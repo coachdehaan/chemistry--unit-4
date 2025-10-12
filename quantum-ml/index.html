@@ -1,48 +1,71 @@
 <!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Quantum Numbers: l & mℓ</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quantum Numbers: n, l & mℓ</title>
 <style>
-  body { font-family: system-ui, Arial, sans-serif; margin: 18px; }
-  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-  .card { border: 1px solid #bbb; border-radius: 10px; padding: 12px 14px; }
-  label { font-weight: 600; }
-  .pill { display:inline-block; padding: 4px 10px; border:1px solid #999; border-radius:999px; margin:2px 4px; }
-  .pill.active { background:#eee; border-color:#333; }
-  #axis { position: relative; height: 64px; margin-top: 8px; }
-  .line { position:absolute; top:30px; left:6px; right:6px; height:2px; background:#333; }
-  .tick { position:absolute; top:22px; width:2px; height:18px; background:#333; }
-  .tick-label { position:absolute; top:2px; transform:translateX(-50%); font-size: 12px; }
-  .cursor { position:absolute; top:12px; width:10px; height:36px; border-radius:6px; background:#2d2d2d; }
-  .meta { font-size: 14px; color:#333; }
-  input[type="range"] { width: 260px; }
+  body { font-family: system-ui, Arial, sans-serif; margin: 18px; line-height:1.3 }
+  .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap }
+  .card { border:1px solid #888; border-radius:10px; padding:12px 14px }
+  label { font-weight:600 }
+  .pill { display:inline-block; padding:4px 10px; border:1px solid #666; border-radius:999px; margin:2px 4px }
+  .pill.active { background:#111; color:#fff; border-color:#111 }
+  #axis { position:relative; height:64px; margin-top:8px }
+  .line { position:absolute; top:30px; left:6px; right:6px; height:2px; background:#111 }
+  .tick { position:absolute; top:22px; width:2px; height:18px; background:#111 }
+  .tick-label { position:absolute; top:2px; transform:translateX(-50%); font-size:12px; white-space:nowrap }
+  .cursor { position:absolute; top:12px; width:10px; height:36px; border-radius:6px; background:#3a6; }
+  .meta { font-size:14px; color:#111 }
+  input[type="range"] { width: 300px; touch-action: pan-y; }
+  .boxes { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap }
+  .orb { border:1px solid #666; min-width:28px; padding:2px 6px; border-radius:6px; text-align:center }
+  .orb.sel { background:#eefaf0; border-color:#3a6 }
+  .muted { color:#444 }
+  .live { position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden }
 </style>
-</head><body>
+</head>
+<body>
   <div class="card">
     <div class="row">
-      <label for="sublevel">Sublevel (shape):</label>
-      <select id="sublevel" aria-label="Choose sublevel">
-        <option value="0">s (l = 0)</option>
-        <option value="1">p (l = 1)</option>
-        <option value="2">d (l = 2)</option>
-        <option value="3">f (l = 3)</option>
+      <label for="n">n (principal):</label>
+      <select id="n" aria-label="Choose n">
+        <option>1</option><option selected>2</option><option>3</option>
+        <option>4</option><option>5</option><option>6</option><option>7</option>
       </select>
+
+      <label for="sublevel">l (sublevel/shape):</label>
+      <select id="sublevel" aria-label="Choose sublevel (l)">
+        <option value="0">0 = s</option>
+        <option value="1">1 = p</option>
+        <option value="2">2 = d</option>
+        <option value="3">3 = f</option>
+      </select>
+
       <label for="ml">m<span style="vertical-align:sub;font-size:0.9em;">ℓ</span>:</label>
       <input id="ml" type="range" min="0" max="0" step="1" value="0">
       <span id="mlVal" class="pill active">0</span>
     </div>
+
     <div class="row meta" style="margin-top:8px;">
       <div>l = <span id="lVal">0</span></div>
-      <div>| Number of orbitals = <span id="count">1</span> (= 2l + 1)</div>
+      <div class="muted">| allowed mℓ = −l … +l | orbitals = <span id="count">1</span> (= 2l + 1)</div>
     </div>
+
     <div id="mList" style="margin-top:6px;"></div>
+
     <div id="axis" aria-label="m_l number line">
       <div class="line"></div>
       <div id="cursor" class="cursor"></div>
     </div>
+
+    <div class="boxes" id="boxes"></div>
+    <div class="live" aria-live="polite" id="live"></div>
   </div>
+
 <script>
 (function(){
+  const nSel = document.getElementById('n');
   const sub = document.getElementById('sublevel');
   const ml = document.getElementById('ml');
   const mlVal = document.getElementById('mlVal');
@@ -51,17 +74,27 @@
   const mList = document.getElementById('mList');
   const axis = document.getElementById('axis');
   const cursor = document.getElementById('cursor');
+  const boxes = document.getElementById('boxes');
+  const live = document.getElementById('live');
 
   function range(a,b){ const out=[]; for(let i=a;i<=b;i++) out.push(i); return out; }
 
+  function enforceLvsN(){
+    const n = +nSel.value;
+    const maxL = n-1;
+    [...sub.options].forEach(o => o.disabled = (+o.value) > maxL);
+    if (+sub.value > maxL) sub.value = String(maxL);
+  }
+
   function layoutTicks(L){
     [...axis.querySelectorAll('.tick, .tick-label')].forEach(n=>n.remove());
-    const W = axis.clientWidth - 12;
+    const pad = 10;
+    const W = Math.max(60, axis.clientWidth - pad*2);
     const ms = range(-L, L);
     const xOf = m => {
       if (ms.length===1) return axis.clientWidth/2;
       const idx = m + L;
-      return 6 + (idx / (ms.length - 1)) * W;
+      return pad + (idx / (ms.length - 1)) * W;
     };
     ms.forEach(m => {
       const t = document.createElement('div');
@@ -82,7 +115,16 @@
     cursor.style.left = (x - 5) + 'px';
   }
 
-  function renderForL(L){
+  function renderBoxes(L, m){
+    const ms = range(-L, L);
+    boxes.innerHTML = ms.map(x =>
+      `<span class="orb ${x==m?'sel':''}">${x}</span>`
+    ).join('');
+  }
+
+  function render(){
+    enforceLvsN();
+    const L = +sub.value;
     lVal.textContent = L;
     const ms = range(-L, L);
     count.textContent = (2*L + 1);
@@ -92,13 +134,19 @@
     mList.innerHTML = ms.map(m => `<span class="pill${m==ml.value?' active':''}">${m}</span>`).join('');
     layoutTicks(L);
     setCursor(+ml.value);
+    renderBoxes(L, +ml.value);
+    live.textContent = `n ${nSel.value}, l ${L}, m l ${ml.value}`;
   }
 
-  sub.addEventListener('change', () => { renderForL(+sub.value); });
-  ml.addEventListener('input', () => { mlVal.textContent = ml.value; renderForL(+sub.value); });
+  nSel.addEventListener('change', render);
+  sub.addEventListener('change', render);
+  ml.addEventListener('input', () => { mlVal.textContent = ml.value; render(); });
 
-  renderForL(+sub.value);
-  window.addEventListener('resize', () => { layoutTicks(+sub.value); setCursor(+ml.value); });
+  let t; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(render, 100); });
+
+  // init
+  render();
 })();
 </script>
-</body></html>
+</body>
+</html>
