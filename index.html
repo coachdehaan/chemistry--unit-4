@@ -1,15 +1,32 @@
 <!doctype html>
-<html lang="en"><head>
+<html lang="en">
+<head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Chemistry – Unit 4 Mini-Apps</title>
 <style>
   body{font-family:system-ui,Arial,sans-serif;margin:24px;line-height:1.35}
   h1{font-size:22px;margin:0 0 12px 0}
-  .card{border:1px solid #ccc;border-radius:12px;padding:14px 16px;margin:10px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+  .card{border:1px solid #ccc;border-radius:12px;padding:14px 16px}
   a{color:#0b5bd3;text-decoration:none}
+  .mut{color:#555;font-size:13px}
 </style>
-</head><body>
-<h1>Chemistry – Unit 4 Mini-Apps</h1>
-<div class="card"><strong><a href="./quantum-ml/">Quantum Numbers: l and mℓ Visualizer</a></strong><div>Pick sublevel (s/p/d/f) and slide mℓ across −l…+l with a live number line.</div></div>
-<div class="card"><strong><a href="./ionic-nacl/">Ionic Crystal Lattice (NaCl)</a></strong><div>Interactive rotating rock-salt lattice with unit-cell toggle and bonds.</div></div>
-</body></html>
+</head>
+<body>
+  <h1>Chemistry – Unit 4 Mini-Apps</h1>
+  <div class="grid">
+    <div class="card">
+      <strong><a href="./electron-config/">Electron Configuration — Drag & Drop</a></strong>
+      <div class="mut">Place ↑/↓ into orbital boxes (Aufbau + Hund + Pauli). Live element + configs.</div>
+    </div>
+    <div class="card">
+      <strong><a href="./quantum-ml/">Quantum Numbers: l and mℓ Visualizer</a></strong>
+      <div class="mut">Pick sublevel (s/p/d/f) and slide mℓ across −l…+l with a live number line.</div>
+    </div>
+    <div class="card">
+      <strong><a href="./ionic-nacl/">Ionic Crystal Lattice (NaCl)</a></strong>
+      <div class="mut">Interactive rotating rock-salt lattice with unit-cell toggle, bonds, CN overlay.</div>
+    </div>
+  </div>
+</body>
+</html>
