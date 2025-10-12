@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ionic Crystal Lattice (NaCl)</title>
+<style>
+  body { margin:0; font-family: system-ui, Arial, sans-serif; background:#fff; color:#111; }
+  .wrap { display:flex; flex-direction:column; gap:8px; padding:14px; max-width:960px; margin:0 auto; }
+  .panel { border:1px solid #ccc; border-radius:12px; padding:10px 12px; }
+  .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  label { font-weight:600; }
+  input[type="range"] { width:200px; }
+  .legend { display:flex; gap:12px; align-items:center; font-size:14px; }
+  .dot { width:14px; height:14px; border-radius:50%; display:inline-block; border:1px solid #0003; }
+  .na { background:#4fa3ff; } .cl { background:#62c96b; }
+  #c { width:100%; height:60vh; display:block; background:#fff; border:1px solid #ccc; border-radius:12px; }
+  .small { font-size:13px; color:#333; }
+  button { padding:6px 10px; border:1px solid #aaa; border-radius:8px; background:#f6f6f6; cursor:pointer; }
+</style>
+</head><body>
+<div class="wrap">
+  <div class="panel row">
+    <label>Lattice:</label>
+    <select id="kind"><option value="NaCl" selected>NaCl (rock salt, fcc)</option></select>
+    <span class="legend"><span class="dot na"></span> Na⁺ <span class="dot cl"></span> Cl⁻</span>
+    <button id="toggle">Pause</button>
+    <span class="small">Drag to rotate • Scroll/Pinch to zoom</span>
+  </div>
+
+  <div class="panel row">
+    <label>Size (cells):</label>
+    <input type="range" id="cells" min="1" max="6" step="1" value="3">
+    <span id="cellsVal">3×3×3</span>
+    <label>Spacing (Å, scaled):</label>
+    <input type="range" id="spacing" min="18" max="40" step="1" value="24">
+    <span id="spVal">24</span>
+    <label>Ion radius scale:</label>
+    <input type="range" id="rscale" min="0.6" max="1.6" step="0.05" value="1.0">
+    <span id="rVal">1.00×</span>
+    <label><input type="checkbox" id="unitOnly"> Show unit cell only</label>
+    <label><input type="checkbox" id="bonds"> Draw Na⁺–Cl⁻ links</label>
+  </div>
+
+  <canvas id="c" aria-label="NaCl ionic crystal lattice visualization"></canvas>
+
+  <div class="small">Rock-salt structure: fcc anion lattice, Na⁺ in octahedral holes, CN=6.</div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+  const ui = {
+    cells: document.getElementById('cells'), cellsVal: document.getElementById('cellsVal'),
+    spacing: document.getElementById('spacing'), spVal: document.getElementById('spVal'),
+    rscale: document.getElementById('rscale'), rVal: document.getElementById('rVal'),
+    unitOnly: document.getElementById('unitOnly'), bonds: document.getElementById('bonds'),
+    toggle: document.getElementById('toggle')
+  };
+  let W=0,H=0, anim=true, rotX=-0.6, rotY=0.6, zoom=1.0, dragging=false, lastX=0,lastY=0;
+  const ions=[], edges=[];
+  function resize(){ const r=window.devicePixelRatio||1; W=canvas.clientWidth; H=canvas.clientHeight; canvas.width=W*r; canvas.height=H*r; ctx.setTransform(r,0,0,r,0,0); }
+  window.addEventListener('resize', resize); resize();
+  function rotate(p){ const sx=Math.sin(rotX), cx=Math.cos(rotX), sy=Math.sin(rotY), cy=Math.cos(rotY);
+    let y=p.y*cx-p.z*sx, z=p.y*sx+p.z*cx, x=p.x*cy+z*sy; z=-p.x*sy+z*cy; return {x,y,z}; }
+  function project(p,s=260){ const d=6/zoom, f=s/(d+p.z*0.02+3); return {x:W/2+p.x*f, y:H/2+p.y*f, scale:f}; }
+  function makeNaClLattice(n,a,unitOnly){ ions.length=0; edges.length=0;
+    const fcc=[[0,0,0],[0,0.5,0.5],[0.5,0,0.5],[0.5,0.5,0]], oct=[[0.5,0.5,0.5],[0.5,0.5,0],[0.5,0,0.5],[0,0.5,0.5],[0,0,0.5],[0,0.5,0],[0.5,0,0],[0.5,0,0.5]];
+    const half=unitOnly?0:Math.floor(n/2), minI=unitOnly?0:-half, maxI=unitOnly?0:half;
+    for(let i=minI;i<=maxI;i++)for(let j=minI;j<=maxI;j++)for(let k=minI;k<=maxI;k++){
+      const off=[i*a,j*a,k*a];
+      for(const v of fcc) ions.push({x:v[0]*a+off[0],y:v[1]*a+off[1],z:v[2]*a+off[2],type:'Cl'});
+      for(const v of oct) ions.push({x:v[0]*a+off[0],y:v[1]*a+off[1],z:v[2]*a+off[2],type:'Na'});
+    }
+    const L=a, verts=[[0,0,0],[L,0,0],[L,L,0],[0,L,0],[0,0,L],[L,0,L],[L,L,L],[0,L,L]];
+    const E=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+    for(const [a1,a2] of E) edges.push({a:{x:verts[a1][0],y:verts[a1][1],z:verts[a1][2]}, b:{x:verts[a2][0],y:verts[a2][1],z:verts[a2][2]}});
+    const xs=ions.map(p=>p.x), ys=ions.map(p=>p.y), zs=ions.map(p=>p.z);
+    const cx=(Math.min(...xs)+Math.max(...xs))/2, cy=(Math.min(...ys)+Math.max(...ys))/2, cz=(Math.min(...zs)+Math.max(...zs))/2;
+    for(const p of ions){ p.x-=cx; p.y-=cy; p.z-=cz; } for(const e of edges){ e.a.x-=cx; e.a.y-=cy; e.a.z-=cz; e.b.x-=cx; e.b.y-=cy; e.b.z-=cz; }
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    if(ui.bonds.checked){
+      const sp=+ui.spacing.value, cutoff=sp*0.71;
+      for(let i=0;i<ions.length;i++){ const a=ions[i]; if(a.type!=='Na') continue;
+        for(let j=0;j<ions.length;j++){ const b=ions[j]; if(b.type!=='Cl') continue;
+          const dx=a.x-b.x, dy=a.y-b.y, dz=a.z-b.z, d=Math.hypot(dx,dy,dz);
+          if(d<cutoff){ const A=project(rotate(a)), B=project(rotate(b));
+            ctx.globalAlpha=0.22; ctx.lineWidth=2; ctx.strokeStyle='#888';
+            ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke(); ctx.globalAlpha=1; } } } }
+    ctx.strokeStyle='#ffcc66'; ctx.lineWidth=2;
+    for(const e of edges){ const A=project(rotate(e.a)), B=project(rotate(e.b)); ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke(); }
+    const rscale=+ui.rscale.value;
+    const sprites=ions.map(p=>{ const R=rotate(p), P=project(R), base=(p.type==='Na'?6:7.5); return {P, z:R.z, type:p.type, r:Math.max(1, base*rscale*P.scale/32)}; }).sort((a,b)=>a.z-b.z);
+    for(const s of sprites){ ctx.beginPath(); ctx.arc(s.P.x,s.P.y,s.r,0,Math.PI*2); ctx.fillStyle=(s.type==='Na'?'#4fa3ff':'#62c96b'); ctx.fill(); ctx.strokeStyle='#00000022'; ctx.stroke(); }
+  }
+  function rebuild(){ const n=parseInt(ui.cells.value,10), a=parseFloat(ui.spacing.value);
+    ui.cellsVal.textContent=`${n}×${n}×${n}`; ui.spVal.textContent=`${a}`; ui.rVal.textContent=(+ui.rscale.value).toFixed(2)+'×';
+    makeNaClLattice(n,a,ui.unitOnly.checked);
+  }
+  let lastT=0; function loop(t){ if(anim){ const dt=(t-lastT)||16; if(!dragging) rotY+=0.0006*dt; draw(); } lastT=t; requestAnimationFrame(loop); }
+  canvas.addEventListener('mousedown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+  window.addEventListener('mouseup', ()=> dragging=false);
+  window.addEventListener('mousemove', e=>{ if(!dragging) return; const dx=e.clientX-lastX, dy=e.clientY-lastY; rotY+=dx*0.005; rotX+=dy*0.005; lastX=e.clientX; lastY=e.clientY; });
+  canvas.addEventListener('wheel', e=>{ e.preventDefault(); zoom*= (e.deltaY>0 ? 1.07 : 0.93); zoom=Math.min(3.0, Math.max(0.35, zoom)); }, {passive:false});
+  ui.cells.addEventListener('input', rebuild); ui.spacing.addEventListener('input', rebuild); ui.rscale.addEventListener('input', rebuild);
+  ui.unitOnly.addEventListener('change', rebuild); ui.bonds.addEventListener('change', rebuild);
+  ui.toggle.addEventListener('click', ()=>{ anim=!anim; ui.toggle.textContent = anim ? 'Pause' : 'Play'; if(anim) draw(); });
+  rebuild(); draw(); requestAnimationFrame(loop);
+})();
+</script>
+</body></html>
