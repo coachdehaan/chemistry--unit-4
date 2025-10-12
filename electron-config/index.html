@@ -1,107 +1,119 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Electron Configuration Builder — Drag & Drop</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Electron Configuration — Strict Builder (Aufbau + Hund + Pauli)</title>
 <style>
   :root{
-    --bg:#ffffff; --fg:#111; --mut:#555; --accent:#0b5bd3;
-    --box:#d9dde6; --boxB:#9aa4b5; --good:#2e8540; --bad:#c62828;
-    --orb:#f6f8fc; --pill:#eef3ff;
+    --bg:#ffffff; --fg:#0f172a; --mut:#475569; --accent:#0b5bd3;
+    --box:#e2e8f0; --boxB:#94a3b8; --ok:#16a34a; --bad:#dc2626; --pill:#eef3ff;
+    --orb:#f8fafc;
   }
+  *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Arial,sans-serif}
-  .wrap{display:grid;grid-template-columns:320px 1fr;gap:14px;max-width:1400px;margin:0 auto;padding:14px}
-  @media (max-width:900px){ .wrap{grid-template-columns:1fr} }
+  .layout{display:grid;grid-template-columns:1fr 280px;gap:14px;max-width:1400px;margin:0 auto;padding:14px}
+  @media (max-width:900px){ .layout{grid-template-columns:1fr} .tray{position:static} }
   h1{font-size:18px;margin:0 0 8px 0}
-  .panel{border:1px solid #ccd2dd;border-radius:12px;padding:12px;background:#fff}
+  .panel{border:1px solid #cbd5e1;border-radius:12px;background:#fff}
+  .panel .inner{padding:12px}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .mut{color:var(--mut)}
-  .btn{border:1px solid #b6bfd0;background:#f7f9fc;border-radius:8px;padding:6px 10px;cursor:pointer}
-  .btn:active{transform:translateY(1px)}
-  .btn.primary{border-color:var(--accent); color:#fff; background:var(--accent)}
-  .pill{background:var(--pill);border:1px solid #c8d3f2;border-radius:999px;padding:2px 8px;font-size:13px}
-  .grid{position:relative;overflow:auto;min-height:55vh;border:1px dashed #ccd2dd;border-radius:12px;padding:12px;background:#fbfcff}
-  .subshell{display:flex;align-items:center;gap:10px;margin:6px 0}
-  .label{width:64px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  .badge{border:1px solid #cbd5e1;border-radius:10px;padding:4px 8px;background:#f8fafc}
+  .grid{position:relative;overflow:auto;min-height:60vh;border-top:1px dashed #cbd5e1;border-radius:0 0 12px 12px;padding:12px;background:#fbfdff}
+  .subshell{display:flex;align-items:center;gap:12px;margin:6px 0}
+  .label{width:64px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
   .orbitals{display:flex;gap:10px;flex-wrap:wrap}
-  .orbital{width:48px;height:38px;border:2px solid var(--boxB);border-radius:8px;background:var(--orb);display:flex;align-items:center;justify-content:center;position:relative}
-  .orbital.full{border-color:var(--good)}
+  .orbital{width:52px;height:40px;border:2px solid var(--boxB);border-radius:8px;background:var(--orb);display:flex;align-items:center;justify-content:center;position:relative}
+  .orbital.full{border-color:var(--ok)}
   .orbital.over{outline:2px dashed var(--accent)}
-  .e{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-      font-size:14px;user-select:none}
-  .up{background:#e1f3e6;border:1px solid #8bc69a}
-  .down{background:#ffe9e6;border:1px solid #f4a699}
-  .tray{display:flex;gap:8px;flex-wrap:wrap}
-  .tray .e{cursor:grab}
-  .mini{font-size:12px}
-  .kvo{display:grid;grid-template-columns:1fr;gap:6px}
-  code{background:#f2f4f8;border:1px solid #d7dbe4;border-radius:6px;padding:2px 6px}
-  .rightHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .e{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;user-select:none}
+  .up{background:#e1f3e6;border:1px solid #86efac}
+  .down{background:#ffe9e6;border:1px solid #fca5a5}
+  .readouts{display:flex;gap:8px;flex-wrap:wrap}
+  .cfg{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px}
+  .topbar{display:flex;justify-content:space-between;align-items:center}
   .hint{font-size:12px}
-  .diag{font-size:12px;color:#2b3a55}
-  .topbar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px}
-  .badge{border:1px solid #cbd5e1;border-radius:8px;padding:4px 8px;background:#f8fafc}
+  .toggle{font-size:13px}
+  /* Right floating tray */
+  .tray{position:sticky; top:12px}
+  .tray .inner{display:flex;flex-direction:column;gap:10px}
+  .tray .arrows{display:flex;gap:8px}
+  .tray .e{cursor:grab}
+  .btn{border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;padding:6px 10px;cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{border-color:var(--accent);background:var(--accent);color:#fff}
+  .small{font-size:12px;color:var(--mut)}
+  /* Warning modal */
+  .modal{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:14px}
+  .modal.show{display:flex}
+  .box{max-width:520px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px}
+  .box h2{margin:0 0 8px 0;font-size:16px}
+  .why{color:#334155}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <!-- LEFT: Controls & readouts -->
+<div class="layout">
+  <!-- LEFT: Board -->
   <div class="panel">
-    <h1>Electron Configuration Builder</h1>
-    <div class="row">
-      <span class="pill">Drag ↑ / ↓ into orbital boxes</span>
-      <span class="hint mut">Pauli enforced; Autofill honors Hund</span>
-    </div>
-    <div class="row" style="margin-top:8px;">
-      <button id="addUp" class="btn">Add ↑</button>
-      <button id="addDown" class="btn">Add ↓</button>
-      <button id="auto" class="btn primary">Autofill Next</button>
-      <button id="clear" class="btn">Clear</button>
-    </div>
-    <div class="row" style="margin-top:8px;">
-      <label><input type="checkbox" id="useHund" checked> Hund’s rule (autofill)</label>
-      <label><input type="checkbox" id="nobleToggle" checked> Use noble-gas shorthand after Period ≥ 4</label>
-    </div>
-
-    <hr>
-
-    <div class="kvo">
-      <div class="row">
+    <div class="inner">
+      <div class="topbar">
+        <h1>Electron Configuration — Strict Builder</h1>
+        <label class="toggle">
+          <input id="nobleToggle" type="checkbox" checked> Noble-gas shorthand after Period ≥ 4
+        </label>
+      </div>
+      <div class="readouts" style="margin-top:6px;">
         <div class="badge">Z = <strong id="Z">0</strong></div>
         <div class="badge">Element: <strong id="El">—</strong></div>
         <div class="badge">Period: <strong id="Period">—</strong></div>
       </div>
-      <div>Configuration:</div>
-      <div><code id="cfg">—</code></div>
-      <div class="mut mini">Shorthand:</div>
-      <div><code id="sh">—</code></div>
-    </div>
-
-    <hr>
-    <div>Electron tray (drag from here):</div>
-    <div id="tray" class="tray" aria-label="electron tray">
-      <div class="e up" draggable="true" data-spin="up">↑</div>
-      <div class="e down" draggable="true" data-spin="down">↓</div>
-    </div>
-  </div>
-
-  <!-- RIGHT: Orbital layout -->
-  <div class="panel">
-    <div class="rightHead">
-      <div class="topbar">
-        <div class="diag">Order shown in **Aufbau filling** (bottom = 1s → up/right)</div>
+      <div style="margin-top:8px;">
+        <div>Full configuration:</div>
+        <div id="cfg" class="cfg">—</div>
+        <div class="small" style="margin-top:4px;">Shorthand: <span id="sh" class="cfg">—</span></div>
       </div>
-      <div class="hint mut">Each box is an orbital (2 e⁻ max, opposite spins)</div>
+      <div class="hint mut" style="margin-top:8px;">Place electrons in **strict Aufbau order** with **Hund’s rule** and **Pauli**. Wrong drops are rejected with a rule-specific warning.</div>
     </div>
     <div id="grid" class="grid" aria-label="orbital grid"></div>
+  </div>
+
+  <!-- RIGHT: Floating tray -->
+  <div class="panel tray">
+    <div class="inner">
+      <div class="small mut">Drag one electron at a time. Only the correct next spot is accepted.</div>
+      <div class="arrows">
+        <div class="e up" draggable="true" data-spin="up" title="Up-spin electron">↑</div>
+        <div class="e down" draggable="true" data-spin="down" title="Down-spin electron">↓</div>
+      </div>
+      <div class="row">
+        <button id="autoOne" class="btn primary">Auto-place 1</button>
+        <button id="clear" class="btn">Clear</button>
+      </div>
+      <div class="small">Rules enforced:</div>
+      <ul class="small" style="margin:0 0 0 16px;padding:0;line-height:1.35">
+        <li>Aufbau order (1s → 2s → 2p → 3s → 3p → 4s → 3d → 4p → …)</li>
+        <li>Hund’s rule (maximize parallel spins across degenerate orbitals)</li>
+        <li>Pauli (max 2 per orbital, opposite spins)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Warning modal -->
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="box">
+    <h2 id="mTitle">Not allowed</h2>
+    <div id="mBody" class="why">—</div>
+    <div class="row" style="margin-top:10px;justify-content:flex-end">
+      <button id="ok" class="btn primary">OK</button>
+    </div>
   </div>
 </div>
 
 <script>
 /* ======= Data ======= */
 
-// Aufbau order through 7p (s,p,d,f capacities accounted)
+// Aufbau order through 7p
 const ORDER = [
   "1s",
   "2s","2p",
@@ -111,322 +123,229 @@ const ORDER = [
   "6s","4f","5d","6p",
   "7s","5f","6d","7p"
 ];
-
-// subshell -> number of orbitals
 const ORB_COUNT = { s:1, p:3, d:5, f:7 };
-
-// capacity per subshell
 const CAP = { s:2, p:6, d:10, f:14 };
 
-// periodic table symbols (1..118)
-const SYMBOLS = [
-  null,"H","He","Li","Be","B","C","N","O","F","Ne","Na","Mg","Al","Si","P","S","Cl","Ar",
-  "K","Ca","Sc","Ti","V","Cr","Mn","Fe","Co","Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr",
-  "Rb","Sr","Y","Zr","Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd","In","Sn","Sb","Te","I","Xe",
-  "Cs","Ba","La","Ce","Pr","Nd","Pm","Sm","Eu","Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu",
-  "Hf","Ta","W","Re","Os","Ir","Pt","Au","Hg","Tl","Pb","Bi","Po","At","Rn",
-  "Fr","Ra","Ac","Th","Pa","U","Np","Pu","Am","Cm","Bk","Cf","Es","Fm","Md","No","Lr",
-  "Rf","Db","Sg","Bh","Hs","Mt","Ds","Rg","Cn","Nh","Fl","Mc","Lv","Ts","Og"
-];
-
-// atomic number -> period (row) for 1..118 (rough, sufficient for “Period ≥ 4” check)
-const PERIOD = (()=>{
-  const borders = [2,10,18,36,54,86,118]; // end Z for periods 1..7
-  const period = [null];
-  for(let z=1,p=1; z<=118; z++){
-    if(z> borders[p-1]) p++;
-    period[z]=p;
-  }
-  return period;
-})();
-
-// noble gases by Z
-const NOBLES = [
-  {Z:2, sym:"He"},{Z:10, sym:"Ne"},{Z:18, sym:"Ar"},
-  {Z:36, sym:"Kr"},{Z:54, sym:"Xe"},{Z:86, sym:"Rn"},{Z:118, sym:"Og"}
-];
+const SYMBOLS=[null,"H","He","Li","Be","B","C","N","O","F","Ne","Na","Mg","Al","Si","P","S","Cl","Ar",
+"K","Ca","Sc","Ti","V","Cr","Mn","Fe","Co","Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr",
+"Rb","Sr","Y","Zr","Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd","In","Sn","Sb","Te","I","Xe",
+"Cs","Ba","La","Ce","Pr","Nd","Pm","Sm","Eu","Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu",
+"Hf","Ta","W","Re","Os","Ir","Pt","Au","Hg","Tl","Pb","Bi","Po","At","Rn",
+"Fr","Ra","Ac","Th","Pa","U","Np","Pu","Am","Cm","Bk","Cf","Es","Fm","Md","No","Lr",
+"Rf","Db","Sg","Bh","Hs","Mt","Ds","Rg","Cn","Nh","Fl","Mc","Lv","Ts","Og"];
+const PERIOD = (()=>{const b=[2,10,18,36,54,86,118]; const p=[null]; for(let z=1,k=1; z<=118; z++){ if(z>b[k-1]) k++; p[z]=k; } return p;})();
+const NOBLES = [{Z:2,sym:"He"},{Z:10,sym:"Ne"},{Z:18,sym:"Ar"},{Z:36,sym:"Kr"},{Z:54,sym:"Xe"},{Z:86,sym:"Rn"},{Z:118,sym:"Og"}];
 
 /* ======= State ======= */
-
-const state = {
-  orbitals: {}, // key "ns:idx" -> [{spin:'up'|'down'}...]
-  Z: 0
-};
+const state = { orbitals:{}, Z:0 };
 
 /* ======= Build grid ======= */
-
 const grid = document.getElementById('grid');
 
 function buildGrid(){
-  grid.innerHTML = "";
-  // layout: 1s at bottom; so iterate ORDER but render with flex column reversed or prepend
-  const rows = [];
+  grid.innerHTML="";
+  const rows=[];
   for(const tag of ORDER){
     const [n, ell] = [parseInt(tag), tag.replace(/[0-9]/g,"")];
-    const row = document.createElement('div');
-    row.className = 'subshell';
-    const lab = document.createElement('div');
-    lab.className = 'label';
-    lab.textContent = tag;
-    const wrap = document.createElement('div');
-    wrap.className = 'orbitals';
-    const count = ORB_COUNT[ell];
+    const row=document.createElement('div'); row.className='subshell';
+    const lab=document.createElement('div'); lab.className='label'; lab.textContent=tag;
+    const wrap=document.createElement('div'); wrap.className='orbitals';
+    const count=ORB_COUNT[ell];
     for(let i=0;i<count;i++){
-      const box = document.createElement('div');
-      box.className = 'orbital';
-      box.dataset.key = `${tag}:${i}`;
-      box.dataset.n = String(n);
-      box.dataset.sub = ell;
-      box.dataset.idx = String(i);
-      box.addEventListener('dragover', ev => { ev.preventDefault(); box.classList.add('over'); });
+      const box=document.createElement('div');
+      box.className='orbital'; box.dataset.key=`${tag}:${i}`;
+      box.dataset.n=String(n); box.dataset.sub=ell; box.dataset.idx=String(i);
+      box.addEventListener('dragover', ev=>{ ev.preventDefault(); box.classList.add('over'); });
       box.addEventListener('dragleave', ()=> box.classList.remove('over'));
-      box.addEventListener('drop', ev => {
-        ev.preventDefault();
-        box.classList.remove('over');
-        const spin = ev.dataTransfer.getData('text/plain');
-        tryDropElectron(box, spin);
+      box.addEventListener('drop', ev=>{
+        ev.preventDefault(); box.classList.remove('over');
+        const spin=ev.dataTransfer.getData('text/plain')||ev.dataTransfer.getData('text');
+        attemptPlace(box, spin);
       });
       wrap.appendChild(box);
-      state.orbitals[`${tag}:${i}`] = [];
+      state.orbitals[`${tag}:${i}`]=[];
     }
-    row.appendChild(lab); row.appendChild(wrap);
-    rows.push(row);
+    row.appendChild(lab); row.appendChild(wrap); rows.push(row);
   }
-  // render from bottom to top (1s bottom)
+  // render 1s at bottom
   rows.reverse().forEach(r=>grid.appendChild(r));
 }
-
 buildGrid();
 
 /* ======= Drag sources (tray) ======= */
-
-function makeDraggable(el){
+document.querySelectorAll('.tray .e').forEach(el=>{
   el.addEventListener('dragstart', ev=>{
     ev.dataTransfer.setData('text/plain', el.dataset.spin);
   });
+});
+
+/* ======= Rule engine ======= */
+
+// Count electrons per subshell
+function counters(){
+  const c={};
+  for(const tag of ORDER){
+    const sub=tag.replace(/[0-9]/g,"");
+    const count=ORB_COUNT[sub];
+    let sum=0;
+    for(let i=0;i<count;i++) sum+= state.orbitals[`${tag}:${i}`].length;
+    c[tag]=sum;
+  }
+  return c;
 }
-document.querySelectorAll('#tray .e').forEach(makeDraggable);
 
-/* ======= Logic ======= */
+// First incomplete subshell tag (by Aufbau)
+function currentSubshell(){
+  const c=counters();
+  for(const tag of ORDER){
+    const sub=tag.replace(/[0-9]/g,"");
+    if(c[tag] < CAP[sub]) return tag;
+  }
+  return null; // all filled (up to 7p)
+}
 
-function tryDropElectron(box, spin){
-  const key = box.dataset.key;
-  const occ = state.orbitals[key];
-  // Pauli: max 2, must be opposite spins if already has one
-  if(occ.length>=2) return flash(box, 'full');
-  if(occ.length===1 && occ[0].spin===spin) return flash(box,'bad');
-  // Accept
-  occ.push({spin});
-  drawOrbital(box, occ);
+// Next allowed slot (box key + spin) honoring Hund then pairing, within current subshell
+function nextAllowed(){
+  const tag=currentSubshell();
+  if(!tag) return null;
+  const sub=tag.replace(/[0-9]/g,"");
+  const count=ORB_COUNT[sub];
+  const keys=[...Array(count).keys()].map(i=>`${tag}:${i}`);
+  const occs=keys.map(k=>state.orbitals[k]);
+
+  // Hund: fill single ↑ across orbitals
+  for(let i=0;i<count;i++){ if(occs[i].length===0) return {key:keys[i], spin:'up', tag}; }
+  // Then pair with ↓
+  for(let i=0;i<count;i++){
+    if(occs[i].length===1 && !occs[i].some(e=>e.spin==='down')) return {key:keys[i], spin:'down', tag};
+  }
+  // If somehow all have one up and one down missing, allow the first with 1 (down)
+  for(let i=0;i<count;i++){ if(occs[i].length===1) return {key:keys[i], spin:(occs[i][0].spin==='up'?'down':'up'), tag}; }
+
+  return null;
+}
+
+function attemptPlace(targetBox, spin){
+  const allowed = nextAllowed();
+  if(!allowed){ warn("No available orbital", "All orbitals through 7p are filled."); return; }
+
+  const targetKey = targetBox.dataset.key;
+  const targetOcc = state.orbitals[targetKey];
+
+  // Fast Pauli check first (capacity/opposite spins)
+  if(targetOcc.length>=2) return warn("Pauli exclusion", "That orbital already has 2 electrons.");
+  if(targetOcc.length===1 && targetOcc[0].spin===spin) return warn("Pauli exclusion", "Electrons in the same orbital must have opposite spins.");
+
+  // If target subshell != current subshell → Aufbau violation
+  const curTag = allowed.tag;
+  const targetTag = targetKey.split(":")[0];
+  if(targetTag !== curTag){
+    return warn("Aufbau order", `Next subshell is <strong>${curTag}</strong>, not <strong>${targetTag}</strong>. Place electrons in the proper energy order.`);
+  }
+
+  // Hund enforcement: if trying to pair before all orbitals in this subshell have one ↑
+  const sub = curTag.replace(/[0-9]/g,"");
+  const count = ORB_COUNT[sub];
+  const keys = [...Array(count).keys()].map(i=>`${curTag}:${i}`);
+  const anyEmpty = keys.some(k=>state.orbitals[k].length===0);
+  if(anyEmpty && targetOcc.length===1){
+    return warn("Hund’s rule", "Place one electron (↑) in each orbital of this subshell before pairing (↓).");
+  }
+
+  // Spin check: must match the specific spin required by nextAllowed
+  if(!(targetKey===allowed.key && spin===allowed.spin)){
+    // More specific message if spin wrong but box right
+    if(targetKey===allowed.key && spin!==allowed.spin){
+      return warn("Spin / Hund", `Use <strong>${allowed.spin==='up'?'↑':'↓'}</strong> for this step to follow Hund’s rule.`);
+    }
+    // Otherwise general Aufbau/Hund guidance
+    return warn("Order violation", `The next allowed placement is <strong>${allowed.key.split(':')[0]}</strong> with <strong>${allowed.spin==='up'?'↑':'↓'}</strong>.`);
+  }
+
+  // All good → commit
+  targetOcc.push({spin});
+  drawOrbital(targetBox, targetOcc);
   state.Z++;
   syncReadouts();
 }
 
 function drawOrbital(box, occ){
-  box.innerHTML = ''; // clear
+  box.innerHTML='';
   occ.forEach(o=>{
-    const e = document.createElement('div');
-    e.className = 'e ' + (o.spin==='up'?'up':'down');
-    e.textContent = o.spin==='up'?'↑':'↓';
-    // allow dragging out to other orbitals
-    e.draggable = true;
-    e.addEventListener('dragstart', ev=>{
-      ev.dataTransfer.setData('text/plain', o.spin);
-      // remove from this orbital when dropped elsewhere (we’ll handle on drop-success by listening to grid)
-      e.dataset.from = box.dataset.key;
-    });
+    const e=document.createElement('div');
+    e.className='e ' + (o.spin==='up'?'up':'down');
+    e.textContent=(o.spin==='up'?'↑':'↓');
     box.appendChild(e);
   });
   box.classList.toggle('full', occ.length===2);
 }
 
-grid.addEventListener('drop', ev=>{
-  // If dragging from inside, remove from origin on successful drop into a different box
-  const spin = ev.dataTransfer.getData('text/plain');
-  const targetBox = ev.target.closest('.orbital');
-  const fromKey = (ev.dataTransfer.types||[]).includes('text/plain') ? null : null; // not reliable cross-browser
-  // As a simple heuristic, after drop we scan for any .e with data-from and delete from its origin if moved
-  document.querySelectorAll('.e[data-from]').forEach(el=>{
-    const origin = el.dataset.from; delete el.dataset.from;
-    // if origin != target
-    if(origin && origin !== targetBox?.dataset.key){
-      const occ = state.orbitals[origin];
-      const idx = occ.findIndex(x=>x.spin===spin);
-      if(idx>-1){ occ.splice(idx,1); const obox = document.querySelector(`.orbital[data-key="${origin}"]`); drawOrbital(obox, occ); }
-    }
-  });
-});
-
-/* ======= Autofill (Aufbau + Hund) ======= */
-
-function nextAutofillSlot(){
-  // Build a list of subshells expanded into orbitals; choose first with space following Hund’s rule
-  // 1) First pass: for the *current* subshell in progress, put single ↑ across empty orbitals
-  // 2) Then pair with ↓
-  for(const tag of ORDER){
-    const sub = tag.replace(/[0-9]/g,"");
-    const count = ORB_COUNT[sub];
-    const starts = [...Array(count).keys()].map(i=>`${tag}:${i}`);
-    const occs = starts.map(k=>state.orbitals[k]);
-
-    // if subshell not yet full
-    const total = occs.reduce((a,b)=>a+b.length,0);
-    if(total < CAP[sub]){
-      // Hund: fill one ↑ per orbital before pairing (if toggle on)
-      if(document.getElementById('useHund').checked){
-        for(let i=0;i<count;i++){ if(occs[i].length===0) return {key:starts[i], spin:'up'}; }
-        for(let i=0;i<count;i++){ if(occs[i].length===1 && !occs[i].some(e=>e.spin==='down')) return {key:starts[i], spin:'down'}; }
-      } else {
-        // No Hund: just first orbital then pair
-        for(let i=0;i<count;i++){ if(occs[i].length<2) return {key:starts[i], spin: (occs[i].length===0?'up':'down')}; }
-      }
-    }
-  }
-  return null; // full
-}
-
-function autofillNext(){
-  const slot = nextAutofillSlot();
-  if(!slot) return;
-  const box = document.querySelector(`.orbital[data-key="${slot.key}"]`);
-  tryDropElectron(box, slot.spin);
-}
-
-/* ======= Config strings ======= */
-
+/* ======= Config strings & readout ======= */
 function currentConfigCounters(){
-  const counters = {};
-  for(const tag of ORDER){
-    const sub = tag.replace(/[0-9]/g,"");
-    const count = ORB_COUNT[sub];
-    let sum=0;
-    for(let i=0;i<count;i++){
-      const k = `${tag}:${i}`;
-      sum += state.orbitals[k].length;
-    }
-    if(sum>0) counters[tag] = sum;
-  }
-  return counters;
+  const c=counters(); const out={};
+  for(const tag of ORDER){ if(c[tag]>0) out[tag]=c[tag]; }
+  return out;
 }
-
-function cfgString(){
-  const c = currentConfigCounters();
-  const parts = [];
-  for(const tag of ORDER){
-    if(c[tag]) parts.push(`${tag}<sup>${c[tag]}</sup>`);
-  }
+function cfgHTML(){
+  const c=currentConfigCounters(); const parts=[];
+  for(const tag of ORDER){ if(c[tag]) parts.push(`${tag}<sup>${c[tag]}</sup>`); }
   return parts.length? parts.join(" "): "—";
 }
-
-function atomicNumber(){
-  return state.Z;
+function cfgPlain(){
+  const c=currentConfigCounters(); const parts=[];
+  for(const tag of ORDER){ if(c[tag]) parts.push(`${tag}${c[tag]}`); }
+  return parts.length? parts.join(" "): "—";
 }
-
-function elementSymbol(Z){
-  return (Z>=1 && Z<=118)? SYMBOLS[Z] : "—";
-}
-
-function periodFromZ(Z){
-  return PERIOD[Z] || "—";
-}
-
-function shorthandString(){
-  const Z = atomicNumber();
-  if(Z===0) return "—";
-  const period = periodFromZ(Z);
-  const nobleToggle = document.getElementById('nobleToggle').checked;
-  // Only use shorthand if toggle is on and Period >= 4
-  if(!nobleToggle || (typeof period==="number" && period<4)) return plainTextCfg();
-
-  // Find largest noble gas <= Z
-  let core = null;
-  for(const ng of NOBLES){ if(ng.Z<=Z) core = ng; else break; }
-  if(!core) return plainTextCfg();
-
-  // Compute electrons beyond core: fill up to core, then subtract
-  const needed = Z - core.Z;
-  if(needed===0) return `[${core.sym}]`;
-  // Build a fresh temp state to core then read remainder
-  const temp = {};
-  for(const tag of ORDER){
-    const sub = tag.replace(/[0-9]/g,"");
-    temp[tag]=0;
-  }
-  let left = needed;
-  for(const tag of ORDER){
-    const sub = tag.replace(/[0-9]/g,"");
-    const cap = CAP[sub];
-    // compute how many the *actual* state has for this tag
-    const c = currentConfigCounters()[tag] || 0;
-    // How many belong to remainder? we need the final distribution; simplest path: replay Aufbau from zero with 'needed'
-    // We'll just rebuild "remainder only"
-  }
-
-  // Rebuild remainder distribution
-  const rem = {};
-  let left2 = needed;
-  for(const tag of ORDER){
-    if(left2<=0) break;
-    const sub = tag.replace(/[0-9]/g,"");
-    const take = Math.min(CAP[sub], left2);
-    rem[tag] = take; left2 -= take;
-  }
-
-  const parts = [`[${core.sym}]`];
-  for(const tag of ORDER){
-    if(rem[tag]) parts.push(`${tag}${sup(rem[tag])}`);
-  }
+function elementSymbol(Z){ return (Z>=1 && Z<=118)? SYMBOLS[Z] : "—"; }
+function periodFromZ(Z){ return PERIOD[Z] || "—"; }
+function shorthand(){
+  const Z=state.Z; if(Z===0) return "—";
+  const nobleToggle=document.getElementById('nobleToggle').checked;
+  const p=periodFromZ(Z);
+  if(!nobleToggle || (typeof p==="number" && p<4)) return cfgPlain();
+  let core=null; for(const ng of NOBLES){ if(ng.Z<=Z) core=ng; else break; }
+  if(!core) return cfgPlain();
+  const remCount=Z-core.Z; if(remCount===0) return `[${core.sym}]`;
+  // distribute remainder by Aufbau
+  let left=remCount; const rem={};
+  for(const tag of ORDER){ if(left<=0) break; const sub=tag.replace(/[0-9]/g,""); const take=Math.min(CAP[sub], left); rem[tag]=take; left-=take; }
+  const parts=[`[${core.sym}]`]; for(const tag of ORDER){ if(rem[tag]) parts.push(`${tag}${rem[tag]}`); }
   return parts.join(" ");
 }
-
-function plainTextCfg(){
-  // plain text version of cfg (no <sup>)
-  const c = currentConfigCounters();
-  const parts = [];
-  for(const tag of ORDER){
-    if(c[tag]) parts.push(`${tag}${c[tag]}`);
-  }
-  return parts.length? parts.join(" ") : "—";
-}
-function sup(n){ return String(n); } // we’ll format visually with <code>, keep simple here
-
 function syncReadouts(){
-  document.getElementById('Z').textContent = atomicNumber();
-  document.getElementById('El').textContent = elementSymbol(state.Z);
-  document.getElementById('Period').textContent = periodFromZ(state.Z);
-  document.getElementById('cfg').innerHTML = cfgString();
-  document.getElementById('sh').textContent = shorthandString();
+  document.getElementById('Z').textContent=state.Z;
+  document.getElementById('El').textContent=elementSymbol(state.Z);
+  document.getElementById('Period').textContent=periodFromZ(state.Z);
+  document.getElementById('cfg').innerHTML=cfgHTML();
+  document.getElementById('sh').textContent=shorthand();
 }
 
-/* ======= Utilities ======= */
-
-function flash(el, cls){
-  el.classList.add(cls);
-  setTimeout(()=>el.classList.remove(cls), 400);
+/* ======= Modal ======= */
+const modal=document.getElementById('modal');
+const mBody=document.getElementById('mBody');
+document.getElementById('ok').addEventListener('click', ()=> modal.classList.remove('show'));
+function warn(title, html){
+  document.getElementById('mTitle').textContent=title;
+  mBody.innerHTML = html;
+  modal.classList.add('show');
 }
 
 /* ======= Buttons ======= */
-
-document.getElementById('addUp').addEventListener('click', ()=> {
-  // drop an up electron to the next available orbital in the current subshell in progress, else next subshell
-  const slot = nextAutofillSlot(); if(!slot) return;
-  const box = document.querySelector(`.orbital[data-key="${slot.key}"]`);
-  tryDropElectron(box, 'up');
+document.getElementById('autoOne').addEventListener('click', ()=>{
+  const a=nextAllowed(); if(!a) return;
+  const box=document.querySelector(`.orbital[data-key="${a.key}"]`);
+  attemptPlace(box, a.spin);
 });
-document.getElementById('addDown').addEventListener('click', ()=> {
-  const slot = nextAutofillSlot(); if(!slot) return;
-  const box = document.querySelector(`.orbital[data-key="${slot.key}"]`);
-  tryDropElectron(box, 'down');
-});
-document.getElementById('auto').addEventListener('click', ()=>autofillNext());
 document.getElementById('clear').addEventListener('click', ()=>{
-  for(const k in state.orbitals){ state.orbitals[k] = []; }
+  for(const k in state.orbitals){ state.orbitals[k]=[]; }
   document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
-  state.Z = 0; syncReadouts();
+  state.Z=0; syncReadouts();
 });
+document.getElementById('nobleToggle').addEventListener('change', ()=> syncReadouts());
 
 /* ======= Init ======= */
 syncReadouts();
 </script>
 </body>
 </html>
+
