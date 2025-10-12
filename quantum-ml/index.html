@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quantum Numbers: l & mℓ</title>
+<style>
+  body { font-family: system-ui, Arial, sans-serif; margin: 18px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .card { border: 1px solid #bbb; border-radius: 10px; padding: 12px 14px; }
+  label { font-weight: 600; }
+  .pill { display:inline-block; padding: 4px 10px; border:1px solid #999; border-radius:999px; margin:2px 4px; }
+  .pill.active { background:#eee; border-color:#333; }
+  #axis { position: relative; height: 64px; margin-top: 8px; }
+  .line { position:absolute; top:30px; left:6px; right:6px; height:2px; background:#333; }
+  .tick { position:absolute; top:22px; width:2px; height:18px; background:#333; }
+  .tick-label { position:absolute; top:2px; transform:translateX(-50%); font-size: 12px; }
+  .cursor { position:absolute; top:12px; width:10px; height:36px; border-radius:6px; background:#2d2d2d; }
+  .meta { font-size: 14px; color:#333; }
+  input[type="range"] { width: 260px; }
+</style>
+</head><body>
+  <div class="card">
+    <div class="row">
+      <label for="sublevel">Sublevel (shape):</label>
+      <select id="sublevel" aria-label="Choose sublevel">
+        <option value="0">s (l = 0)</option>
+        <option value="1">p (l = 1)</option>
+        <option value="2">d (l = 2)</option>
+        <option value="3">f (l = 3)</option>
+      </select>
+      <label for="ml">m<span style="vertical-align:sub;font-size:0.9em;">ℓ</span>:</label>
+      <input id="ml" type="range" min="0" max="0" step="1" value="0">
+      <span id="mlVal" class="pill active">0</span>
+    </div>
+    <div class="row meta" style="margin-top:8px;">
+      <div>l = <span id="lVal">0</span></div>
+      <div>| Number of orbitals = <span id="count">1</span> (= 2l + 1)</div>
+    </div>
+    <div id="mList" style="margin-top:6px;"></div>
+    <div id="axis" aria-label="m_l number line">
+      <div class="line"></div>
+      <div id="cursor" class="cursor"></div>
+    </div>
+  </div>
+<script>
+(function(){
+  const sub = document.getElementById('sublevel');
+  const ml = document.getElementById('ml');
+  const mlVal = document.getElementById('mlVal');
+  const lVal = document.getElementById('lVal');
+  const count = document.getElementById('count');
+  const mList = document.getElementById('mList');
+  const axis = document.getElementById('axis');
+  const cursor = document.getElementById('cursor');
+
+  function range(a,b){ const out=[]; for(let i=a;i<=b;i++) out.push(i); return out; }
+
+  function layoutTicks(L){
+    [...axis.querySelectorAll('.tick, .tick-label')].forEach(n=>n.remove());
+    const W = axis.clientWidth - 12;
+    const ms = range(-L, L);
+    const xOf = m => {
+      if (ms.length===1) return axis.clientWidth/2;
+      const idx = m + L;
+      return 6 + (idx / (ms.length - 1)) * W;
+    };
+    ms.forEach(m => {
+      const t = document.createElement('div');
+      t.className = 'tick';
+      t.style.left = xOf(m) + 'px';
+      axis.appendChild(t);
+      const lbl = document.createElement('div');
+      lbl.className = 'tick-label';
+      lbl.style.left = xOf(m) + 'px';
+      lbl.textContent = String(m);
+      axis.appendChild(lbl);
+    });
+    axis._xOf = xOf;
+  }
+
+  function setCursor(m){
+    const x = axis._xOf ? axis._xOf(m) : axis.clientWidth/2;
+    cursor.style.left = (x - 5) + 'px';
+  }
+
+  function renderForL(L){
+    lVal.textContent = L;
+    const ms = range(-L, L);
+    count.textContent = (2*L + 1);
+    ml.min = -L; ml.max = L;
+    if (+ml.value < -L || +ml.value > L) ml.value = 0;
+    mlVal.textContent = ml.value;
+    mList.innerHTML = ms.map(m => `<span class="pill${m==ml.value?' active':''}">${m}</span>`).join('');
+    layoutTicks(L);
+    setCursor(+ml.value);
+  }
+
+  sub.addEventListener('change', () => { renderForL(+sub.value); });
+  ml.addEventListener('input', () => { mlVal.textContent = ml.value; renderForL(+sub.value); });
+
+  renderForL(+sub.value);
+  window.addEventListener('resize', () => { layoutTicks(+sub.value); setCursor(+ml.value); });
+})();
+</script>
+</body></html>
