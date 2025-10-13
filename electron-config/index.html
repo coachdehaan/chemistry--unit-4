@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Electron Configuration — Block Layout + Floating Tray</title>
+<title>Electron Configuration — Block Layout (Strict)</title>
 <style>
   :root{
     --bg:#0f1216; --fg:#e6eaf0; --mut:#a8b0bd; --accent:#5aa7ff;
     --s:#0e6b73; --p:#4b5f16; --d:#5c1135; --f:#143ea9;
     --boxB:#5a6b86; --ok:#22c55e; --orb:#0f1622;
     --panel:#0b111b; --edge:#273244; --chip:#0f1622;
-    --warn:#dc2626; --overlay:rgba(2,8,23,.55);
+    --overlay:rgba(2,8,23,.55);
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Arial,sans-serif}
@@ -34,8 +34,6 @@
   .orbital{width:42px;height:34px;border:2px solid var(--boxB);border-radius:8px;background:var(--orb);display:flex;align-items:center;justify-content:center;position:relative}
   .orbital.full{border-color:var(--ok)}
   .orbital.over{outline:2px dashed var(--accent)}
-  .orbital.next{box-shadow:0 0 0 3px #3a82ff66}
-  .ghost{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; font-size:16px; opacity:.7}
 
   /* Electron chips */
   .e{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;user-select:none}
@@ -190,7 +188,7 @@ function buildBlocks(){
   const dTags=["3d","4d","5d","6d"];
   const fTags=["4f","5f"];
 
-  // Render top→bottom to match the screenshot
+  // Render top→bottom to match the image (7 at top, 1s bottom)
   [...sTags].reverse().forEach(tag=> addRow(scol, tag, 1));
   [...pTags].reverse().forEach(tag=> addRow(pcol, tag, 3));
   [...dTags].reverse().forEach(tag=> addRow(dcol, tag, 5));
@@ -238,16 +236,6 @@ function nextAllowed(){
 }
 
 /* ======= Placement + Feedback ======= */
-function highlightNext(){
-  // Clear previous highlights
-  document.querySelectorAll('.orbital.next').forEach(n=>{ n.classList.remove('next'); const g=n.querySelector('.ghost'); if(g) g.remove(); });
-  const a=nextAllowed(); if(!a) return;
-  const target=document.querySelector(`.orbital[data-key="${a.key}"]`);
-  if(target){ target.classList.add('next');
-    const ghost=document.createElement('div'); ghost.className='ghost'; ghost.textContent = a.spin==='up' ? '↑' : '↓';
-    target.appendChild(ghost);
-  }
-}
 function attemptPlace(targetBox, spin){
   const allowed = nextAllowed();
   if(!allowed){ return warn("No available orbital", "All orbitals through 7p are filled."); }
@@ -285,7 +273,7 @@ function attemptPlace(targetBox, spin){
   // Commit
   targetOcc.push({spin});
   drawOrbital(targetBox, targetOcc);
-  state.Z++; syncReadouts(); highlightNext();
+  state.Z++; syncReadouts();
 }
 function drawOrbital(box, occ){
   box.innerHTML='';
@@ -343,15 +331,13 @@ document.getElementById('autoOne').addEventListener('click', ()=>{
 });
 document.getElementById('clear').addEventListener('click', ()=>{
   for(const k in state.orbitals){ state.orbitals[k]=[]; }
-  document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full','next'); });
-  state.Z=0; syncReadouts(); highlightNext();
+  document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
+  state.Z=0; syncReadouts();
 });
 document.getElementById('nobleToggle').addEventListener('change', syncReadouts);
 
-/* Init + first highlight */
+/* Init */
 syncReadouts();
-highlightNext();
 </script>
 </body>
 </html>
-
