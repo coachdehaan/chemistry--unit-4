@@ -21,6 +21,7 @@
   .badge{border:1px solid #2b3a55;border-radius:10px;padding:4px 8px;background:var(--chip);color:#dce6f4}
   .cfg{background:#111a27;border:1px solid #2b3a55;border-radius:8px;padding:6px 8px}
   .hint{font-size:12px;color:var(--mut)}
+  .hidden{display:none}
 
   /* Block grid like the reference image */
   .blocks{display:grid;grid-template-columns:auto 1fr 1fr 1fr 1fr;gap:14px;align-items:start}
@@ -52,6 +53,7 @@
   .float-tray .e{cursor:grab}
   .btn{border:1px solid #2b3a55;background:var(--chip);color:#dce6f4;border-radius:8px;padding:6px 10px;cursor:pointer}
   .btn.primary{border-color:#3a82ff;background:#3a82ff;color:#fff}
+  .btn.warn{border-color:#ef4444;background:#ef4444;color:#fff}
   .btn:active{transform:translateY(1px)}
   @media (max-width:720px){ .float-tray{left:50%; transform:translateX(-50%); width:min(96%,520px)} }
 
@@ -69,17 +71,32 @@
     <div class="inner">
       <div class="row" style="justify-content:space-between">
         <h1>Electron Configuration — Block Layout</h1>
-        <label class="hint"><input id="nobleToggle" type="checkbox" checked> Noble-gas shorthand after Period ≥ 4</label>
+        <div class="row">
+          <label class="hint"><input id="nobleToggle" type="checkbox" checked> Noble-gas shorthand after Period ≥ 4</label>
+          <button id="toggleAnswers" class="btn">Show Answers</button>
+        </div>
       </div>
-      <div class="row" style="margin-top:6px;">
-        <div class="badge">Z = <strong id="Z">0</strong></div>
-        <div class="badge">Element: <strong id="El">—</strong></div>
-        <div class="badge">Period: <strong id="Period">—</strong></div>
+
+      <!-- Answers panel (hidden by default) -->
+      <div id="answersPanel" class="hidden" aria-live="polite">
+        <div class="row" style="margin-top:6px;">
+          <div class="badge">Z = <strong id="Z">0</strong></div>
+          <div class="badge">Element: <strong id="El">—</strong></div>
+          <div class="badge">Period: <strong id="Period">—</strong></div>
+        </div>
+        <div style="margin-top:8px;">
+          <div>Full configuration:</div>
+          <div id="cfg" class="cfg">—</div>
+          <div class="hint" style="margin-top:4px;">Shorthand: <span id="sh" class="cfg">—</span></div>
+        </div>
+        <div style="margin-top:8px;">
+          <div>Quantum numbers (last e⁻):</div>
+          <div id="qn" class="cfg">n = —, ℓ = — (—), m<sub>ℓ</sub> = —, m<sub>s</sub> = —</div>
+        </div>
       </div>
-      <div style="margin-top:8px;">
-        <div>Full configuration:</div>
-        <div id="cfg" class="cfg">—</div>
-        <div class="hint" style="margin-top:4px;">Shorthand: <span id="sh" class="cfg">—</span></div>
+
+      <div class="hint" style="margin-top:8px;">
+        Place electrons in strict <strong>Aufbau</strong> order with <strong>Hund’s rule</strong> and <strong>Pauli</strong>. Wrong drops are rejected with a rule-specific warning.
       </div>
     </div>
 
@@ -110,6 +127,7 @@
       <div class="e down" draggable="true" data-spin="down">↓</div>
     </div>
     <button id="autoOne" class="btn primary" title="Tap to place the next allowed electron">Auto-place 1</button>
+    <button id="autoRemove" class="btn warn" title="Undo last correct placement">Auto-remove 1</button>
     <button id="clear" class="btn">Clear</button>
   </div>
 </div>
@@ -150,7 +168,7 @@ const PERIOD = (()=>{const b=[2,10,18,36,54,86,118]; const p=[null]; for(let z=1
 const NOBLES = [{Z:2,sym:"He"},{Z:10,sym:"Ne"},{Z:18,sym:"Ar"},{Z:36,sym:"Kr"},{Z:54,sym:"Xe"},{Z:86,sym:"Rn"},{Z:118,sym:"Og"}];
 
 /* ======= State ======= */
-const state = { orbitals:{}, Z:0 };
+const state = { orbitals:{}, Z:0, history:[] };
 
 /* ======= Build columns to match the reference image ======= */
 function addRow(container, tag, boxes){
@@ -188,7 +206,7 @@ function buildBlocks(){
   const dTags=["3d","4d","5d","6d"];
   const fTags=["4f","5f"];
 
-  // Render top→bottom to match the image (7 at top, 1s bottom)
+  // Render top→bottom (7 at top, 1s bottom)
   [...sTags].reverse().forEach(tag=> addRow(scol, tag, 1));
   [...pTags].reverse().forEach(tag=> addRow(pcol, tag, 3));
   [...dTags].reverse().forEach(tag=> addRow(dcol, tag, 5));
@@ -235,6 +253,25 @@ function nextAllowed(){
   return null;
 }
 
+/* ======= Quantum numbers helpers ======= */
+const L_FROM_SUB = { s:0, p:1, d:2, f:3 };
+function mlSequenceFor(sub){
+  const l = L_FROM_SUB[sub];
+  const arr=[]; for(let m=-l; m<=l; m++) arr.push(m);
+  return arr; // left→right mapping
+}
+function qnFromKeySpin(key, spin){
+  const tag = key.split(":")[0];           // e.g., "4p"
+  const n = parseInt(tag);                 // principal
+  const sub = tag.replace(/[0-9]/g,"");    // s/p/d/f
+  const l = L_FROM_SUB[sub];
+  const idx = parseInt(key.split(":")[1],10); // orbital index within subshell
+  const mlList = mlSequenceFor(sub);
+  const m_l = mlList[idx] ?? 0;
+  const m_s = (spin === 'up') ? '+1/2' : '−1/2';
+  return { n, l, sub, m_l, m_s };
+}
+
 /* ======= Placement + Feedback ======= */
 function attemptPlace(targetBox, spin){
   const allowed = nextAllowed();
@@ -273,7 +310,11 @@ function attemptPlace(targetBox, spin){
   // Commit
   targetOcc.push({spin});
   drawOrbital(targetBox, targetOcc);
-  state.Z++; syncReadouts();
+  state.Z++;
+  // Push to history for undo
+  state.history.push({ key: targetKey, spin });
+  syncReadouts();
+  syncQuantumLast(); // update quantum numbers
 }
 function drawOrbital(box, occ){
   box.innerHTML='';
@@ -356,6 +397,19 @@ function syncReadouts(){
   document.getElementById('sh').textContent=shorthand();
 }
 
+/* ======= Quantum numbers readout (last electron) ======= */
+function syncQuantumLast(){
+  const qnEl = document.getElementById('qn');
+  if (!state.history.length){
+    qnEl.textContent = 'n = —, ℓ = — (—), mℓ = —, ms = —';
+    return;
+  }
+  const last = state.history[state.history.length - 1]; // {key, spin}
+  const q = qnFromKeySpin(last.key, last.spin);
+  const lName = ({0:'s',1:'p',2:'d',3:'f'})[q.l] || '—';
+  qnEl.innerHTML = `n = ${q.n}, ℓ = ${q.l} (${lName}), m<sub>ℓ</sub> = ${q.m_l}, m<sub>s</sub> = ${q.m_s}`;
+}
+
 /* ======= Modal & buttons ======= */
 const modal=document.getElementById('modal'); const mBody=document.getElementById('mBody');
 document.getElementById('ok').addEventListener('click', ()=> modal.classList.remove('show'));
@@ -365,15 +419,42 @@ document.getElementById('autoOne').addEventListener('click', ()=>{
   const a=nextAllowed(); if(!a) return;
   const box=document.querySelector(`.orbital[data-key="${a.key}"]`); attemptPlace(box, a.spin);
 });
+
+document.getElementById('autoRemove').addEventListener('click', ()=>{
+  if(!state.history.length) return;
+  const last = state.history.pop(); // {key, spin}
+  const occ = state.orbitals[last.key];
+  if(occ && occ.length){
+    // remove the electron that matches 'spin' (it will be the last added in our flow)
+    occ.pop();
+    const box = document.querySelector(`.orbital[data-key="${last.key}"]`);
+    if(box) drawOrbital(box, occ);
+    if(state.Z > 0) state.Z--;
+    syncReadouts();
+    syncQuantumLast();
+  }
+});
+
 document.getElementById('clear').addEventListener('click', ()=>{
   for(const k in state.orbitals){ state.orbitals[k]=[]; }
   document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
-  state.Z=0; syncReadouts();
+  state.Z=0; state.history=[];
+  syncReadouts(); syncQuantumLast();
 });
+
 document.getElementById('nobleToggle').addEventListener('change', syncReadouts);
+
+/* Answers Show/Hide toggle */
+const answersPanel = document.getElementById('answersPanel');
+const toggleBtn = document.getElementById('toggleAnswers');
+toggleBtn.addEventListener('click', ()=>{
+  const hidden = answersPanel.classList.toggle('hidden');
+  toggleBtn.textContent = hidden ? 'Show Answers' : 'Hide Answers';
+});
 
 /* Init */
 syncReadouts();
+syncQuantumLast();
 </script>
 </body>
 </html>
