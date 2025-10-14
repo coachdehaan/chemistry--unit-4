@@ -1,0 +1,242 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Class Slider Evaluator – Simple Live</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{fontFamily:{sans:["Inter","ui-sans-serif","system-ui"]}}}};</script>
+  <!-- (Optional) Firebase for multi-device sync. Leave off unless you add your config. -->
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <style>
+    .card{ @apply bg-white rounded-2xl shadow p-5; }
+    .btn{ @apply px-4 py-2 rounded-xl shadow text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50; }
+    .btn-ghost{ @apply px-3 py-2 rounded-xl text-sm font-medium hover:bg-gray-100; }
+    .tab{ @apply px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer; }
+    .tab-active{ @apply bg-gray-900 text-white; }
+    .tab-inactive{ @apply hover:bg-gray-100; }
+    dialog::backdrop{ background: rgba(0,0,0,0.45); }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="max-w-5xl mx-auto p-4">
+    <header class="flex items-center justify-between mb-3">
+      <h1 class="text-2xl font-bold">Class Slider Evaluator</h1>
+      <div class="flex items-center gap-2">
+        <span id="connectionBadge" class="text-xs px-2 py-1 rounded-full bg-gray-100">offline (local)</span>
+        <button id="gearBtn" class="btn-ghost" title="Teacher tools">⚙️</button>
+      </div>
+    </header><nav class="mb-3 flex gap-2">
+  <button class="tab tab-active" data-tab="join">Join</button>
+  <button class="tab tab-inactive" data-tab="rate">Rate</button>
+  <button class="tab tab-inactive" data-tab="results">Results</button>
+</nav>
+
+<main class="grid md:grid-cols-3 gap-4">
+  <!-- Left: roster -->
+  <section class="md:col-span-1 card">
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="font-semibold">Roster</h2>
+      <button id="refreshRoster" class="btn-ghost text-xs">Refresh</button>
+    </div>
+    <ul id="rosterList" class="space-y-2 text-sm"></ul>
+    <div class="text-xs text-gray-500 mt-3">Tap your name to go to Rate.</div>
+  </section>
+
+  <!-- Middle: join / rate -->
+  <section class="md:col-span-1 space-y-4">
+    <div id="joinTab" class="card">
+      <h2 class="font-semibold mb-2">Join</h2>
+      <label class="block text-sm mb-1">Your name</label>
+      <input id="nameInput" class="w-full border rounded-xl px-3 py-2" placeholder="e.g., Jane S." />
+      <div class="flex items-center gap-2 mt-3">
+        <button id="joinBtn" class="btn">Join class</button>
+        <span id="joinStatus" class="text-sm"></span>
+      </div>
+    </div>
+
+    <div id="rateTab" class="card hidden">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold">Rate (1–10)</h2>
+        <div class="text-sm">You: <span id="whoami" class="font-semibold">—</span></div>
+      </div>
+      <div id="criteriaList" class="mt-3 space-y-4"></div>
+      <div class="mt-3 text-right text-sm">Your total: <span id="totalScore" class="font-semibold">0</span></div>
+    </div>
+  </section>
+
+  <!-- Right: results -->
+  <section class="md:col-span-1 card" id="resultsTab" class="hidden">
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="font-semibold">Results (Averages)</h2>
+      <button id="exportBtn" class="btn-ghost text-xs">CSV</button>
+    </div>
+    <div id="resultsSummary" class="space-y-2 text-sm"></div>
+    <div class="border-t mt-3 pt-3 text-sm">
+      <div class="flex items-center justify-between">
+        <div class="font-semibold">Final average</div>
+        <div class="font-bold text-lg" id="finalAverage">0.00</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+  </div>  <!-- Teacher modal -->  <dialog id="teacherDlg" class="rounded-2xl w-full max-w-sm">
+    <form method="dialog" class="p-5 space-y-4">
+      <h3 class="text-lg font-semibold">Teacher Tools</h3>
+      <label class="block text-sm">Enter PIN to unlock reset</label>
+      <input id="pinInput" type="password" class="w-full border rounded-xl px-3 py-2" placeholder="PIN" />
+      <div class="flex items-center gap-2">
+        <button id="unlockBtn" class="btn" value="unlock">Unlock</button>
+        <button class="btn-ghost" value="cancel">Close</button>
+      </div>
+      <div id="teacherActions" class="hidden border-t pt-3">
+        <button id="resetScores" class="btn w-full">Reset scores (keep roster)</button>
+        <button id="resetAll" class="btn-ghost w-full mt-2">Reset ALL (scores + roster)</button>
+      </div>
+    </form>
+  </dialog>  <script>
+    // ===== CONFIG (edit text & categories here) =====
+    const CONFIG = {
+      classKey: "default",          // change to separate periods
+      teacherPin: "2468",           // <- YOUR PIN
+      useFirebase: false,            // set true after filling firebaseConfig
+      firebaseConfig: { apiKey:"", authDomain:"", databaseURL:"", projectId:"", storageBucket:"", messagingSenderId:"", appId:"" },
+      criteria: [                    // edit labels; max is fixed 10 per Mr. D spec
+        { id: uid(), label: "Content Accuracy" },
+        { id: uid(), label: "Clarity" },
+        { id: uid(), label: "Visuals" },
+        { id: uid(), label: "Engagement" },
+        { id: uid(), label: "Delivery" }
+      ]
+    };
+
+    const MAX_SCORE = 10; // fixed 1–10 sliders
+
+    // ===== STATE / STORAGE =====
+    const state = { db:null, online:false, me:null };
+    const LS_KEY = `cse_simple_${CONFIG.classKey}`;
+    const readLocal = () => JSON.parse(localStorage.getItem(LS_KEY)||"{}");
+    const writeLocal = (obj) => localStorage.setItem(LS_KEY, JSON.stringify(obj));
+
+    function dbInit(){
+      if(!CONFIG.useFirebase) return;
+      try{ firebase.initializeApp(CONFIG.firebaseConfig); state.db=firebase.database(); state.online=true; badge('online (firebase)'); liveWire(); }
+      catch(e){ console.warn(e); state.online=false; badge('offline (local)'); }
+    }
+    function badge(txt){ document.getElementById('connectionBadge').textContent = txt; }
+
+    function getAll(){
+      if(state.db){ /* live listeners handle state; just reflect local mirror */ }
+      const d = readLocal();
+      if(!d.criteria){ d.criteria = CONFIG.criteria; writeLocal(d); }
+      if(!d.students){ d.students = {}; writeLocal(d); }
+      return d;
+    }
+    function setAll(obj){ const d = readLocal(); const m = {...d, ...obj}; writeLocal(m); renderAll(); }
+    function updateStudent(name, patch){ const d=getAll(); d.students[name]={...(d.students[name]||{}), ...patch}; writeLocal(d); renderAll(); }
+
+    function liveWire(){
+      if(!state.db) return;
+      const base = `/classes/${CONFIG.classKey}`;
+      state.db.ref(`${base}/criteria`).on('value', s=>{ const d=getAll(); d.criteria=s.val()||CONFIG.criteria; writeLocal(d); renderAll(); });
+      state.db.ref(`${base}/students`).on('value', s=>{ const d=getAll(); d.students=s.val()||{}; writeLocal(d); renderAll(); });
+    }
+
+    // ===== UTIL =====
+    const $ = sel=>document.querySelector(sel); const $$=sel=>Array.from(document.querySelectorAll(sel));
+    function uid(){ return Math.random().toString(36).slice(2,9); }
+    function mean(arr){ return arr.length? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+
+    // ===== RENDER =====
+    function renderRoster(){
+      const list = $('#rosterList'); list.innerHTML='';
+      const {students} = getAll(); const names = Object.keys(students).sort((a,b)=>a.localeCompare(b));
+      if(!names.length){ list.innerHTML='<div class="text-gray-500">No students yet.</div>'; return; }
+      names.forEach(n=>{
+        const total = computeStudentTotal(n);
+        const li = document.createElement('li'); li.className='flex items-center justify-between';
+        li.innerHTML = `<button class="btn-ghost flex-1 text-left" data-pick="${n}"><span class="font-medium">${n}</span></button><span class="text-xs px-2 py-0.5 rounded-full bg-gray-100">${total.toFixed(1)}</span>`;
+        list.appendChild(li);
+      });
+      list.querySelectorAll('[data-pick]').forEach(b=> b.onclick = ()=>{ state.me=b.dataset.pick; updateWho(); setTab('rate'); });
+    }
+
+    function renderRate(){ updateWho(); const wrap=$('#criteriaList'); wrap.innerHTML='';
+      const d=getAll(); const my=(d.students[state.me]||{scores:{}}).scores||{};
+      d.criteria.forEach((c,idx)=>{
+        const v = Math.max(0, Math.min(MAX_SCORE, Number(my[c.id]||0)));
+        const row = document.createElement('div');
+        row.innerHTML = `
+          <div class="flex items-center justify-between mb-1"><div class="text-sm font-medium">${idx+1}. ${c.label}</div><div class="text-xs text-gray-500">1–${MAX_SCORE}</div></div>
+          <input type="range" min="1" max="${MAX_SCORE}" step="1" value="${v||1}" data-crit="${c.id}" class="w-full"/>
+          <div class="text-right text-sm mt-1">Score: <span data-val="${c.id}" class="font-semibold">${v||1}</span></div>`;
+        wrap.appendChild(row);
+      });
+      wrap.querySelectorAll('input[type=range]').forEach(r=>{ r.oninput=()=>{ const id=r.dataset.crit; const v=Number(r.value); wrap.querySelector(`[data-val="${id}"]`).textContent=v; queueSave(id,v); updateMyTotal(); }; });
+      updateMyTotal();
+    }
+
+    function updateMyTotal(){ const t = computeStudentTotal(state.me); $('#totalScore').textContent=t.toFixed(1); }
+    function updateWho(){ $('#whoami').textContent = state.me||'—'; }
+
+    function renderResults(){
+      const box = $('#resultsSummary'); box.innerHTML='';
+      const d=getAll(); const names = Object.keys(d.students);
+      if(!names.length){ box.textContent='No submissions yet.'; $('#finalAverage').textContent='0.00'; return; }
+
+      // Per Mr. D: average each category over ALL students in roster; missing scores count as 0
+      const avgs = d.criteria.map(c=>{
+        const vals = names.map(n=> Number(((d.students[n].scores||{})[c.id])||0));
+        return { label:c.label, avg: mean(vals) };
+      });
+
+      avgs.forEach(a=>{
+        const row=document.createElement('div'); row.className='flex items-center justify-between';
+        row.innerHTML = `<div>${a.label}</div><div class="font-semibold">${a.avg.toFixed(2)} / ${MAX_SCORE}</div>`; box.appendChild(row);
+      });
+
+      const finalAvg = mean(avgs.map(a=>a.avg));
+      $('#finalAverage').textContent = finalAvg.toFixed(2);
+    }
+
+    function renderAll(){ renderRoster(); renderRate(); renderResults(); }
+
+    function setTab(which){ $$('.tab').forEach(b=>{ const on=b.dataset.tab===which; b.className=`tab ${on?'tab-active':'tab-inactive'}`; });
+      $('#joinTab').classList.toggle('hidden', which!=='join');
+      $('#rateTab').classList.toggle('hidden', which!=='rate');
+      // results panel is always visible on the right; nothing to toggle here
+    }
+
+    // ===== COMPUTE / SAVE =====
+    function computeStudentTotal(name){ const d=getAll(); const me=(d.students[name]||{scores:{}}).scores||{}; return d.criteria.reduce((s,c)=> s + Number(me[c.id]||0), 0); }
+
+    let saveTimer=null; const SAVE_DELAY=200;
+    function queueSave(id,v){ if(saveTimer) clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ const d=getAll(); const cur=d.students[state.me]||{scores:{}}; cur.scores=cur.scores||{}; cur.scores[id]=v; cur.ts=Date.now(); updateStudent(state.me,cur); }, SAVE_DELAY); }
+
+    // ===== EXPORT / RESET (teacher) =====
+    function exportCSV(){ const d=getAll(); const headers=['Name', ...d.criteria.map(c=>c.label),'Total']; const rows=[headers];
+      Object.keys(d.students).forEach(n=>{ const s=d.students[n].scores||{}; const vals=d.criteria.map(c=>Number(s[c.id]||0)); const tot=vals.reduce((a,b)=>a+b,0).toFixed(2); rows.push([n,...vals,tot]); });
+      const csv = rows.map(r=>r.map(x=> (""+x).includes(',')?`"${x}"`:x).join(',')).join('
+'); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`results-${CONFIG.classKey}.csv`; a.click(); URL.revokeObjectURL(url); }
+
+    function resetScores(){ const d=getAll(); Object.keys(d.students).forEach(n=>{ if(d.students[n].scores) d.students[n].scores={}; }); setAll(d); }
+    function resetAll(){ setAll({criteria:CONFIG.criteria, students:{}}); }
+
+    // ===== WIRE UI =====
+    $('#joinBtn').onclick = function(){ const name=$('#nameInput').value.trim(); if(!name){ $('#joinStatus').textContent='Enter a name.'; return; } const d=getAll(); d.students[name]=d.students[name]||{scores:{},ts:Date.now()}; setAll(d); state.me=name; updateWho(); $('#joinStatus').textContent='Joined. Go to Rate.'; setTab('rate'); };
+    $('#refreshRoster').onclick = renderRoster;
+    $$('.tab').forEach(b=> b.onclick = ()=> setTab(b.dataset.tab));
+    $('#exportBtn').onclick = exportCSV;
+
+    // Teacher modal + PIN-protected resets
+    const dlg = document.getElementById('teacherDlg');
+    document.getElementById('gearBtn').onclick = ()=> dlg.showModal();
+    document.getElementById('unlockBtn').onclick = (e)=>{ e.preventDefault(); if($('#pinInput').value===CONFIG.teacherPin){ document.getElementById('teacherActions').classList.remove('hidden'); } else { alert('Wrong PIN'); }};
+    document.getElementById('resetScores').onclick = (e)=>{ e.preventDefault(); if(confirm('Reset scores (keep roster)?')) resetScores(); };
+    document.getElementById('resetAll').onclick = (e)=>{ e.preventDefault(); if(confirm('Reset ALL (scores + roster)?')) resetAll(); };
+
+    // Boot
+    window.addEventListener('load',()=>{ badge(CONFIG.useFirebase? 'online (firebase)':'offline (local)'); dbInit(); renderAll(); });
+  </script></body>
+</html>
