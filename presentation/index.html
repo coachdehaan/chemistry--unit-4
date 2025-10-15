@@ -9,15 +9,13 @@
     .wrap{max-width:1000px;margin:0 auto}
     .row{display:grid;grid-template-columns:2fr 1fr;gap:12px}
     .card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:14px 16px}
-    .btn{padding:.5rem 1rem;border-radius:.75rem;border:1px solid #111;background:#111;color:#fff;font-weight:600}
+    .btn{padding:.5rem 1rem;border-radius:.75rem;border:1px solid:#111;background:#111;color:#fff;font-weight:600}
     .btn-ghost{padding:.35rem .65rem;border-radius:.65rem;border:1px solid #ddd;background:#fff}
     .badge{font-size:.7rem;padding:.2rem .5rem;border-radius:9999px;background:#eef}
     input[type="range"]{width:100%}
     .mut{color:#666;font-size:12px}
     .tiny{font-size:11px;line-height:1.2}
   </style>
-
-  <!-- Firebase SDKs -->
   <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -117,16 +115,19 @@
         storageBucket: "presentation-83d1f.firebasestorage.app",
         messagingSenderId: "132406143951",
         appId: "1:132406143951:web:9695690023bd3f2aedc0ba"
-      },
-      criteria: [
-        { id: uid(), label: "Content Accuracy" },
-        { id: uid(), label: "Clarity" },
-        { id: uid(), label: "Visuals" },
-        { id: uid(), label: "Engagement" },
-        { id: uid(), label: "Delivery" }
-      ]
+      }
     };
     const MAX_SCORE = 10;
+
+    // ===== STABLE, SHARED CRITERIA (seed once if missing) =====
+    const DEFAULT_CRITERIA = [
+      { id: "content",    label: "Content Accuracy" },
+      { id: "clarity",    label: "Clarity" },
+      { id: "visuals",    label: "Visuals" },
+      { id: "engagement", label: "Engagement" },
+      { id: "delivery",   label: "Delivery" }
+    ];
+    let CRITERIA = DEFAULT_CRITERIA.slice(); // will be replaced by DB value
 
     // ===== STATE =====
     const state = { db:null, me:{id:null,name:null}, online:false, studentRef:null };
@@ -136,10 +137,10 @@
     // ===== UTIL =====
     const $ = s => document.querySelector(s);
     const $$ = s => Array.from(document.querySelectorAll(s));
-    function uid(){ return Math.random().toString(36).slice(2,9); }
     function mean(a){ return a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0; }
     function show(el,on){ el.style.display = on ? '' : 'none'; }
     function badge(txt){ $('#connectionBadge').textContent = txt; }
+    function uid(){ return Math.random().toString(36).slice(2,9); }
 
     // ===== FIREBASE INIT =====
     function dbInit(){
@@ -149,13 +150,27 @@
         state.db = firebase.database();
         firebase.auth().signInAnonymously().then(()=>{
           state.online = true; badge('online (firebase)');
-          attachListeners();
+          initCriteriaThenAttach();
         }).catch(()=>{ state.online=false; badge('offline (local)'); });
       }catch(e){ state.online=false; badge('offline (local)'); }
     }
-    function attachListeners(){
+
+    // Ensure criteria exist in DB with STABLE IDs, then attach listeners
+    async function initCriteriaThenAttach(){
       const cRef = state.db.ref(`${basePath()}/criteria`);
-      cRef.once('value').then(s=>{ if(!s.exists()) cRef.set(CONFIG.criteria); });
+      const snap = await cRef.get();
+      if(!snap.exists()){
+        await cRef.set(DEFAULT_CRITERIA);   // seed once with stable IDs
+        CRITERIA = DEFAULT_CRITERIA.slice();
+      } else {
+        const val = snap.val() || [];
+        // normalize to array if stored as object
+        CRITERIA = Array.isArray(val) ? val : Object.values(val);
+      }
+      attachListeners();
+    }
+
+    function attachListeners(){
       // Live roster & results
       state.db.ref(`${basePath()}/students`).on('value', snap=>{
         cacheStudents = snap.val() || {};
@@ -176,25 +191,24 @@
       const id = state.me.id;
       state.studentRef = state.db.ref(`${basePath()}/students/${id}`);
 
-      // Seed scores at 1 for visibility
-      const seed = Object.fromEntries(CONFIG.criteria.map(c => [c.id, 1]));
-      await state.studentRef.set({ name, scores: seed });
+      // Only create name (no seeded scores)
+      await state.studentRef.set({ name });
 
-      // TRUE presence: remove node when tab closes/disconnects
+      // TRUE presence: auto-remove on disconnect/close
       try { state.studentRef.onDisconnect().remove(); } catch (e) {}
 
-      // Also remove on refresh/unload (so they rejoin clean)
+      // Extra: remove on refresh/unload
       window.addEventListener('beforeunload', () => {
         try { state.studentRef.remove(); } catch(e) {}
       });
 
-      renderSliders(); // make sliders immediately usable
+      renderSliders();
     }
 
-    // ===== SLIDERS (instant write-through) =====
+    // ===== SLIDERS (instant write-through using CRITERIA from DB) =====
     function renderSliders(){
       const wrap = $('#criteriaList'); wrap.innerHTML = '';
-      CONFIG.criteria.forEach((c, idx)=>{
+      CRITERIA.forEach((c, idx)=>{
         const div = document.createElement('div');
         div.innerHTML = `
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -208,23 +222,25 @@
 
       wrap.querySelectorAll('input[type=range]').forEach(r=>{
         r.oninput = ()=>{
-          const id = r.dataset.crit;
+          const critId = r.dataset.crit;
           const v = Number(r.value);
-          wrap.querySelector(`[data-val="${id}"]`).textContent = v;
-          if(state.studentRef) state.studentRef.child(`scores/${id}`).set(v);
+          wrap.querySelector(`[data-val="${critId}"]`).textContent = v;
+          if(state.studentRef) state.studentRef.child(`scores/${critId}`).set(v);
         };
       });
     }
 
-    // ===== RESULTS (live-only) =====
+    // ===== RESULTS (live-only; ignore unset scores) =====
     function renderResults(students){
-      const pool = Object.values(students || {}); // everyone with an open page
+      const pool = Object.values(students || {}); // everyone with page open
       $('#participantsBadge').textContent = `${pool.length} participants`;
       $('#participantsList').textContent = pool.map(s=> s && s.name ? s.name : '—').join(', ');
 
-      // Per-category averages
-      const res = CONFIG.criteria.map(c=>{
-        const vals = pool.map(s => Number((s.scores||{})[c.id] || 0));
+      // Per-category averages: include only students that HAVE a number for that criterion
+      const res = CRITERIA.map(c=>{
+        const vals = pool
+          .map(s => (s && s.scores && typeof s.scores[c.id] === 'number') ? Number(s.scores[c.id]) : null)
+          .filter(v => v !== null);
         return { label:c.label, avg: mean(vals) };
       });
 
@@ -240,9 +256,17 @@
       const finalAvg = mean(res.map(a=> a.avg || 0));
       $('#finalAverage').textContent = (finalAvg||0).toFixed(2);
 
-      // Class total average (mean of each student's sum)
-      const totals = pool.map(s => CONFIG.criteria.reduce((sum,c)=> sum + Number((s.scores||{})[c.id] || 0), 0));
-      const maxTot = CONFIG.criteria.length * MAX_SCORE;
+      // Class total average (mean of each student's sum, counting only set scores)
+      const totals = pool.map(s => {
+        if(!s || !s.scores) return null;
+        const nums = CRITERIA
+          .map(c => (typeof (s.scores||{})[c.id] === 'number') ? Number(s.scores[c.id]) : null)
+          .filter(v => v !== null);
+        if(!nums.length) return null;
+        return nums.reduce((a,b)=>a+b,0);
+      }).filter(v => v !== null);
+
+      const maxTot = CRITERIA.length * MAX_SCORE;
       $('#classTotalAvg').textContent = `${(mean(totals)||0).toFixed(2)} / ${maxTot}`;
       $('#maxTotal').textContent = maxTot;
     }
