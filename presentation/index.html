@@ -131,7 +131,7 @@
     let CRITERIA = DEFAULT_CRITERIA.slice();
 
     // ===== STATE =====
-    const state = { db:null, me:{id:null,name:null}, online:false, studentRef:null };
+    const state = { db:null, me:{id:null,name:null}, online:false, studentRef:null, joined:false };
     let cacheStudents = {};
     const basePath = () => `/classes/${CONFIG.classKey}`;
 
@@ -143,16 +143,18 @@
     function badge(txt){ $('#connectionBadge').textContent = txt; }
     function uid(){ return Math.random().toString(36).slice(2,9); }
 
-    // ===== RESET GUARD helpers (persist across reloads) =====
+    // ===== RESET TOKEN GUARD (persist without reload) =====
     function seenKey(k){ return `present_seen_${CONFIG.classKey}_${k}`; }
     function getSeen(k){ return Number(localStorage.getItem(seenKey(k)) || 0); }
     function setSeen(k, v){ localStorage.setItem(seenKey(k), String(v)); }
 
-    // ===== FIREBASE INIT =====
+    // ===== FIREBASE INIT (no double init) =====
     function dbInit(){
       if(!CONFIG.useFirebase){ badge('offline (local)'); return; }
       try{
-        firebase.initializeApp(CONFIG.firebaseConfig);
+        if (firebase.apps && firebase.apps.length === 0) {
+          firebase.initializeApp(CONFIG.firebaseConfig);
+        }
         state.db = firebase.database();
         firebase.auth().signInAnonymously().then(()=>{
           state.online = true; badge('online (firebase)');
@@ -167,27 +169,27 @@
       if(!snap.exists()){ await cRef.set(DEFAULT_CRITERIA); CRITERIA = DEFAULT_CRITERIA.slice(); }
       else { const val = snap.val() || []; CRITERIA = Array.isArray(val) ? val : Object.values(val); }
 
-      // Listen for teacher soft/hard resets (with guards)
+      // Listen for teacher soft/hard resets (guarded, no reloads)
       state.db.ref(`${basePath()}/control/softResetAt`).on('value', s=>{
         const t = Number(s.val() || 0);
-        if(t && t > getSeen('soft')){           // RESET GUARD
+        if(t && t > getSeen('soft')){
           setSeen('soft', t);
-          // Zero my sliders visually + write zeros
-          $$('#criteriaList input[type=range]').forEach(r=>{
-            r.value = 0;
-            r.dispatchEvent(new Event('input'));
-          });
+          // Zero sliders visually & write zeros if joined
+          if(state.joined){
+            $$('#criteriaList input[type=range]').forEach(r=>{
+              r.value = 0;
+              r.dispatchEvent(new Event('input'));
+            });
+          }
         }
       });
 
       state.db.ref(`${basePath()}/control/resetAt`).on('value', s=>{
         const t = Number(s.val() || 0);
-        if(t && t > getSeen('hard')){           // RESET GUARD
-          setSeen('hard', t);
-          try { if(state.studentRef) state.studentRef.remove(); } catch(e) {}
-          localStorage.removeItem('present_uid');
-          location.reload(); // back to Join, but won't loop due to guard
-        }
+        if(!t || t <= getSeen('hard')) return;
+        setSeen('hard', t);
+        // Hard reset: return to Join view WITHOUT reloading
+        goToJoinView();
       });
 
       attachListeners();
@@ -198,26 +200,53 @@
         cacheStudents = snap.val() || {};
         renderResults(cacheStudents);
       });
+
+      // connectivity indicator using RTDB .info/connected
+      state.db.ref('.info/connected').on('value', s=>{
+        const ok = !!s.val();
+        badge(ok ? 'online (firebase)' : 'offline (local)');
+      });
     }
 
-    // ===== JOIN / LIVE PRESENCE =====
+    // ===== JOIN / PRESENCE =====
     function ensureClientId(){
       let id = localStorage.getItem('present_uid');
       if(!id){ id = uid(); localStorage.setItem('present_uid', id); }
       state.me.id = id; return id;
     }
+
     async function joinClass(name){
-      ensureClientId(); state.me.name = name;
+      ensureClientId(); state.me.name = name; state.joined = true;
       $('#whoami').textContent = name; show($('#rateCard'), true); show($('#joinCard'), false);
 
       const id = state.me.id;
       state.studentRef = state.db.ref(`${basePath()}/students/${id}`);
 
       await state.studentRef.set({ name }); // no seeded scores
+
+      // Presence cleanup only if joined
       try { state.studentRef.onDisconnect().remove(); } catch (e) {}
-      window.addEventListener('beforeunload', () => { try { state.studentRef.remove(); } catch(e) {} });
+      window.addEventListener('beforeunload', () => {
+        if(state.studentRef){ try { state.studentRef.remove(); } catch(e) {} }
+      });
 
       renderSliders();
+    }
+
+    // Return to Join WITHOUT reload (used by hard reset)
+    function goToJoinView(){
+      // Remove my presence node if exists
+      if(state.studentRef){ try { state.studentRef.remove(); } catch(e) {} }
+      state.studentRef = null;
+      state.joined = false;
+      // Clear my local id so next join is fresh
+      localStorage.removeItem('present_uid');
+      // Reset UI
+      $('#nameInput').value = '';
+      $('#whoami').textContent = '—';
+      $('#criteriaList').innerHTML = '';
+      show($('#rateCard'), false);
+      show($('#joinCard'), true);
     }
 
     // ===== SLIDERS (0–10) =====
@@ -286,8 +315,6 @@
     // ===== TEACHER CONTROLS =====
     async function resetScoresKeepParticipants(){
       if(!state.db) return;
-      if(!confirm('Reset scores to 0 for all participants?')) return;
-
       const root = state.db.ref(basePath());
       const studentsSnap = await root.child('students').get();
       const students = studentsSnap.val() || {};
@@ -304,10 +331,10 @@
 
     async function endSessionKickAll(){
       if(!state.db) return;
-      if(!confirm('End session and kick everyone off?')) return;
       const root = state.db.ref(basePath());
       await root.child('students').set({});
       await root.child('control/resetAt').set(firebase.database.ServerValue.TIMESTAMP);
+      // Note: clients return to Join view; no reloads
     }
 
     // ===== UI WIRES =====
