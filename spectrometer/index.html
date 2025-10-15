@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Webcam Spectrometer – Mr. D</title>
+<style>
+  :root { --bg:#0d1117; --ink:#e6edf3; --mut:#8b949e; --acc:#58a6ff; --grid:#30363d; }
+  html,body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.35 system-ui,Segoe UI,Roboto,Helvetica,Arial; }
+  header{padding:10px 14px; border-bottom:1px solid var(--grid); display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
+  h1{font-size:16px;margin:0 8px 0 0;}
+  main{display:grid; grid-template-columns: 1.3fr 1fr; gap:10px; padding:10px;}
+  .panel{border:1px solid var(--grid); border-radius:10px; overflow:hidden; background:#0f141b;}
+  .p-h{padding:8px 10px; background:#0b0f14; border-bottom:1px solid var(--grid); font-weight:600;}
+  .p-b{padding:10px;}
+  #viewwrap{position:relative; background:#000;}
+  video,canvas{max-width:100%; display:block;}
+  #draw {position:absolute; inset:0; pointer-events:none;}
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0;}
+  label{color:var(--mut);}
+  input,select,button{background:#0b0f14;color:var(--ink);border:1px solid var(--grid);border-radius:8px;padding:6px 8px}
+  button{cursor:pointer}
+  .small{font-size:12px;color:var(--mut)}
+  #plot{height:260px;width:100%;background:#000;border:1px solid var(--grid);border-radius:8px}
+  .hint{color:var(--mut);font-size:12px}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px}
+  .mono{font-family:ui-monospace,Consolas,Menlo,monospace}
+  .pill{padding:2px 8px;border:1px solid var(--grid);border-radius:999px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Webcam Spectrometer</h1>
+  <span class="pill">ROI: drag in preview</span>
+  <span class="pill">Calibrate: click “Pick px”</span>
+</header>
+
+<main>
+  <!-- Left: live view & controls -->
+  <section class="panel">
+    <div class="p-h">Live Preview</div>
+    <div class="p-b" id="viewwrap">
+      <video id="vid" playsinline muted></video>
+      <canvas id="draw"></canvas>
+    </div>
+    <div class="p-b">
+      <div class="row">
+        <button id="start">Start Camera</button>
+        <label>Resolution
+          <select id="res">
+            <option value="640x480">640×480</option>
+            <option value="1280x720" selected>1280×720</option>
+            <option value="1920x1080">1920×1080</option>
+          </select>
+        </label>
+        <label>Orientation
+          <select id="orient">
+            <option value="horizontal" selected>Horizontal spectrum</option>
+            <option value="vertical">Vertical spectrum</option>
+          </select>
+        </label>
+        <label>Avg rows <input id="avg" type="number" value="10" min="1" max="200" style="width:70px"></label>
+        <label>Smooth <input id="smooth" type="number" value="3" min="1" max="25" style="width:60px"></label>
+      </div>
+      <div class="row small">Tip: Align the **bright slit image** so the spectrum spans left→right. Use a dark room; reduce stray light.</div>
+
+      <div class="row">
+        <button id="snap">Snapshot PNG</button>
+        <button id="csv">Export CSV</button>
+        <span class="small">Cursor: <span id="cursor" class="mono">px: –, λ: – nm</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Right: plot + calibration -->
+  <section class="panel">
+    <div class="p-h">Intensity vs Wavelength</div>
+    <div class="p-b">
+      <canvas id="plot"></canvas>
+      <div class="row">
+        <label>Mode
+          <select id="mode">
+            <option value="lum" selected>Luminance</option>
+            <option value="r">Red</option>
+            <option value="g">Green</option>
+            <option value="b">Blue</option>
+          </select>
+        </label>
+        <label>Gamma <input id="gamma" type="number" value="1.0" step="0.1" min="0.3" max="3" style="width:70px"></label>
+        <label>Subtract BG <input id="bg" type="checkbox"></label>
+      </div>
+
+      <div class="p-h">Calibration</div>
+      <div class="p-b">
+        <div class="grid">
+          <div>
+            <div class="row"><strong>2-point (linear)</strong></div>
+            <div class="row">
+              <button class="pick" data-idx="0">Pick px A</button>
+              <label>λA nm <input class="lam" data-idx="0" type="number" value="546.1" step="0.1" style="width:90px"></label>
+              <span class="small mono" id="p0">pxA: –</span>
+            </div>
+            <div class="row">
+              <button class="pick" data-idx="1">Pick px B</button>
+              <label>λB nm <input class="lam" data-idx="1" type="number" value="589.0" step="0.1" style="width:90px"></label>
+              <span class="small mono" id="p1">pxB: –</span>
+            </div>
+            <div class="row">
+              <button id="apply2">Apply 2-pt</button>
+              <span class="small" id="eq2"></span>
+            </div>
+          </div>
+
+          <div>
+            <div class="row"><strong>3-point (quadratic)</strong></div>
+            <div class="row">
+              <button class="pick" data-idx="2">Pick px C</button>
+              <label>λC nm <input class="lam" data-idx="2" type="number" value="435.8" step="0.1" style="width:90px"></label>
+              <span class="small mono" id="p2">pxC: –</span>
+            </div>
+            <div class="row">
+              <button id="apply3">Apply 3-pt</button>
+              <span class="small" id="eq3"></span>
+            </div>
+          </div>
+        </div>
+        <div class="hint">
+          Use known lines: Hg (435.8, 546.1, 577.0/579.1 nm), Na (589.0 nm), H-alpha (656.3 nm), K (766.5/769.9 nm).<br>
+          Click “Pick px” then click the line on the **plot** (peak) or in the **preview** (spectrum band).
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const vid = $('#vid'), draw = $('#draw'), viewwrap = $('#viewwrap');
+const plot = $('#plot');
+const ctxD = draw.getContext('2d'), ctxP = plot.getContext('2d');
+
+let stream, W=1280, H=720, roi = {y:300,h:40}, picking=null;
+let calib = { // nm = A*px + B  or  nm = a*px^2 + b*px + c
+  kind:'linear', A:1, B:0, a:0, b:1, c:0, px:[null,null,null], nm:[546.1,589.0,435.8]
+};
+let bgProfile = null;
+
+function fitCanvas(){
+  draw.width = vid.videoWidth||W; draw.height = vid.videoHeight||H;
+}
+function startCam(){
+  const [w,h]= $('#res').value.split('x').map(Number);
+  navigator.mediaDevices.getUserMedia({video:{width:{ideal:w},height:{ideal:h}}, audio:false})
+    .then(s=>{ stream=s; vid.srcObject=s; vid.play(); })
+    .catch(e=>alert('Camera error: '+e));
+}
+$('#start').onclick = startCam;
+vid.onloadedmetadata = ()=>{ fitCanvas(); animate(); };
+
+function animate(){
+  if(!vid.videoWidth){ requestAnimationFrame(animate); return; }
+  ctxD.drawImage(vid,0,0,draw.width,draw.height);
+  // ROI overlay
+  ctxD.strokeStyle='rgba(88,166,255,.9)'; ctxD.lineWidth=2;
+  ctxD.strokeRect(0,roi.y,draw.width,roi.h);
+  requestAnimationFrame(animate);
+}
+
+let dragging=false, lastY=0;
+viewwrap.addEventListener('mousedown',e=>{
+  const r=v
