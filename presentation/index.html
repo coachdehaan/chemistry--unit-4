@@ -133,8 +133,6 @@
     // ===== STATE =====
     const state = { db:null, me:{id:null,name:null}, online:false, studentRef:null };
     let cacheStudents = {};
-    let lastSoftResetToken = null;
-    let lastHardResetToken = null;
     const basePath = () => `/classes/${CONFIG.classKey}`;
 
     // ===== UTIL =====
@@ -144,6 +142,11 @@
     function show(el,on){ el.style.display = on ? '' : 'none'; }
     function badge(txt){ $('#connectionBadge').textContent = txt; }
     function uid(){ return Math.random().toString(36).slice(2,9); }
+
+    // ===== RESET GUARD helpers (persist across reloads) =====
+    function seenKey(k){ return `present_seen_${CONFIG.classKey}_${k}`; }
+    function getSeen(k){ return Number(localStorage.getItem(seenKey(k)) || 0); }
+    function setSeen(k, v){ localStorage.setItem(seenKey(k), String(v)); }
 
     // ===== FIREBASE INIT =====
     function dbInit(){
@@ -164,22 +167,26 @@
       if(!snap.exists()){ await cRef.set(DEFAULT_CRITERIA); CRITERIA = DEFAULT_CRITERIA.slice(); }
       else { const val = snap.val() || []; CRITERIA = Array.isArray(val) ? val : Object.values(val); }
 
-      // Listen for teacher soft/hard resets
+      // Listen for teacher soft/hard resets (with guards)
       state.db.ref(`${basePath()}/control/softResetAt`).on('value', s=>{
-        const t = s.val();
-        if(t && t !== lastSoftResetToken){
-          lastSoftResetToken = t;
-          // Zero my sliders visually
-          $$('#criteriaList input[type=range]').forEach(r=>{ r.value = 0; r.dispatchEvent(new Event('input')); });
+        const t = Number(s.val() || 0);
+        if(t && t > getSeen('soft')){           // RESET GUARD
+          setSeen('soft', t);
+          // Zero my sliders visually + write zeros
+          $$('#criteriaList input[type=range]').forEach(r=>{
+            r.value = 0;
+            r.dispatchEvent(new Event('input'));
+          });
         }
       });
+
       state.db.ref(`${basePath()}/control/resetAt`).on('value', s=>{
-        const t = s.val();
-        if(t && t !== lastHardResetToken){
-          lastHardResetToken = t;
+        const t = Number(s.val() || 0);
+        if(t && t > getSeen('hard')){           // RESET GUARD
+          setSeen('hard', t);
           try { if(state.studentRef) state.studentRef.remove(); } catch(e) {}
           localStorage.removeItem('present_uid');
-          location.reload(); // back to Join
+          location.reload(); // back to Join, but won't loop due to guard
         }
       });
 
@@ -245,10 +252,9 @@
       $('#participantsList').textContent = pool.map(s=> s && s.name ? s.name : '—').join(', ');
 
       const res = CRITERIA.map(c=>{
-        // include zeros; ignore only unset
         const vals = pool
           .map(s => (s && s.scores && typeof s.scores[c.id] === 'number') ? Number(s.scores[c.id]) : null)
-          .filter(v => v !== null);
+          .filter(v => v !== null); // include 0; exclude unset
         return { label:c.label, avg: mean(vals) };
       });
 
@@ -286,7 +292,6 @@
       const studentsSnap = await root.child('students').get();
       const students = studentsSnap.val() || {};
 
-      // Build a multi-path update: set every scores/{critId}=0
       const updates = {};
       Object.keys(students).forEach(id=>{
         CRITERIA.forEach(c=>{
@@ -294,8 +299,6 @@
         });
       });
       await root.update(updates);
-
-      // Broadcast soft reset so sliders snap to 0 visually without reload
       await root.child('control/softResetAt').set(firebase.database.ServerValue.TIMESTAMP);
     }
 
@@ -303,8 +306,8 @@
       if(!state.db) return;
       if(!confirm('End session and kick everyone off?')) return;
       const root = state.db.ref(basePath());
-      await root.child('students').set({}); // clear roster
-      await root.child('control/resetAt').set(firebase.database.ServerValue.TIMESTAMP); // force reload to Join
+      await root.child('students').set({});
+      await root.child('control/resetAt').set(firebase.database.ServerValue.TIMESTAMP);
     }
 
     // ===== UI WIRES =====
