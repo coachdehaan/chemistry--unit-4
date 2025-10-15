@@ -5,80 +5,75 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Webcam Spectrometer – Mr. D</title>
 <style>
-  :root { --bg:#0d1117; --ink:#e6edf3; --mut:#8b949e; --acc:#58a6ff; --grid:#30363d; }
-  html,body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.35 system-ui,Segoe UI,Roboto,Helvetica,Arial; }
-  header{padding:10px 14px; border-bottom:1px solid var(--grid); display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
-  h1{font-size:16px;margin:0 8px 0 0;}
-  main{display:grid; grid-template-columns: 1.3fr 1fr; gap:10px; padding:10px;}
-  .panel{border:1px solid var(--grid); border-radius:10px; overflow:hidden; background:#0f141b;}
-  .p-h{padding:8px 10px; background:#0b0f14; border-bottom:1px solid var(--grid); font-weight:600;}
-  .p-b{padding:10px;}
-  #viewwrap{position:relative; background:#000;}
-  video,canvas{max-width:100%; display:block;}
-  #draw {position:absolute; inset:0; pointer-events:none;}
-  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0;}
-  label{color:var(--mut);}
+  :root{--bg:#0d1117;--ink:#e6edf3;--mut:#8b949e;--acc:#58a6ff;--grid:#30363d}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  header{padding:10px 14px;border-bottom:1px solid var(--grid);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  h1{font-size:16px;margin:0 8px 0 0}
+  main{display:grid;grid-template-columns:1.3fr 1fr;gap:10px;padding:10px}
+  .panel{border:1px solid var(--grid);border-radius:10px;overflow:hidden;background:#0f141b}
+  .p-h{padding:8px 10px;background:#0b0f14;border-bottom:1px solid var(--grid);font-weight:600}
+  .p-b{padding:10px}
+  #viewwrap{position:relative;background:#000}
+  video,canvas{max-width:100%;display:block}
+  #draw{position:absolute;inset:0;pointer-events:none}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+  label{color:var(--mut)}
   input,select,button{background:#0b0f14;color:var(--ink);border:1px solid var(--grid);border-radius:8px;padding:6px 8px}
   button{cursor:pointer}
   .small{font-size:12px;color:var(--mut)}
   #plot{height:260px;width:100%;background:#000;border:1px solid var(--grid);border-radius:8px}
-  .hint{color:var(--mut);font-size:12px}
-  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px}
-  .mono{font-family:ui-monospace,Consolas,Menlo,monospace}
   .pill{padding:2px 8px;border:1px solid var(--grid);border-radius:999px}
+  #log{white-space:pre-wrap;background:#0b0f14;border:1px solid var(--grid);border-radius:8px;padding:8px;min-height:60px}
 </style>
 </head>
 <body>
 <header>
   <h1>Webcam Spectrometer</h1>
-  <span class="pill">ROI: drag in preview</span>
-  <span class="pill">Calibrate: click “Pick px”</span>
+  <span class="pill">Use HTTPS (GitHub Pages)</span>
+  <span class="pill">If blocked: Safari → Settings → Websites → Camera → Allow</span>
 </header>
 
 <main>
-  <!-- Left: live view & controls -->
+  <!-- LEFT -->
   <section class="panel">
     <div class="p-h">Live Preview</div>
     <div class="p-b" id="viewwrap">
-      <video id="vid" playsinline muted></video>
+      <video id="vid" playsinline muted autoplay></video>
       <canvas id="draw"></canvas>
     </div>
     <div class="p-b">
       <div class="row">
         <button id="start">Start Camera</button>
+        <label>Camera
+          <select id="cams"></select>
+        </label>
         <label>Resolution
           <select id="res">
-            <option value="640x480">640×480</option>
-            <option value="1280x720" selected>1280×720</option>
-            <option value="1920x1080">1920×1080</option>
-          </select>
-        </label>
-        <label>Orientation
-          <select id="orient">
-            <option value="horizontal" selected>Horizontal spectrum</option>
-            <option value="vertical">Vertical spectrum</option>
+            <option>640x480</option>
+            <option selected>1280x720</option>
+            <option>1920x1080</option>
           </select>
         </label>
         <label>Avg rows <input id="avg" type="number" value="10" min="1" max="200" style="width:70px"></label>
         <label>Smooth <input id="smooth" type="number" value="3" min="1" max="25" style="width:60px"></label>
       </div>
-      <div class="row small">Tip: Align the **bright slit image** so the spectrum spans left→right. Use a dark room; reduce stray light.</div>
-
+      <div class="row small">Drag the rectangle to cover the brightest horizontal band of the spectrum.</div>
       <div class="row">
         <button id="snap">Snapshot PNG</button>
         <button id="csv">Export CSV</button>
-        <span class="small">Cursor: <span id="cursor" class="mono">px: –, λ: – nm</span></span>
+        <span class="small">Cursor: <span id="cursor">px: –, λ: – nm</span></span>
       </div>
+      <div class="row"><div id="log" class="small"></div></div>
     </div>
   </section>
 
-  <!-- Right: plot + calibration -->
+  <!-- RIGHT -->
   <section class="panel">
     <div class="p-h">Intensity vs Wavelength</div>
     <div class="p-b">
       <canvas id="plot"></canvas>
       <div class="row">
-        <label>Mode
+        <label>Channel
           <select id="mode">
             <option value="lum" selected>Luminance</option>
             <option value="r">Red</option>
@@ -92,80 +87,242 @@
 
       <div class="p-h">Calibration</div>
       <div class="p-b">
-        <div class="grid">
-          <div>
-            <div class="row"><strong>2-point (linear)</strong></div>
-            <div class="row">
-              <button class="pick" data-idx="0">Pick px A</button>
-              <label>λA nm <input class="lam" data-idx="0" type="number" value="546.1" step="0.1" style="width:90px"></label>
-              <span class="small mono" id="p0">pxA: –</span>
-            </div>
-            <div class="row">
-              <button class="pick" data-idx="1">Pick px B</button>
-              <label>λB nm <input class="lam" data-idx="1" type="number" value="589.0" step="0.1" style="width:90px"></label>
-              <span class="small mono" id="p1">pxB: –</span>
-            </div>
-            <div class="row">
-              <button id="apply2">Apply 2-pt</button>
-              <span class="small" id="eq2"></span>
-            </div>
-          </div>
-
-          <div>
-            <div class="row"><strong>3-point (quadratic)</strong></div>
-            <div class="row">
-              <button class="pick" data-idx="2">Pick px C</button>
-              <label>λC nm <input class="lam" data-idx="2" type="number" value="435.8" step="0.1" style="width:90px"></label>
-              <span class="small mono" id="p2">pxC: –</span>
-            </div>
-            <div class="row">
-              <button id="apply3">Apply 3-pt</button>
-              <span class="small" id="eq3"></span>
-            </div>
-          </div>
+        <div class="row"><b>2-point (linear):</b>
+          <button class="pick" data-idx="0">Pick px A</button> λA <input class="lam" data-idx="0" type="number" value="546.1" step="0.1" style="width:90px"> <span id="p0" class="small">pxA: –</span>
+          <button class="pick" data-idx="1">Pick px B</button> λB <input class="lam" data-idx="1" type="number" value="589.0" step="0.1" style="width:90px"> <span id="p1" class="small">pxB: –</span>
+          <button id="apply2">Apply 2-pt</button> <span id="eq2" class="small"></span>
         </div>
-        <div class="hint">
-          Use known lines: Hg (435.8, 546.1, 577.0/579.1 nm), Na (589.0 nm), H-alpha (656.3 nm), K (766.5/769.9 nm).<br>
-          Click “Pick px” then click the line on the **plot** (peak) or in the **preview** (spectrum band).
+        <div class="row"><b>3-point (quadratic):</b>
+          <button class="pick" data-idx="2">Pick px C</button> λC <input class="lam" data-idx="2" type="number" value="656.3" step="0.1" style="width:90px"> <span id="p2" class="small">pxC: –</span>
+          <button id="apply3">Apply 3-pt</button> <span id="eq3" class="small"></span>
         </div>
+        <div class="small">Known lines: Hg 435.8, 546.1, 577.0/579.1; Na 589.0; H-α 656.3; K 766.5/769.9.</div>
       </div>
     </div>
   </section>
 </main>
 
 <script>
-const $ = s => document.querySelector(s);
-const vid = $('#vid'), draw = $('#draw'), viewwrap = $('#viewwrap');
-const plot = $('#plot');
-const ctxD = draw.getContext('2d'), ctxP = plot.getContext('2d');
+const log = (m)=>{ const el=document.getElementById('log'); el.textContent += (el.textContent?'\n':'')+m; console.log(m); };
 
-let stream, W=1280, H=720, roi = {y:300,h:40}, picking=null;
-let calib = { // nm = A*px + B  or  nm = a*px^2 + b*px + c
-  kind:'linear', A:1, B:0, a:0, b:1, c:0, px:[null,null,null], nm:[546.1,589.0,435.8]
-};
-let bgProfile = null;
+(async function boot(){
+  if(!('mediaDevices' in navigator)){ log('ERROR: navigator.mediaDevices not available. Use Chrome/Safari ≥ 13.'); return; }
+  if(!window.isSecureContext){ log('ERROR: Page is not secure. Host on HTTPS (GitHub Pages) to use camera.'); }
+  try{
+    // On first load, request minimal access to populate labels in Safari
+    await navigator.mediaDevices.getUserMedia({video:true, audio:false}).then(s=>s.getTracks().forEach(t=>t.stop())).catch(e=>log('Note: pre-permission test: '+e.name));
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const cams = devs.filter(d=>d.kind==='videoinput');
+    const sel = document.getElementById('cams');
+    sel.innerHTML = '';
+    cams.forEach((d,i)=>{
+      const o=document.createElement('option');
+      o.value=d.deviceId; o.textContent = d.label || ('Camera '+(i+1));
+      sel.appendChild(o);
+    });
+    if(!cams.length) log('No cameras found. Check OS privacy settings and browser permissions.');
+  }catch(e){ log('Enumerate error: '+e.name+' — '+e.message); }
+})();
+const $ = s=>document.querySelector(s);
+const vid = $('#vid'), draw = $('#draw'), plot = $('#plot');
+const ctxD = draw.getContext('2d'), ctxP = plot.getContext('2d');
+let stream=null, roi={y:300,h:40}, picking=null, bgProfile=null;
+let calib={kind:'linear',A:1,B:0,a:0,b:1,c:0,px:[null,null,null],nm:[546.1,589.0,656.3]};
+let W=1280,H=720;
 
 function fitCanvas(){
   draw.width = vid.videoWidth||W; draw.height = vid.videoHeight||H;
+  plot.width = plot.clientWidth; plot.height = plot.clientHeight;
 }
-function startCam(){
-  const [w,h]= $('#res').value.split('x').map(Number);
-  navigator.mediaDevices.getUserMedia({video:{width:{ideal:w},height:{ideal:h}}, audio:false})
-    .then(s=>{ stream=s; vid.srcObject=s; vid.play(); })
-    .catch(e=>alert('Camera error: '+e));
+function constraints(){
+  const [w,h] = $('#res').value.split('x').map(Number);
+  const devId = $('#cams').value || undefined;
+  // robust constraints for Safari/Chrome
+  const video = devId ? {deviceId:{exact:devId}} : {facingMode:'environment'};
+  video.width = {ideal:w}; video.height = {ideal:h};
+  return {video, audio:false};
+}
+async function startCam(){
+  try{
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    const c = constraints();
+    log('Requesting camera with constraints: '+JSON.stringify(c));
+    stream = await navigator.mediaDevices.getUserMedia(c);
+    vid.srcObject = stream;
+    await vid.play();
+    fitCanvas();
+    requestAnimationFrame(loop);
+    log('Camera started: '+(stream.getVideoTracks()[0]?.label||'unknown'));
+  }catch(e){
+    log('getUserMedia ERROR: '+e.name+' — '+e.message);
+    if(e.name==='NotAllowedError') log('Permission denied: Click the camera icon in the address bar and allow.');
+    if(e.name==='NotFoundError') log('No camera matched. Try a different camera in the dropdown.');
+    if(e.name==='OverconstrainedError') log('Resolution too high for this camera. Select 640×480 and retry.');
+    if(!window.isSecureContext) log('This page must be served over HTTPS to access the camera.');
+  }
 }
 $('#start').onclick = startCam;
-vid.onloadedmetadata = ()=>{ fitCanvas(); animate(); };
+vid.onloadedmetadata = ()=>{ fitCanvas(); };
+window.onresize = ()=>fitCanvas();
 
-function animate(){
-  if(!vid.videoWidth){ requestAnimationFrame(animate); return; }
-  ctxD.drawImage(vid,0,0,draw.width,draw.height);
-  // ROI overlay
-  ctxD.strokeStyle='rgba(88,166,255,.9)'; ctxD.lineWidth=2;
-  ctxD.strokeRect(0,roi.y,draw.width,roi.h);
-  requestAnimationFrame(animate);
+function loop(){
+  if(vid.readyState>=2){
+    ctxD.drawImage(vid,0,0,draw.width,draw.height);
+    ctxD.strokeStyle='rgba(88,166,255,.9)'; ctxD.lineWidth=2;
+    ctxD.strokeRect(0,roi.y,draw.width,roi.h);
+  }
+  drawPlot();
+  requestAnimationFrame(loop);
 }
 
-let dragging=false, lastY=0;
-viewwrap.addEventListener('mousedown',e=>{
-  const r=v
+let dragging=false,lastY=0;
+$('#viewwrap').addEventListener('mousedown',e=>{
+  const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
+  if(e.shiftKey){ dragging='h'; lastY=y; } else { dragging='y'; lastY=y; }
+});
+window.addEventListener('mousemove',e=>{
+  if(!dragging) return;
+  const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
+  if(dragging==='y'){ roi.y = Math.max(0, Math.min(draw.height-roi.h, y - roi.h/2)); }
+  else if(dragging==='h'){ roi.h = Math.max(2, Math.min(draw.height-roi.y, Math.abs(y-lastY))); }
+});
+window.addEventListener('mouseup',()=>dragging=false);
+
+function getProfile(){
+  const avg = Math.max(1, parseInt($('#avg').value,10));
+  const y0 = Math.max(0, Math.round(roi.y + roi.h/2 - avg/2));
+  const w = draw.width, rows = Math.min(draw.height,avg);
+  const data = ctxD.getImageData(0, y0, w, rows).data;
+  const R=new Float32Array(w), G=new Float32Array(w), B=new Float32Array(w);
+  for(let row=0; row<rows; row++){
+    for(let x=0; x<w; x++){
+      const i=(row*w + x)*4;
+      R[x]+=data[i]; G[x]+=data[i+1]; B[x]+=data[i+2];
+    }
+  }
+  for(let x=0;x<w;x++){ R[x]/=rows; G[x]/=rows; B[x]/=rows; }
+  const gamma = Math.max(0.3, parseFloat($('#gamma').value));
+  const L = new Float32Array(w);
+  for(let x=0;x<w;x++){
+    const r=Math.pow(R[x]/255,1/gamma), g=Math.pow(G[x]/255,1/gamma), b=Math.pow(B[x]/255,1/gamma);
+    L[x]=0.2126*r+0.7152*g+0.0722*b;
+  }
+  const k = Math.max(1, parseInt($('#smooth').value,10));
+  const smooth = A=>{
+    const out=new Float32Array(A.length);
+    for(let i=0;i<A.length;i++){
+      const i0=Math.max(0,i-k), i1=Math.min(A.length-1,i+k);
+      let s=0; for(let j=i0;j<=i1;j++) s+=A[j];
+      out[i]=s/(i1-i0+1);
+    } return out;
+  };
+  return {R:smooth(R),G:smooth(G),B:smooth(B),L:smooth(L)};
+}
+
+function pxToNm(px){
+  if(calib.kind==='linear') return calib.A*px + calib.B;
+  return calib.a*px*px + calib.b*px + calib.c;
+}
+function nmToPx(nm){
+  if(calib.kind==='linear') return (nm - calib.B)/calib.A;
+  const {a,b,c}=calib; const A=a,B=b,C=c-nm, D=B*B-4*A*C;
+  if(D<=0) return NaN;
+  const r1=(-B+Math.sqrt(D))/(2*A), r2=(-B-Math.sqrt(D))/(2*A);
+  return (r1>=0&&r1<=draw.width)?r1:r2;
+}
+
+plot.addEventListener('mousemove',e=>{
+  const r = plot.getBoundingClientRect(), x = e.clientX - r.left;
+  const px = Math.max(0, Math.min(draw.width-1, Math.round(x/plot.width*draw.width)));
+  const lam = pxToNm(px);
+  $('#cursor').textContent = `px:${px} , λ:${isFinite(lam)?lam.toFixed(1):'–'} nm`;
+});
+let picking=null;
+for (const b of document.querySelectorAll('.pick')){
+  b.onclick=()=>{ picking=parseInt(b.dataset.idx,10); log('Click the peak on the plot to assign pixel.'); };
+}
+for (const l of document.querySelectorAll('.lam')){
+  l.onchange=()=>{ calib.nm[parseInt(l.dataset.idx,10)]=parseFloat(l.value); };
+}
+plot.addEventListener('click',e=>{
+  if(picking===null) return;
+  const r = plot.getBoundingClientRect(), x = e.clientX - r.left;
+  const px = Math.round(x/plot.width*draw.width);
+  calib.px[picking]=px; $('#p'+picking).textContent = `px${['A','B','C'][picking]}: ${px}`; picking=null;
+});
+
+function apply2(){
+  const [x1,x2]=[calib.px[0],calib.px[1]], [y1,y2]=[calib.nm[0],calib.nm[1]];
+  if(x1==null||x2==null) return log('Pick two pixels first.');
+  calib.kind='linear'; calib.A=(y2-y1)/(x2-x1); calib.B=y1 - calib.A*x1;
+  $('#eq2').textContent = `λ = ${calib.A.toFixed(4)}·px + ${calib.B.toFixed(2)}`;
+}
+function apply3(){
+  const x=[0,1,2].map(i=>calib.px[i]), y=[0,1,2].map(i=>calib.nm[i]);
+  if(x.some(v=>v==null)) return log('Pick three pixels first.');
+  const [x1,x2,x3]=x,[y1,y2,y3]=y; const D=(x1-x2)*(x1-x3)*(x2-x3);
+  const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
+  const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
+  const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
+  calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
+  $('#eq3').textContent = `λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)}`;
+}
+$('#apply2').onclick=apply2; $('#apply3').onclick=apply3;
+
+function drawPlot(){
+  // profile
+  const P = getProfile();
+  if($('#bg').checked && !bgProfile) bgProfile=P;
+  const m = $('#mode').value;
+  const Y = m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
+  const Yb = ($('#bg').checked && bgProfile) ? Y.map((v,i)=>Math.max(0, v - bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'][i])) : Y;
+  // canvas size
+  plot.width = plot.clientWidth; plot.height = plot.clientHeight;
+  // draw
+  const Wp=plot.width, Hp=plot.height;
+  ctxP.fillStyle='#000'; ctxP.fillRect(0,0,Wp,Hp);
+  // grid if calibrated
+  const nm0=pxToNm(0), nm1=pxToNm(draw.width);
+  if(isFinite(nm0)&&isFinite(nm1)){
+    const step=50, lo=Math.round(Math.min(nm0,nm1)/step)*step, hi=Math.max(nm0,nm1);
+    ctxP.strokeStyle='#333'; ctxP.fillStyle='#9aa0a6'; ctxP.lineWidth=1;
+    for(let lam=lo; lam<=hi; lam+=step){
+      const x= (nmToPx(lam)/draw.width)*Wp;
+      if(isFinite(x)){
+        ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
+        ctxP.fillText(`${lam} nm`, x+2, 12);
+      }
+    }
+  } else {
+    ctxP.fillStyle='#9aa0a6'; ctxP.fillText('Calibrate (Pick px, enter λ) to show wavelength scale.', 8, 14);
+  }
+  // line
+  const max = Math.max(...Yb) || 1;
+  ctxP.strokeStyle='#58a6ff'; ctxP.lineWidth=2; ctxP.beginPath();
+  for(let i=0;i<Yb.length;i++){
+    const x = (i/draw.width)*Wp;
+    const y = Hp - (Yb[i]/max)*(Hp-18) - 4;
+    if(i===0) ctxP.moveTo(x,y); else ctxP.lineTo(x,y);
+  }
+  ctxP.stroke();
+}
+
+// snapshot/csv
+$('#snap').onclick=()=>{
+  const c=document.createElement('canvas'); c.width=draw.width; c.height=draw.height;
+  c.getContext('2d').drawImage(draw,0,0);
+  const a=document.createElement('a'); a.download='spectrum.png'; a.href=c.toDataURL('image/png'); a.click();
+};
+$('#csv').onclick=()=>{
+  const P=getProfile(); const mode=$('#mode').value;
+  const Y=mode==='r'?P.R: mode==='g'?P.G: mode==='b'?P.B: P.L;
+  let rows='px,lambda_nm,intensity\n';
+  for(let i=0;i<Y.length;i++){
+    const lam=pxToNm(i); rows+=`${i},${isFinite(lam)?lam.toFixed(3):''},${Y[i].toFixed(6)}\n`;
+  }
+  const blob=new Blob([rows],{type:'text/csv'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='spectrum.csv'; a.click();
+};
+</script>
+</body>
+</html>
