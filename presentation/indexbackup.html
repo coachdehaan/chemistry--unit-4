@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiveGauge</title>
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;margin:24px;line-height:1.35;background:#f7f7f7}
+    .wrap{max-width:1000px;margin:0 auto}
+    .row{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+    .card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:14px 16px}
+    .btn{padding:.5rem 1rem;border-radius:.75rem;border:1px solid #111;background:#111;color:#fff;font-weight:600}
+    .btn-ghost{padding:.35rem .65rem;border-radius:.65rem;border:1px solid #ddd;background:#fff}
+    .badge{font-size:.7rem;padding:.2rem .5rem;border-radius:9999px;background:#eef}
+    input[type="range"]{width:100%}
+    .mut{color:#666;font-size:12px}
+    .tiny{font-size:11px;line-height:1.2}
+  </style>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h1 style="margin:0">LiveGauge</h1>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="connectionBadge" class="badge">offline (local)</span>
+        <button id="loginBtn" class="btn-ghost" title="Teacher login">Login</button>
+      </div>
+    </header>
+
+    <div class="row">
+      <!-- LEFT: Student join + sliders -->
+      <section style="display:flex;flex-direction:column;gap:12px">
+        <div id="joinCard" class="card">
+          <h3 style="margin:0 0 8px 0">Join</h3>
+          <label class="mut">Your name</label>
+          <input id="nameInput" style="width:100%;padding:.6rem;border:1px solid #ccc;border-radius:10px" placeholder="e.g., Jane S." />
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <button id="joinBtn" class="btn">Join & Rate</button>
+            <span id="joinStatus" class="mut"></span>
+          </div>
+        </div>
+
+        <div id="rateCard" class="card" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h3 style="margin:0">Rate (0–10)</h3>
+            <div class="mut">You: <span id="whoami" style="font-weight:600">—</span></div>
+          </div>
+          <div id="criteriaList" style="margin-top:10px;display:flex;flex-direction:column;gap:12px"></div>
+          <div style="margin-top:10px;display:flex;justify-content:flex-end;align-items:center">
+            <div class="mut">Totals update as you slide.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: Results (teacher PIN) -->
+      <aside id="resultsCard" class="card" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <h3 style="margin:0">Results (Live)</h3>
+          <span id="participantsBadge" class="badge">0 participants</span>
+        </div>
+
+        <div id="resultsSummary" style="display:flex;flex-direction:column;gap:6px"></div>
+
+        <div style="border-top:1px solid #eee;margin-top:10px;padding-top:8px" class="tiny">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Final average</strong> (by category)</div>
+            <div style="font-weight:700;font-size:18px" id="finalAverage">0.00</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+            <div>Class total average</div>
+            <div id="classTotalAvg" style="font-weight:600">0.00</div>
+          </div>
+          <div class="mut tiny">Max total = <span id="maxTotal"></span></div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="tiny" style="font-weight:700;margin-bottom:4px">Participants</div>
+          <div id="participantsList" class="tiny" style="color:#333"></div>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button id="resetScores" class="btn-ghost" title="Zero all scores; keep participants">Reset Scores</button>
+          <button id="endSession" class="btn-ghost" title="Kick everyone off and clear">End Session</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Teacher login modal -->
+  <dialog id="loginDlg" style="border:none;border-radius:12px;max-width:380px;width:92%">
+    <form method="dialog" style="padding:16px">
+      <h3 style="margin:0 0 8px 0">Teacher Login</h3>
+      <p class="mut tiny" style="margin-top:0">Enter PIN to unlock the Results panel.</p>
+      <input id="pinInput" type="password" style="width:100%;padding:.6rem;border:1px solid #ccc;border-radius:10px" placeholder="PIN" />
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button id="unlockBtn" class="btn" value="unlock">Unlock</button>
+        <button class="btn-ghost" value="cancel">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    // ===== CONFIG =====
+    const CONFIG = {
+      classKey: "chem_presentation",
+      teacherPin: "2468",
+      useFirebase: true,
+      firebaseConfig: {
+        apiKey: "AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
+        authDomain: "presentation-83d1f.firebaseapp.com",
+        databaseURL: "https://presentation-83d1f-default-rtdb.firebaseio.com",
+        projectId: "presentation-83d1f",
+        storageBucket: "presentation-83d1f.firebasestorage.app",
+        messagingSenderId: "132406143951",
+        appId: "1:132406143951:web:9695690023bd3f2aedc0ba"
+      }
+    };
+    const MAX_SCORE = 10;
+
+    // ===== STABLE, SHARED CRITERIA =====
+    const DEFAULT_CRITERIA = [
+      { id: "content",    label: "Content Accuracy" },
+      { id: "clarity",    label: "Clarity" },
+      { id: "visuals",    label: "Visuals" },
+      { id: "engagement", label: "Engagement" },
+      { id: "delivery",   label: "Delivery" }
+    ];
+    let CRITERIA = DEFAULT_CRITERIA.slice();
+
+    // ===== STATE =====
+    const state = { db:null, me:{id:null,name:null}, online:false, studentRef:null, joined:false };
+    let cacheStudents = {};
+    const basePath = () => `/classes/${CONFIG.classKey}`;
+
+    // ===== UTIL =====
+    const $ = s => document.querySelector(s);
+    const $$ = s => Array.from(document.querySelectorAll(s));
+    function mean(a){ return a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0; }
+    function show(el,on){ el.style.display = on ? '' : 'none'; }
+    function badge(txt){ $('#connectionBadge').textContent = txt; }
+    function uid(){ return Math.random().toString(36).slice(2,9); }
+
+    // ===== RESET TOKEN GUARD (persist without reload) =====
+    function seenKey(k){ return `present_seen_${CONFIG.classKey}_${k}`; }
+    function getSeen(k){ return Number(localStorage.getItem(seenKey(k)) || 0); }
+    function setSeen(k, v){ localStorage.setItem(seenKey(k), String(v)); }
+
+    // ===== FIREBASE INIT (no double init) =====
+    function dbInit(){
+      if(!CONFIG.useFirebase){ badge('offline (local)'); return; }
+      try{
+        if (firebase.apps && firebase.apps.length === 0) {
+          firebase.initializeApp(CONFIG.firebaseConfig);
+        }
+        state.db = firebase.database();
+        firebase.auth().signInAnonymously().then(()=>{
+          state.online = true; badge('online (firebase)');
+          initCriteriaThenAttach();
+        }).catch(()=>{ state.online=false; badge('offline (local)'); });
+      }catch(e){ state.online=false; badge('offline (local)'); }
+    }
+
+    async function initCriteriaThenAttach(){
+      const cRef = state.db.ref(`${basePath()}/criteria`);
+      const snap = await cRef.get();
+      if(!snap.exists()){ await cRef.set(DEFAULT_CRITERIA); CRITERIA = DEFAULT_CRITERIA.slice(); }
+      else { const val = snap.val() || []; CRITERIA = Array.isArray(val) ? val : Object.values(val); }
+
+      // Listen for teacher soft/hard resets (guarded, no reloads)
+      state.db.ref(`${basePath()}/control/softResetAt`).on('value', s=>{
+        const t = Number(s.val() || 0);
+        if(t && t > getSeen('soft')){
+          setSeen('soft', t);
+          // Zero sliders visually & write zeros if joined
+          if(state.joined){
+            $$('#criteriaList input[type=range]').forEach(r=>{
+              r.value = 0;
+              r.dispatchEvent(new Event('input'));
+            });
+          }
+        }
+      });
+
+      state.db.ref(`${basePath()}/control/resetAt`).on('value', s=>{
+        const t = Number(s.val() || 0);
+        if(!t || t <= getSeen('hard')) return;
+        setSeen('hard', t);
+        // Hard reset: return to Join view WITHOUT reloading
+        goToJoinView();
+      });
+
+      attachListeners();
+    }
+
+    function attachListeners(){
+      state.db.ref(`${basePath()}/students`).on('value', snap=>{
+        cacheStudents = snap.val() || {};
+        renderResults(cacheStudents);
+      });
+
+      // connectivity indicator using RTDB .info/connected
+      state.db.ref('.info/connected').on('value', s=>{
+        const ok = !!s.val();
+        badge(ok ? 'online (firebase)' : 'offline (local)');
+      });
+    }
+
+    // ===== JOIN / PRESENCE =====
+    function ensureClientId(){
+      let id = localStorage.getItem('present_uid');
+      if(!id){ id = uid(); localStorage.setItem('present_uid', id); }
+      state.me.id = id; return id;
+    }
+
+    async function joinClass(name){
+      ensureClientId(); state.me.name = name; state.joined = true;
+      $('#whoami').textContent = name; show($('#rateCard'), true); show($('#joinCard'), false);
+
+      const id = state.me.id;
+      state.studentRef = state.db.ref(`${basePath()}/students/${id}`);
+
+      await state.studentRef.set({ name }); // no seeded scores
+
+      // Presence cleanup only if joined
+      try { state.studentRef.onDisconnect().remove(); } catch (e) {}
+      window.addEventListener('beforeunload', () => {
+        if(state.studentRef){ try { state.studentRef.remove(); } catch(e) {} }
+      });
+
+      renderSliders();
+    }
+
+    // Return to Join WITHOUT reload (used by hard reset)
+    function goToJoinView(){
+      // Remove my presence node if exists
+      if(state.studentRef){ try { state.studentRef.remove(); } catch(e) {} }
+      state.studentRef = null;
+      state.joined = false;
+      // Clear my local id so next join is fresh
+      localStorage.removeItem('present_uid');
+      // Reset UI
+      $('#nameInput').value = '';
+      $('#whoami').textContent = '—';
+      $('#criteriaList').innerHTML = '';
+      show($('#rateCard'), false);
+      show($('#joinCard'), true);
+    }
+
+    // ===== SLIDERS (0–10) =====
+    function renderSliders(){
+      const wrap = $('#criteriaList'); wrap.innerHTML = '';
+      CRITERIA.forEach((c, idx)=>{
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div style="font-weight:600">${idx+1}. ${c.label}</div>
+            <div class="mut">0–${MAX_SCORE}</div>
+          </div>
+          <input type="range" min="0" max="${MAX_SCORE}" step="1" value="0" data-crit="${c.id}">
+          <div class="mut" style="text-align:right;margin-top:4px">Score: <strong data-val="${c.id}">0</strong></div>`;
+        wrap.appendChild(div);
+      });
+
+      wrap.querySelectorAll('input[type=range]').forEach(r=>{
+        r.oninput = ()=>{
+          const critId = r.dataset.crit;
+          const v = Number(r.value);
+          wrap.querySelector(`[data-val="${critId}"]`).textContent = v;
+          if(state.studentRef) state.studentRef.child(`scores/${critId}`).set(v);
+        };
+      });
+    }
+
+    // ===== RESULTS (live) =====
+    function renderResults(students){
+      const pool = Object.values(students || {});
+      $('#participantsBadge').textContent = `${pool.length} participants`;
+      $('#participantsList').textContent = pool.map(s=> s && s.name ? s.name : '—').join(', ');
+
+      const res = CRITERIA.map(c=>{
+        const vals = pool
+          .map(s => (s && s.scores && typeof s.scores[c.id] === 'number') ? Number(s.scores[c.id]) : null)
+          .filter(v => v !== null); // include 0; exclude unset
+        return { label:c.label, avg: mean(vals) };
+      });
+
+      const box = $('#resultsSummary'); box.innerHTML = '';
+      res.forEach(a=>{
+        const row = document.createElement('div');
+        row.style.display = 'flex'; row.style.justifyContent = 'space-between'; row.style.alignItems = 'center';
+        row.innerHTML = `<div>${a.label}</div><div style="font-weight:600">${(a.avg||0).toFixed(2)} / ${MAX_SCORE}</div>`;
+        box.appendChild(row);
+      });
+
+      const finalAvg = mean(res.map(a=> a.avg || 0));
+      $('#finalAverage').textContent = (finalAvg||0).toFixed(2);
+
+      const totals = pool.map(s => {
+        if(!s || !s.scores) return null;
+        const nums = CRITERIA
+          .map(c => (typeof (s.scores||{})[c.id] === 'number') ? Number(s.scores[c.id]) : null)
+          .filter(v => v !== null);
+        if(!nums.length) return null;
+        return nums.reduce((a,b)=>a+b,0);
+      }).filter(v => v !== null);
+
+      const maxTot = CRITERIA.length * MAX_SCORE;
+      $('#classTotalAvg').textContent = `${(mean(totals)||0).toFixed(2)} / ${maxTot}`;
+      $('#maxTotal').textContent = maxTot;
+    }
+
+    // ===== TEACHER CONTROLS =====
+    async function resetScoresKeepParticipants(){
+      if(!state.db) return;
+      const root = state.db.ref(basePath());
+      const studentsSnap = await root.child('students').get();
+      const students = studentsSnap.val() || {};
+
+      const updates = {};
+      Object.keys(students).forEach(id=>{
+        CRITERIA.forEach(c=>{
+          updates[`students/${id}/scores/${c.id}`] = 0;
+        });
+      });
+      await root.update(updates);
+      await root.child('control/softResetAt').set(firebase.database.ServerValue.TIMESTAMP);
+    }
+
+    async function endSessionKickAll(){
+      if(!state.db) return;
+      const root = state.db.ref(basePath());
+      await root.child('students').set({});
+      await root.child('control/resetAt').set(firebase.database.ServerValue.TIMESTAMP);
+      // Note: clients return to Join view; no reloads
+    }
+
+    // ===== UI WIRES =====
+    window.addEventListener('load', ()=> { dbInit(); });
+
+    $('#joinBtn').onclick = ()=>{
+      const name = $('#nameInput').value.trim();
+      if(!name){ $('#joinStatus').textContent='Enter a name.'; return; }
+      $('#joinStatus').textContent='';
+      joinClass(name);
+    };
+
+    $('#loginBtn').onclick = ()=> $('#loginDlg').showModal();
+    $('#unlockBtn').onclick = (e)=>{
+      e.preventDefault();
+      if($('#pinInput').value === CONFIG.teacherPin){ show($('#resultsCard'), true); $('#loginDlg').close(); }
+      else alert('Wrong PIN');
+    };
+
+    $('#resetScores').onclick = resetScoresKeepParticipants;
+    $('#endSession').onclick = endSessionKickAll;
+  </script>
+</body>
+</html>
