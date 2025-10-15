@@ -9,13 +9,15 @@
     .wrap{max-width:1000px;margin:0 auto}
     .row{display:grid;grid-template-columns:2fr 1fr;gap:12px}
     .card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:14px 16px}
-    .btn{padding:.5rem 1rem;border-radius:.75rem;border:1px solid:#111;background:#111;color:#fff;font-weight:600}
+    .btn{padding:.5rem 1rem;border-radius:.75rem;border:1px solid #111;background:#111;color:#fff;font-weight:600}
     .btn-ghost{padding:.35rem .65rem;border-radius:.65rem;border:1px solid #ddd;background:#fff}
     .badge{font-size:.7rem;padding:.2rem .5rem;border-radius:9999px;background:#eef}
     input[type="range"]{width:100%}
     .mut{color:#666;font-size:12px}
     .tiny{font-size:11px;line-height:1.2}
   </style>
+
+  <!-- Firebase SDKs -->
   <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -119,7 +121,7 @@
     };
     const MAX_SCORE = 10;
 
-    // ===== STABLE, SHARED CRITERIA (seed once if missing) =====
+    // ===== STABLE, SHARED CRITERIA =====
     const DEFAULT_CRITERIA = [
       { id: "content",    label: "Content Accuracy" },
       { id: "clarity",    label: "Clarity" },
@@ -127,11 +129,12 @@
       { id: "engagement", label: "Engagement" },
       { id: "delivery",   label: "Delivery" }
     ];
-    let CRITERIA = DEFAULT_CRITERIA.slice(); // will be replaced by DB value
+    let CRITERIA = DEFAULT_CRITERIA.slice();
 
     // ===== STATE =====
     const state = { db:null, me:{id:null,name:null}, online:false, studentRef:null };
     let cacheStudents = {};
+    let lastResetToken = null; // RESET BROADCAST
     const basePath = () => `/classes/${CONFIG.classKey}`;
 
     // ===== UTIL =====
@@ -155,18 +158,23 @@
       }catch(e){ state.online=false; badge('offline (local)'); }
     }
 
-    // Ensure criteria exist in DB with STABLE IDs, then attach listeners
     async function initCriteriaThenAttach(){
       const cRef = state.db.ref(`${basePath()}/criteria`);
       const snap = await cRef.get();
-      if(!snap.exists()){
-        await cRef.set(DEFAULT_CRITERIA);   // seed once with stable IDs
-        CRITERIA = DEFAULT_CRITERIA.slice();
-      } else {
-        const val = snap.val() || [];
-        // normalize to array if stored as object
-        CRITERIA = Array.isArray(val) ? val : Object.values(val);
-      }
+      if(!snap.exists()){ await cRef.set(DEFAULT_CRITERIA); CRITERIA = DEFAULT_CRITERIA.slice(); }
+      else { const val = snap.val() || []; CRITERIA = Array.isArray(val) ? val : Object.values(val); }
+
+      // RESET BROADCAST listener — reload everyone on teacher reset
+      state.db.ref(`${basePath()}/control/resetAt`).on('value', s=>{
+        const t = s.val();
+        if(t && t !== lastResetToken){
+          lastResetToken = t;
+          try { if(state.studentRef) state.studentRef.remove(); } catch(e) {}
+          localStorage.removeItem('present_uid');
+          location.reload(); // return to Join
+        }
+      });
+
       attachListeners();
     }
 
@@ -191,21 +199,14 @@
       const id = state.me.id;
       state.studentRef = state.db.ref(`${basePath()}/students/${id}`);
 
-      // Only create name (no seeded scores)
-      await state.studentRef.set({ name });
-
-      // TRUE presence: auto-remove on disconnect/close
+      await state.studentRef.set({ name }); // no seeded scores
       try { state.studentRef.onDisconnect().remove(); } catch (e) {}
-
-      // Extra: remove on refresh/unload
-      window.addEventListener('beforeunload', () => {
-        try { state.studentRef.remove(); } catch(e) {}
-      });
+      window.addEventListener('beforeunload', () => { try { state.studentRef.remove(); } catch(e) {} });
 
       renderSliders();
     }
 
-    // ===== SLIDERS (instant write-through using CRITERIA from DB) =====
+    // ===== SLIDERS =====
     function renderSliders(){
       const wrap = $('#criteriaList'); wrap.innerHTML = '';
       CRITERIA.forEach((c, idx)=>{
@@ -230,13 +231,12 @@
       });
     }
 
-    // ===== RESULTS (live-only; ignore unset scores) =====
+    // ===== RESULTS =====
     function renderResults(students){
-      const pool = Object.values(students || {}); // everyone with page open
+      const pool = Object.values(students || {});
       $('#participantsBadge').textContent = `${pool.length} participants`;
       $('#participantsList').textContent = pool.map(s=> s && s.name ? s.name : '—').join(', ');
 
-      // Per-category averages: include only students that HAVE a number for that criterion
       const res = CRITERIA.map(c=>{
         const vals = pool
           .map(s => (s && s.scores && typeof s.scores[c.id] === 'number') ? Number(s.scores[c.id]) : null)
@@ -252,11 +252,9 @@
         box.appendChild(row);
       });
 
-      // Final average (mean of category avgs)
       const finalAvg = mean(res.map(a=> a.avg || 0));
       $('#finalAverage').textContent = (finalAvg||0).toFixed(2);
 
-      // Class total average (mean of each student's sum, counting only set scores)
       const totals = pool.map(s => {
         if(!s || !s.scores) return null;
         const nums = CRITERIA
@@ -275,7 +273,11 @@
     function resetSession(){
       if(!state.db) return;
       if(!confirm('Reset session? (Kicks everyone off and clears scores.)')) return;
-      state.db.ref(`${basePath()}/students`).set({});
+      const root = state.db.ref(basePath());
+      // 1) clear students
+      root.child('students').set({});
+      // 2) broadcast reset (server timestamp)
+      root.child('control/resetAt').set(firebase.database.ServerValue.TIMESTAMP); // RESET BROADCAST
     }
 
     // ===== UI WIRES =====
