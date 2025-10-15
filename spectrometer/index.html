@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Webcam Spectrometer – Stable</title>
+<title>Webcam Spectrometer – Color Peaks + Small ROI</title>
 <style>
   :root{--bg:#0d1117;--ink:#e6edf3;--mut:#9aa4ad;--acc:#58a6ff;--grid:#30363d}
   html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
@@ -26,6 +26,9 @@
   .pill{padding:2px 8px;border:1px solid var(--grid);border-radius:999px}
   .small{font-size:12px;color:var(--mut)}
   .badge{background:#1f6feb;border:1px solid #2f81f7;color:#fff;border-radius:999px;padding:2px 8px;font-size:12px}
+  #legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .legend-item{display:flex;align-items:center;gap:6px;background:#0b0f14;border:1px solid #2a2f35;border-radius:8px;padding:4px 8px;font:14px ui-monospace,Consolas,Menlo}
+  .swatch{width:12px;height:12px;border-radius:3px;border:1px solid #222}
   #tooltip{position:absolute;pointer-events:none;background:#111;border:1px solid #444;color:#fff;padding:4px 6px;border-radius:6px;font:14px ui-monospace,Consolas,Menlo}
 </style>
 </head>
@@ -58,9 +61,8 @@
         </label>
         <label>Avg rows <input id="avg" type="number" value="8" min="1" max="200" style="width:70px"></label>
         <label>Smooth <input id="smooth" type="number" value="2" min="1" max="25" style="width:60px"></label>
-        <span class="small" id="fps">FPS: –</span>
+        <span class="small">Tip: drag ROI to the brightest rainbow; Shift=height, ⌥Alt=width</span>
       </div>
-      <div class="row small">Drag rectangle to cover the brightest horizontal band. Shift+drag changes height.</div>
       <div class="row">
         <button id="snap">Save PNG</button>
         <button id="csv">Export CSV</button>
@@ -91,6 +93,7 @@
         <label>Subtract BG <input id="bg" type="checkbox"></label>
         <span id="cursor" class="small">Hover: λ — nm</span>
       </div>
+      <div id="legend"></div>
     </div>
   </section>
 </main>
@@ -104,15 +107,19 @@ const tooltip=$('#tooltip');
 const log=m=>{ $('#log').textContent += ($('#log').textContent?'\n':'')+m; console.log(m); };
 if(!window.isSecureContext) $('#httpsWarn').style.display='inline-block';
 
-let stream=null, roi={y:220,h:44}, dragging=false,lastY=0, bgProfile=null, peaks=[];
+let stream=null;
+// ROI is now a small box: x,y,w,h
+let roi={x:100,y:180,w:220,h:60};
+let dragging=false, dragMode='move', last={x:0,y:0}, bgProfile=null, peaks=[];
 let qcStage=0;
 let calib={kind:'linear',A:NaN,B:NaN};
 let W=640,H=480;
 
+const PEAK_COLORS = ['#ff4d4d','#2ecc71','#3498db','#f1c40f','#9b59b6','#e67e22','#1abc9c','#e84393','#16a085','#c0392b'];
+
 function fitCanvas(){
   draw.width=vid.videoWidth||W; draw.height=vid.videoHeight||H;
   plot.width=plot.clientWidth; plot.height=plot.clientHeight||340;
-  // initial text so it's never blank
   ctxP.fillStyle='#000'; ctxP.fillRect(0,0,plot.width,plot.height);
   ctxP.fillStyle='#c9d1d9'; ctxP.font='16px ui-monospace,Consolas,Menlo';
   ctxP.fillText('Start Camera → Quick Cal → Find Peaks', 12, 26);
@@ -148,25 +155,39 @@ async function startCamera(){
 }
 $('#start').onclick=startCamera;
 
-// ROI drag
+// ROI interactions
 $('#viewwrap').addEventListener('mousedown',e=>{
-  const r=$('#viewwrap').getBoundingClientRect(), y=e.clientY-r.top;
-  if(e.shiftKey){ dragging='h'; lastY=y; } else { dragging='y'; lastY=y; }
+  const r=$('#viewwrap').getBoundingClientRect();
+  const x=e.clientX-r.left, y=e.clientY-r.top;
+  last.x=x; last.y=y;
+  if(e.shiftKey) dragMode='height';
+  else if(e.altKey || e.metaKey) dragMode='width';
+  else dragMode='move';
+  dragging=true;
 });
 window.addEventListener('mousemove',e=>{
   if(!dragging) return;
-  const r=$('#viewwrap').getBoundingClientRect(), y=e.clientY-r.top;
-  if(dragging==='y') roi.y=Math.max(0, Math.min(draw.height-roi.h, y - roi.h/2));
-  else roi.h=Math.max(8, Math.min(draw.height-roi.y, Math.abs(y-lastY)));
+  const r=$('#viewwrap').getBoundingClientRect();
+  const x=e.clientX-r.left, y=e.clientY-r.top;
+  const dx=x-last.x, dy=y-last.y;
+  if(dragMode==='move'){
+    roi.x = Math.max(0, Math.min(draw.width - roi.w, roi.x + dx));
+    roi.y = Math.max(0, Math.min(draw.height - roi.h, roi.y + dy));
+  }else if(dragMode==='height'){
+    roi.h = Math.max(8, Math.min(draw.height - roi.y, roi.h + dy));
+  }else if(dragMode==='width'){
+    roi.w = Math.max(40, Math.min(draw.width - roi.x, roi.w + dx));
+  }
+  last.x=x; last.y=y;
 });
 window.addEventListener('mouseup',()=> dragging=false);
 
-// data pipeline (direct from preview, small avg height → fast)
+// Data pipeline using ROI box
 function getProfile(){
   const avg=Math.max(1, parseInt($('#avg').value,10));
-  const y0=Math.max(0, Math.round(roi.y + roi.h/2 - avg/2));
-  const rows=Math.min(draw.height,avg), w=draw.width;
-  const data=ctxD.getImageData(0,y0,w,rows).data;
+  const y0=Math.max(roi.y, Math.round(roi.y + roi.h/2 - avg/2));
+  const rows=Math.min(roi.h,avg), w=roi.w;
+  const data=ctxD.getImageData(roi.x, y0, w, rows).data;
   const R=new Float32Array(w), G=new Float32Array(w), B=new Float32Array(w);
   for(let row=0; row<rows; row++){
     for(let x=0; x<w; x++){
@@ -213,7 +234,7 @@ function findPeaks(Y){
     }
   }
   out.sort((a,b)=>b.amp-a.amp);
-  return out.slice(0,12).sort((a,b)=>a.px-b.px);
+  return out.slice(0,10).sort((a,b)=>a.px-b.px);
 }
 
 function drawPlot(Y){
@@ -223,11 +244,11 @@ function drawPlot(Y){
   ctxP.strokeStyle='#333'; ctxP.fillStyle='#c9d1d9'; ctxP.lineWidth=1.5;
   ctxP.font='16px ui-monospace,Consolas,Menlo';
 
-  const λ0=pxToNm(0), λ1=pxToNm(draw.width-1);
+  const λ0=pxToNm(0), λ1=pxToNm(Y.length-1);
   if(isFinite(λ0)&&isFinite(λ1)){
     const lo=Math.round(Math.min(λ0,λ1)/50)*50, hi=Math.max(λ0,λ1);
     for(let lam=lo; lam<=hi; lam+=50){
-      const x=(nmToPx(lam)/(draw.width-1))*Wp;
+      const x=(nmToPx(lam)/(Y.length-1))*Wp;
       if(isFinite(x)){
         ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
         ctxP.fillText(`${lam} nm`, x+4, 22);
@@ -245,34 +266,52 @@ function drawPlot(Y){
   }
   ctxP.stroke();
 
-  ctxP.font='16px ui-monospace,Consolas,Menlo';
-  ctxP.textBaseline='bottom';
-  for(const pk of peaks){
+  // Draw colored peak lines (no text here to avoid clutter)
+  peaks.forEach((pk,i)=>{
     const x=(pk.px/(Y.length-1))*Wp;
-    ctxP.strokeStyle='#f06'; ctxP.lineWidth=1.5; ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
-    const nm=pxToNm(pk.px); const label=isFinite(nm)?`${nm.toFixed(1)} nm`:`px ${pk.px}`;
-    ctxP.fillStyle='#fff'; ctxP.fillText(label, x+4, Hp-6);
-  }
+    ctxP.strokeStyle=PEAK_COLORS[i % PEAK_COLORS.length];
+    ctxP.lineWidth=2;
+    ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
+  });
+
+  // Build legend under the plot (color → wavelength)
+  const legend=$('#legend');
+  legend.innerHTML='';
+  peaks.forEach((pk,i)=>{
+    const nm=pxToNm(pk.px);
+    const item=document.createElement('div');
+    item.className='legend-item';
+    const sw=document.createElement('span');
+    sw.className='swatch'; sw.style.background=PEAK_COLORS[i%PEAK_COLORS.length];
+    const txt=document.createElement('span');
+    txt.textContent = isFinite(nm) ? `${nm.toFixed(1)} nm` : `px ${pk.px}`;
+    item.appendChild(sw); item.appendChild(txt);
+    legend.appendChild(item);
+  });
 }
 
 // hover wavelength on plot
 plot.addEventListener('mousemove', e=>{
   const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.max(0, Math.min(draw.width-1, Math.round((x/plot.width)*(draw.width-1))));
+  const N = currentYLength();
+  const px=Math.max(0, Math.min(N-1, Math.round((x/plot.width)*(N-1))));
   const lam=pxToNm(px);
   $('#cursor').textContent = isFinite(lam)? `Hover: λ ${lam.toFixed(1)} nm` : `Hover: px ${px}`;
 });
 // hover wavelength on preview
 $('#viewwrap').addEventListener('mousemove', e=>{
   const r=$('#viewwrap').getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.max(0, Math.min(draw.width-1, Math.round((x/r.width)*(draw.width-1))));
-  const lam=pxToNm(px);
+  const N = currentYLength();
+  const rel = Math.max(0, Math.min(roi.w-1, Math.round((x - (roi.x * r.width/draw.width)) / (roi.w * r.width/draw.width) * (roi.w-1))));
+  const lam=pxToNm(rel);
   tooltip.style.left=(e.clientX - r.left + 12)+'px';
   tooltip.style.top=(e.clientY - r.top + 12)+'px';
-  tooltip.textContent = isFinite(lam)? `${lam.toFixed(1)} nm` : `px ${px}`;
+  tooltip.textContent = isFinite(lam)? `${lam.toFixed(1)} nm` : '';
   tooltip.style.display='block';
 });
 $('#viewwrap').addEventListener('mouseleave', ()=> tooltip.style.display='none');
+
+function currentYLength(){ return Math.max(roi.w, 2); }
 
 // Quick Cal: two clicks (plot OR preview)
 function handleCalClick(px){
@@ -290,15 +329,20 @@ function handleCalClick(px){
 $('#qc').onclick=()=>{ qcStage=1; $('#calState').textContent='QuickCal: click Hg 546 (green)'; };
 plot.addEventListener('click', e=>{
   const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.max(0, Math.min(draw.width-1, Math.round((x/plot.width)*(draw.width-1))));
+  const N=currentYLength();
+  const px=Math.max(0, Math.min(N-1, Math.round((x/plot.width)*(N-1))));
   handleCalClick(px);
 });
 $('#viewwrap').addEventListener('click', e=>{
   const r=$('#viewwrap').getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.max(0, Math.min(draw.width-1, Math.round((x/r.width)*(draw.width-1))));
+  // convert preview x to ROI px
+  const roiScreenX = roi.x * (r.width/draw.width);
+  const roiScreenW = roi.w * (r.width/draw.width);
+  if(x<roiScreenX || x>roiScreenX+roiScreenW) return; // clicked outside ROI
+  const px = Math.max(0, Math.min(roi.w-1, Math.round((x - roiScreenX)/roiScreenW * (roi.w-1))));
   handleCalClick(px);
 });
-$('#clearCal').onclick=()=>{ calib={kind:'linear',A:NaN,B:NaN}; $('#calState').textContent='Uncalibrated'; peaks=[]; };
+$('#clearCal').onclick=()=>{ calib={kind:'linear',A:NaN,B:NaN}; $('#calState').textContent='Uncalibrated'; peaks=[]; $('#legend').innerHTML=''; };
 
 // peaks
 $('#findPeaks').onclick=()=>{
@@ -327,20 +371,21 @@ $('#csv').onclick=()=>{
   a.href=URL.createObjectURL(blob); a.download='spectrum.csv'; a.click();
 };
 
-// main loop (~30 fps; light work per frame)
+// main loop (~30 fps)
 let last=0; function loop(t){
   requestAnimationFrame(loop);
   if(vid.readyState<2) return;
   if(t-last<33) return; last=t;
   ctxD.drawImage(vid,0,0,draw.width,draw.height);
-  ctxD.strokeStyle='rgba(88,166,255,.9)'; ctxD.lineWidth=2;
-  ctxD.strokeRect(0,roi.y,draw.width,roi.h);
+  // ROI overlay
+  ctxD.strokeStyle='rgba(88,166,255,.95)'; ctxD.lineWidth=2;
+  ctxD.strokeRect(roi.x, roi.y, roi.w, roi.h);
+  // profile & plot
   const P=getProfile();
   if($('#bg').checked && !bgProfile) bgProfile=P;
   const m=$('#mode').value;
   const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
   drawPlot(Y);
-  const dt=(t-last)||33; $('#fps').textContent='FPS: '+(1000/dt).toFixed(1);
 }
 fitCanvas();
 </script>
