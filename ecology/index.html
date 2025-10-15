@@ -9,11 +9,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 
   <style>
-    :root{
-      --bg:#ffffff; --ink:#1f2937; --muted:#6b7280; --panel:#f8fafc; --border:#e5e7eb; --accent:#111827;
-    }
+    :root{ --bg:#ffffff; --ink:#1f2937; --muted:#6b7280; --panel:#f8fafc; --border:#e5e7eb; --accent:#111827; }
     *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;line-height:1.35}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Noto Sans",sans-serif;line-height:1.35}
     .wrap{max-width:1100px;margin:0 auto;padding:20px}
     h1{font-size:1.75rem;margin:0 0 4px}
     .sub{color:var(--muted);font-size:.95rem;margin-bottom:12px}
@@ -22,7 +20,7 @@
     button:hover{background:#f3f4f6}
     label{cursor:pointer}
     .grid{display:grid;grid-template-columns:1fr;gap:16px}
-    @media(min-width:940px){.grid{grid-template-columns: 360px 1fr}}
+    @media(min-width:940px){.grid{grid-template-columns:360px 1fr}}
     .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px}
     .label{font-weight:600;margin-bottom:8px}
     .row{display:flex;align-items:center;gap:10px;margin:8px 0}
@@ -36,28 +34,21 @@
     .bar > div{height:100%;background:var(--accent);transition:width .2s ease}
     .small{font-size:.8rem;color:var(--muted)}
     .cols-3{display:grid;gap:12px}
-    @media(min-width:900px){.cols-3{grid-template-columns: repeat(3, 1fr)}}
+    @media(min-width:900px){.cols-3{grid-template-columns:repeat(3,1fr)}}
     .list{margin:0;padding-left:18px}
     #chart{height:360px !important}
     #scene{display:block;width:100%;height:220px;border:1px solid var(--border);border-radius:12px;background:#fff}
-    .code{font-family:ui-monospace, Menlo, Monaco, Consolas, "Courier New", monospace;font-size:.78rem}
+    .code{font-family:ui-monospace,Menlo,Monaco,Consolas,"Courier New",monospace;font-size:.78rem}
     #elog{max-height:160px;overflow:auto;white-space:pre-wrap;background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px}
-
-    /* Trend panel */
-    .trend-row{display:flex;align-items:center;gap:12px;margin:8px 0}
-    .trend-name{width:90px}
-    .trend-arrow{font-weight:700; width:22px; text-align:center; transition:transform .2s ease, color .2s ease; }
-    .trend-weak{opacity:.55}
-    .spark{width:180px;height:36px;border:1px solid var(--border);border-radius:8px;background:#fff}
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
       <h1>Balance the Ecosystem</h1>
-      <div class="sub">Adjust resources and human impact. Observe prey-predator dynamics, carrying capacity (K), and ecosystem health.</div>
+      <div class="sub">Adjust resources and human impact. Observe prey–predator dynamics, K (carrying capacity), and ecosystem health.</div>
 
-      <!-- Global controls -->
+      <!-- Controls -->
       <div class="toolbar">
         <button id="startPauseBtn">Start</button>
         <button id="stepBtn">Step</button>
@@ -80,14 +71,14 @@
       </div>
       <div class="small">
         t = <span id="tval">0.0</span> |
-        K_eff ≈ <span id="keff">-</span> |
-        prey* (pred survive) ≈ <span id="preyStar">-</span>
+        K_eff ≈ <span id="keff">—</span> |
+        prey* (pred survive) ≈ <span id="preyStar">—</span>
       </div>
-      <div class="small">Tip: Click the scene to add prey; Shift+click to add a predator.</div>
+      <div class="small">Tip: click scene to add prey; Shift+click to add a predator.</div>
     </header>
 
     <main class="grid">
-      <!-- Controls -->
+      <!-- Left: Sliders -->
       <section class="card">
         <div class="label">Controls</div>
 
@@ -134,12 +125,12 @@
         <div class="presets" id="presets"></div>
 
         <div class="muted" style="margin-top:10px">
-          <div><strong>Model:</strong> logistic prey plus predation with environmental modifiers.</div>
-          <div><strong>Teaching idea:</strong> Start balanced, raise pollution, discuss carrying capacity (K) and density dependence.</div>
+          <div><strong>Model:</strong> logistic prey + predation with environmental modifiers.</div>
+          <div><strong>Teaching idea:</strong> Start balanced → raise pollution; discuss K and density dependence.</div>
         </div>
       </section>
 
-      <!-- Charts, Scene, Trend, Log, Missions -->
+      <!-- Right: Graph + Scene + Log + Missions -->
       <section class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <div class="label" style="margin:0">Populations over Time</div>
@@ -159,23 +150,6 @@
           <div class="small">Sky haze rises with pollution; grass height follows K_eff; colors fade as health drops. Dots = prey, triangles = predators.</div>
         </div>
 
-        <!-- NEW: Animated trend indicators -->
-        <div class="card" style="margin-top:12px">
-          <div class="label" style="margin:0 0 6px">Trends (Last ~20 steps)</div>
-          <div class="trend-row">
-            <div class="trend-name">Prey</div>
-            <div id="preyArrow" class="trend-arrow trend-weak">–</div>
-            <canvas id="sparkPrey" class="spark" width="180" height="36"></canvas>
-            <div class="small" id="preyTrendTxt">flat</div>
-          </div>
-          <div class="trend-row">
-            <div class="trend-name">Predators</div>
-            <div id="predArrow" class="trend-arrow trend-weak">–</div>
-            <canvas id="sparkPred" class="spark" width="180" height="36"></canvas>
-            <div class="small" id="predTrendTxt">flat</div>
-          </div>
-        </div>
-
         <div class="card" style="margin-top:12px">
           <div class="label" style="margin:0 0 6px">Event Log</div>
           <div id="elog"></div>
@@ -183,9 +157,9 @@
 
         <div class="card" style="margin-top:12px">
           <div class="label" style="margin:0 0 6px">Missions</div>
-          <label class="small"><input id="m1" type="checkbox"> Create a predator crash (pred < 2) and explain why.</label><br>
+          <label class="small"><input id="m1" type="checkbox"> Create a predator crash (pred &lt; 2) and explain why.</label><br>
           <label class="small"><input id="m2" type="checkbox"> Show prey overshoot then stabilize near K_eff.</label><br>
-          <label class="small"><input id="m3" type="checkbox"> With Seasonal cycle on, keep Health > 70 for 20 time units.</label>
+          <label class="small"><input id="m3" type="checkbox"> With Seasonal cycle on, keep Health &gt; 70 for 20 time units.</label>
         </div>
       </section>
     </main>
@@ -194,8 +168,8 @@
     <section class="cols-3" style="margin-top:16px">
       <div class="card">
         <div class="label">Equation Reference</div>
-        <div class="code">prey(t+dt) = prey + [ r*s*prey*(1 - prey/K_eff) - a*pred*prey ] * dt</div>
-        <div class="code">pred(t+dt) = pred + [ b*a*pred*prey - ( m + polMort )*pred ] * dt</div>
+        <div class="code">prey(t+dt) = prey + [ r*s*prey*(1 − prey/K_eff) − a*pred*prey ] * dt</div>
+        <div class="code">pred(t+dt) = pred + [ b*a*pred*prey − ( m + polMort )*pred ] * dt</div>
       </div>
       <div class="card">
         <div class="label">Variables</div>
@@ -205,290 +179,196 @@
         </div>
       </div>
       <div class="card">
-        <div class="label">Faith and Stewardship (optional)</div>
-        <div class="small"><em>"The earth is the LORD's" (Ps 24:1)</em> — wise choices (lower pollution, restore predators) reflect stewardship.</div>
+        <div class="label">Faith & Stewardship (optional)</div>
+        <div class="small"><em>“The earth is the LORD’s” (Ps 24:1)</em> — wise choices (lower pollution, restore predators) reflect stewardship.</div>
       </div>
     </section>
   </div>
 
   <script>
-    // Utility
-    function clamp(x, lo, hi){ lo = (lo===undefined?0:lo); hi = (hi===undefined?1e9:hi); return Math.max(lo, Math.min(hi, x)); }
-    function el(id){ return document.getElementById(id); }
+    // ===== Utils =====
+    const clamp=(x,lo=0,hi=1e9)=>Math.max(lo,Math.min(hi,x));
+    const el=id=>document.getElementById(id);
 
-    // Parameters and State (UPDATED predator parameters)
-    var sunlight = 80, water = 70, pollution = 5;
-    var prey = 60, pred = 18;
-    var dt = 0.1, r = 0.7, a = 0.012, b = 0.20, m = 0.18, K_base = 220; // <-- tuned
-    var time = 0, timer = null, speedMs = 120;
-    var MAX_POINTS = 360;
-    var seasonalOn = false, tSeason = 0;
-    var dayNightOn = false;
-    var cbOn = false;
+    // ===== Parameters (tuned so predators persist) =====
+    let sunlight=80, water=70, pollution=5;
+    let prey=60, pred=18;
+    const dt=0.1, r=0.7, a=0.012, b=0.20, m=0.18, K_base=220;   // tuned
+    let time=0, timer=null, speedMs=120;
+    const MAX_POINTS=360;
+    let seasonalOn=false, tSeason=0, dayNightOn=false, cbOn=false;
 
-    // DOM refs
-    var inputs = { sunlight: el('sunlight'), water: el('water'), pollution: el('pollution'), prey0: el('prey0'), pred0: el('pred0'), speed: el('speed') };
-    var vals = { sunlight: el('sunlightVal'), water: el('waterVal'), pollution: el('pollutionVal'), prey0: el('prey0Val'), pred0: el('pred0Val'), speed: el('speedVal'), tval: el('tval'), keff: el('keff'), healthText: el('healthText'), healthFill: el('healthFill') };
+    // DOM
+    const inputs={sunlight:el('sunlight'), water:el('water'), pollution:el('pollution'), prey0:el('prey0'), pred0:el('pred0'), speed:el('speed')};
+    const vals={sunlight:el('sunlightVal'), water:el('waterVal'), pollution:el('pollutionVal'), prey0:el('prey0Val'), pred0:el('pred0Val'), speed:el('speedVal'), tval:el('tval'), keff:el('keff'), healthText:el('healthText'), healthFill:el('healthFill')};
 
-    // Scenarios
-    var SCENARIOS = [
-      { name: 'Balanced Prairie',      params: { sunlight:80, water:70, pollution:5,  prey0:60, pred0:18 }},
-      { name: 'Drought Year',          params: { sunlight:85, water:25, pollution:10, prey0:40, pred0:12 }},
-      { name: 'Runoff and Pollution',  params: { sunlight:70, water:75, pollution:45, prey0:55, pred0:15 }},
-      { name: 'Overhunting Predators', params: { sunlight:80, water:70, pollution:5,  prey0:60, pred0:6  }}
+    // Presets
+    const SCENARIOS=[
+      {name:'Balanced Prairie',      params:{sunlight:80, water:70, pollution:5,  prey0:60, pred0:18}},
+      {name:'Drought Year',          params:{sunlight:85, water:25, pollution:10, prey0:40, pred0:12}},
+      {name:'Runoff & Pollution',    params:{sunlight:70, water:75, pollution:45, prey0:55, pred0:15}},
+      {name:'Overhunting Predators', params:{sunlight:80, water:70, pollution:5,  prey0:60, pred0:6}}
     ];
-    var presetsWrap = el('presets');
-    SCENARIOS.forEach(function(s){
-      var bBtn = document.createElement('button');
-      bBtn.textContent = s.name;
-      bBtn.addEventListener('click', function(){ reset(s.params); logEvent('Preset: ' + s.name); });
-      presetsWrap.appendChild(bBtn);
+    const presetsWrap=el('presets');
+    SCENARIOS.forEach(s=>{
+      const b=document.createElement('button'); b.textContent=s.name;
+      b.addEventListener('click',()=>{ reset(s.params); logEvent('Preset: '+s.name); });
+      presetsWrap.appendChild(b);
     });
 
-    // Chart with explicit colors (swap via color-blind toggle)
-    var PREY_COL = '#2563eb';
-    var PRED_COL = '#dc2626';
-    var KEFF_COL = '#6b7280';
-
-    var ctx = el('chart').getContext('2d');
-    var chart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        datasets: [
-          { label: 'Prey',      data: [], borderWidth: 2, pointRadius: 0, borderColor: PREY_COL, backgroundColor: 'rgba(37,99,235,0.15)' },
-          { label: 'Predators', data: [], borderWidth: 2, pointRadius: 0, borderColor: PRED_COL, backgroundColor: 'rgba(220,38,38,0.15)' },
-          { label: 'K_eff',     data: [], borderWidth: 1.5, pointRadius: 0, borderDash: [5,5], borderColor: KEFF_COL, backgroundColor: 'rgba(107,114,128,0.10)' }
-        ]
-      },
-      options: {
-        animation: false,
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { type: 'linear', title: { display:true, text:'time' }, ticks: { maxTicksLimit: 8 } },
-          y: { beginAtZero: true }
-        },
-        plugins: {
-          legend: { labels: { boxWidth: 12 } },
-          tooltip: { mode: 'nearest', intersect: false }
-        },
-        elements: { line: { tension: 0.25 } }
+    // Chart.js
+    let PREY_COL='#2563eb', PRED_COL='#dc2626', KEFF_COL='#6b7280';
+    const ctx=el('chart').getContext('2d');
+    const chart=new Chart(ctx,{
+      type:'line',
+      data:{datasets:[
+        {label:'Prey',      data:[], borderWidth:2, pointRadius:0, borderColor:PREY_COL, backgroundColor:'rgba(37,99,235,0.15)'},
+        {label:'Predators', data:[], borderWidth:2, pointRadius:0, borderColor:PRED_COL, backgroundColor:'rgba(220,38,38,0.15)'},
+        {label:'K_eff',     data:[], borderWidth:1.5, pointRadius:0, borderDash:[5,5], borderColor:KEFF_COL, backgroundColor:'rgba(107,114,128,0.10)'}
+      ]},
+      options:{
+        animation:false, responsive:true, maintainAspectRatio:false,
+        scales:{ x:{type:'linear', title:{display:true,text:'time'}, ticks:{maxTicksLimit:8}}, y:{beginAtZero:true}},
+        plugins:{ legend:{labels:{boxWidth:12}}, tooltip:{mode:'nearest',intersect:false}},
+        elements:{ line:{tension:0.25} }
       }
     });
+    function pushPoint(t,py,pr,k){ const P=chart.data.datasets; const push=(ds,x,y)=>{ds.data.push({x,y}); if(ds.data.length>MAX_POINTS) ds.data.shift();};
+      push(P[0],t,py); push(P[1],t,pr); push(P[2],t,k); chart.update(); }
+    function clearChart(){ chart.data.datasets.forEach(d=>d.data=[]); chart.update(); }
 
-    function pushPoint(t, preyVal, predVal, kEff){
-      function push(ds, x, y){ ds.data.push({ x:x, y:y }); if (ds.data.length > MAX_POINTS) ds.data.shift(); }
-      push(chart.data.datasets[0], t, preyVal);
-      push(chart.data.datasets[1], t, predVal);
-      push(chart.data.datasets[2], t, kEff);
-      chart.update();
-    }
-    function clearChart(){ chart.data.datasets.forEach(function(d){ d.data = []; }); chart.update(); }
-
-    // Environment and Health  (polMort gentler)
+    // Environment
     function envModifiers(){
-      var resFactor = (0.35 + 0.65*(sunlight/100) * (0.6 + 0.4*(water/100)));
-      var polFactor = 1 - 0.7*(pollution/100);
-      var K_eff = clamp(K_base * resFactor * polFactor, 30, 600);
-      var polMort = 0.10*(pollution/100);   // reduced from 0.15
-      var preyStress = 1 - 0.25*(pollution/100);
-      return { K_eff:K_eff, polMort:polMort, preyStress:preyStress };
+      const resFactor=(0.35+0.65*(sunlight/100)*(0.6+0.4*(water/100)));
+      const polFactor=1-0.7*(pollution/100);
+      const K_eff=clamp(K_base*resFactor*polFactor,30,600);
+      const polMort=0.10*(pollution/100);     // gentler pollution mortality
+      const preyStress=1-0.25*(pollution/100);
+      return {K_eff, polMort, preyStress};
     }
     function healthIndex(K_eff){
-      var diversity = Math.max(0, 1 - Math.abs(prey - pred)/(prey + pred + 1));
-      var headroom = Math.max(0, 1 - Math.max(0, (prey - K_eff))/K_eff);
-      var pol = 1 - (pollution/100);
-      var raw = 100 * (0.45*diversity + 0.35*headroom + 0.20*pol);
-      return clamp(raw, 0, 100);
+      const diversity=Math.max(0,1-Math.abs(prey-pred)/(prey+pred+1));
+      const headroom=Math.max(0,1-Math.max(0,(prey-K_eff))/K_eff);
+      const pol=1-(pollution/100);
+      return clamp(100*(0.45*diversity+0.35*headroom+0.20*pol),0,100);
     }
 
-    // Seasonal toggle
-    el('seasonToggle').addEventListener('change', function(e){ seasonalOn = e.target.checked; logEvent('Seasonal cycle ' + (seasonalOn?'ON':'OFF')); });
-
-    // Day/night toggle
-    el('nightToggle').addEventListener('change', function(e){ dayNightOn = e.target.checked; });
-
-    // Color-blind palette toggle
-    el('cbToggle').addEventListener('change', function(e){
-      cbOn = e.target.checked;
-      var preyColor = cbOn ? '#1b9e77' : '#2563eb';
-      var predColor = cbOn ? '#d95f02' : '#dc2626';
-      PREY_COL = preyColor; PRED_COL = predColor;
-      chart.data.datasets[0].borderColor = preyColor;
-      chart.data.datasets[1].borderColor = predColor;
+    // Toggles
+    el('seasonToggle').addEventListener('change',e=>{ seasonalOn=e.target.checked; logEvent('Seasonal cycle '+(seasonalOn?'ON':'OFF')); });
+    el('nightToggle').addEventListener('change',e=>{ dayNightOn=e.target.checked; });
+    el('cbToggle').addEventListener('change',e=>{
+      cbOn=e.target.checked;
+      const preyColor=cbOn?'#1b9e77':'#2563eb';
+      const predColor=cbOn?'#d95f02':'#dc2626';
+      PREY_COL=preyColor; PRED_COL=predColor;
+      chart.data.datasets[0].borderColor=preyColor;
+      chart.data.datasets[1].borderColor=predColor;
       chart.update();
     });
 
-    // Trend helpers (sparklines & arrows)
-    var sparkPreyData = [], sparkPredData = [];
-    var SPARK_MAX = 120, SPARK_LOOKBACK = 20; // ~last 20 steps for slope
-    function pushSpark(arr, v){ arr.push(v); if(arr.length>SPARK_MAX) arr.shift(); }
-    function drawSpark(canvasId, arr, color){
-      var c = el(canvasId), g = c.getContext('2d'), w=c.width, h=c.height;
-      g.clearRect(0,0,w,h);
-      if(arr.length<2) return;
-      var min = Math.min.apply(null, arr), max = Math.max.apply(null, arr);
-      if (min===max){ min-=1; max+=1; }
-      function X(i){ return (i/(arr.length-1))* (w-8) + 4; }
-      function Y(v){ return h - 4 - ( (v-min)/(max-min) ) * (h-8); }
-      g.lineWidth = 2; g.strokeStyle = color;
-      g.beginPath(); g.moveTo(X(0), Y(arr[0]));
-      for(var i=1;i<arr.length;i++){ g.lineTo(X(i), Y(arr[i])); }
-      g.stroke();
-      // fill under
-      g.lineTo(X(arr.length-1), h-2); g.lineTo(X(0), h-2); g.closePath();
-      g.fillStyle = color.replace(')', ',0.12)').replace('rgb', 'rgba');
-      g.fill();
-    }
-    function slope(arr){
-      if(arr.length<SPARK_LOOKBACK+1) return 0;
-      var a = arr[arr.length-1], b = arr[arr.length-1-SPARK_LOOKBACK];
-      return (a-b)/SPARK_LOOKBACK;
-    }
-    function setTrend(arrowId, txtId, s, baseColor){
-      var elA = el(arrowId), elT = el(txtId);
-      var mag = Math.max(0, Math.min(1, Math.abs(s)/(1+Math.abs(s))));
-      var deg = Math.max(-45, Math.min(45, s*60)); // tilt up/down
-      var color = s>0 ? baseColor : '#6b7280';
-      elA.textContent = s>0 ? '▲' : (s<0 ? '▼' : '–');
-      elA.style.transform = 'translateY(0) rotate('+deg+'deg)';
-      elA.style.color = color;
-      elA.classList.toggle('trend-weak', Math.abs(s)<0.02);
-      elT.textContent = (s>0?'rising ':'falling ') + '(' + (s>0?'+':'') + s.toFixed(2) + '/step)';
-      if (s===0) elT.textContent='flat';
-    }
-
-    // Simulation
-    var log = []; // for CSV export
+    // Simulation step
+    let logArr=[]; // for CSV
     function step(){
-      // Seasonal modulation (non-destructive to slider baselines)
-      if (seasonalOn){
-        tSeason += dt;
-        var S = Math.sin((2*Math.PI/30) * tSeason);
-        var baseSun = Number(inputs.sunlight.value);
-        var baseWat = Number(inputs.water.value);
-        sunlight = clamp(baseSun + 10*S, 0, 100);
-        water    = clamp(baseWat + 20*Math.sin((2*Math.PI/30)*tSeason + Math.PI/4), 0, 100);
-        inputs.sunlight.value = Math.round(sunlight); vals.sunlight.textContent = Math.round(sunlight);
-        inputs.water.value    = Math.round(water);    vals.water.textContent    = Math.round(water);
+      if(seasonalOn){
+        tSeason+=dt;
+        const S=Math.sin((2*Math.PI/30)*tSeason);
+        const baseSun=Number(inputs.sunlight.value);
+        const baseWat=Number(inputs.water.value);
+        sunlight=clamp(baseSun+10*S,0,100);
+        water=clamp(baseWat+20*Math.sin((2*Math.PI/30)*tSeason+Math.PI/4),0,100);
+        inputs.sunlight.value=Math.round(sunlight); vals.sunlight.textContent=Math.round(sunlight);
+        inputs.water.value=Math.round(water);       vals.water.textContent=Math.round(water);
       }
 
-      var env = envModifiers();
-      // survival threshold prey* = (m + polMort)/(a*b)
-      var preyStar = (m + env.polMort) / (a * b);
-      el('preyStar').textContent = Math.round(preyStar);
+      const env=envModifiers();
+      const preyStar=(m+env.polMort)/(a*b); el('preyStar').textContent=Math.round(preyStar);
 
-      var dPrey = (r * env.preyStress) * prey * (1 - prey/env.K_eff) - a * pred * prey;
-      var dPred = b * a * pred * prey - (m + env.polMort) * pred;
-      prey = clamp(prey + dPrey * dt, 0, 5000);
-      pred = clamp(pred + dPred * dt, 0, 5000);
-      time = +(time + dt).toFixed(1);
+      const dPrey=(r*env.preyStress)*prey*(1-prey/env.K_eff)-a*pred*prey;
+      const dPred= b*a*pred*prey - (m+env.polMort)*pred;
+      prey=clamp(prey+dPrey*dt,0,5000);
+      pred=clamp(pred+dPred*dt,0,5000);
+      time=+(time+dt).toFixed(1);
 
-      var H = healthIndex(env.K_eff);
-      el('tval').textContent = time.toFixed(1);
-      el('keff').textContent = env.K_eff.toFixed(0);
-      el('healthText').textContent = Math.round(H);
-      el('healthFill').style.width = H + '%';
+      const H=healthIndex(env.K_eff);
+      el('tval').textContent=time.toFixed(1);
+      el('keff').textContent=env.K_eff.toFixed(0);
+      el('healthText').textContent=Math.round(H);
+      el('healthFill').style.width=H+'%';
 
-      pushPoint(time, +prey.toFixed(1), +pred.toFixed(1), +env.K_eff.toFixed(1));
+      pushPoint(time,+prey.toFixed(1),+pred.toFixed(1),+env.K_eff.toFixed(1));
 
-      // log for export
-      log.push({ t: time, prey: +prey.toFixed(2), pred: +pred.toFixed(2), keff: +env.K_eff.toFixed(2), health: Math.round(H) });
-      if (log.length > 5000) log.shift();
+      logArr.push({t:time,prey:+prey.toFixed(2),pred:+pred.toFixed(2),keff:+env.K_eff.toFixed(2),health:Math.round(H)});
+      if(logArr.length>5000) logArr.shift();
 
-      analyzeState(env, H);
-      missionsTick(env, H);
-
-      // Trends: update sparkline buffers and arrows
-      pushSpark(sparkPreyData, prey);
-      pushSpark(sparkPredData, pred);
-      drawSpark('sparkPrey', sparkPreyData, cbOn? 'rgb(27,158,119)' : 'rgb(37,99,235)');
-      drawSpark('sparkPred', sparkPredData, cbOn? 'rgb(217,95,2)'   : 'rgb(220,38,38)');
-      setTrend('preyArrow','preyTrendTxt', slope(sparkPreyData), cbOn? '#1b9e77' : '#16a34a');
-      setTrend('predArrow','predTrendTxt', slope(sparkPredData), cbOn? '#d95f02' : '#ef4444');
+      analyzeState(env,H);
+      missionsTick(env,H);
     }
 
-    // Wiring sliders
-    function wireSlider(key, setter){
-      inputs[key].addEventListener('input', function(e){
-        var v = Number(e.target.value);
-        vals[key].textContent = v;
-        setter(v);
-      });
-    }
-    wireSlider('sunlight', function(v){ sunlight = v; });
-    wireSlider('water',    function(v){ water = v; });
-    wireSlider('pollution',function(v){ pollution = v; });
-    wireSlider('prey0',    function(v){ prey = v; });
-    wireSlider('pred0',    function(v){ pred = v; });
-    wireSlider('speed',    function(v){ speedMs = v; if (timer){ clearInterval(timer); timer = setInterval(step, speedMs); }});
+    // Sliders
+    function wireSlider(key,set){ inputs[key].addEventListener('input',e=>{ const v=Number(e.target.value); vals[key].textContent=v; set(v); }); }
+    wireSlider('sunlight',v=>sunlight=v);
+    wireSlider('water',v=>water=v);
+    wireSlider('pollution',v=>pollution=v);
+    wireSlider('prey0',v=>prey=v);
+    wireSlider('pred0',v=>pred=v);
+    wireSlider('speed',v=>{ speedMs=v; if(timer){ clearInterval(timer); timer=setInterval(step,speedMs);} });
 
-    el('startPauseBtn').addEventListener('click', function(){
-      if (timer){ clearInterval(timer); timer = null; startPauseBtn.textContent = 'Start'; }
-      else { timer = setInterval(step, speedMs); startPauseBtn.textContent = 'Pause'; }
+    // Start/Pause (single handler — the duplicate caused canceling)
+    el('startPauseBtn').addEventListener('click',()=>{
+      if(timer){ clearInterval(timer); timer=null; startPauseBtn.textContent='Start'; }
+      else { timer=setInterval(step,speedMs); startPauseBtn.textContent='Pause'; }
     });
-    el('stepBtn').addEventListener('click', step);
-    el('resetBtn').addEventListener('click', function(){ reset(); });
+    el('stepBtn').addEventListener('click',step);
+    el('resetBtn').addEventListener('click',()=>reset());
 
     function reset(preset){
-      seasonalOn = false; el('seasonToggle').checked = false;
-      sunlight = (preset && preset.sunlight!=null)? preset.sunlight : Number(inputs.sunlight.value);
-      water    = (preset && preset.water!=null)?    preset.water    : Number(inputs.water.value);
-      pollution= (preset && preset.pollution!=null)?preset.pollution: Number(inputs.pollution.value);
-      prey     = (preset && preset.prey0!=null)?    preset.prey0    : Number(inputs.prey0.value);
-      pred     = (preset && preset.pred0!=null)?    preset.pred0    : Number(inputs.pred0.value);
+      seasonalOn=false; el('seasonToggle').checked=false;
+      sunlight = preset?.sunlight ?? Number(inputs.sunlight.value);
+      water    = preset?.water    ?? Number(inputs.water.value);
+      pollution= preset?.pollution?? Number(inputs.pollution.value);
+      prey     = preset?.prey0    ?? Number(inputs.prey0.value);
+      pred     = preset?.pred0    ?? Number(inputs.pred0.value);
 
-      if (preset){
-        inputs.sunlight.value = sunlight; vals.sunlight.textContent = sunlight;
-        inputs.water.value = water;       vals.water.textContent = water;
-        inputs.pollution.value = pollution; vals.pollution.textContent = pollution;
-        inputs.prey0.value = prey;        vals.prey0.textContent = prey;
-        inputs.pred0.value = pred;        vals.pred0.textContent = pred;
+      if(preset){
+        inputs.sunlight.value=sunlight; vals.sunlight.textContent=sunlight;
+        inputs.water.value=water;       vals.water.textContent=water;
+        inputs.pollution.value=pollution; vals.pollution.textContent=pollution;
+        inputs.prey0.value=prey;        vals.prey0.textContent=prey;
+        inputs.pred0.value=pred;        vals.pred0.textContent=pred;
       }
 
-      time = 0;
-      el('tval').textContent = '0.0';
+      time=0; el('tval').textContent='0.0';
       clearChart();
-      var env = envModifiers();
-      el('keff').textContent = env.K_eff.toFixed(0);
-      var H = healthIndex(env.K_eff);
-      el('healthText').textContent = Math.round(H);
-      el('healthFill').style.width = H + '%';
-      // reset helpers
-      lastExplained = { crash:false, overshoot:false, pollution:false };
-      mission = { m1:false, m2:false, m3:false, tHealthy:0 };
-      el('m1').checked = el('m2').checked = el('m3').checked = false;
-      // reset trends
-      sparkPreyData = []; sparkPredData = [];
-      el('preyArrow').textContent='–'; el('predArrow').textContent='–';
-      el('preyTrendTxt').textContent='flat'; el('predTrendTxt').textContent='flat';
+      const env=envModifiers();
+      el('keff').textContent=env.K_eff.toFixed(0);
+      const H=healthIndex(env.K_eff);
+      el('healthText').textContent=Math.round(H);
+      el('healthFill').style.width=H+'%';
+
+      // helpers
+      lastExplained={crash:false,overshoot:false,pollution:false};
+      mission={m1:false,m2:false,m3:false,tHealthy:0};
+      el('m1').checked=el('m2').checked=el('m3').checked=false;
+
+      // trends removed; nothing to reset there
       logEvent('Reset');
     }
 
     // CSV export
     function exportCSV(){
-      var rows = [['t','prey','pred','K_eff','health']].concat(
-        log.map(function(r){ return [r.t, r.prey, r.pred, r.keff, r.health]; })
-      );
-      var csv = rows.map(function(r){ return r.join(','); }).join('\n');
-      var blob = new Blob([csv], {type:'text/csv'});
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'ecosystem_run.csv';
-      a.click();
-      URL.revokeObjectURL(a.href);
+      const rows=[['t','prey','pred','K_eff','health'],...logArr.map(r=>[r.t,r.prey,r.pred,r.keff,r.health])];
+      const csv=rows.map(r=>r.join(',')).join('\n');
+      const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob); a.download='ecosystem_run.csv'; a.click(); URL.revokeObjectURL(a.href);
     }
-    el('csvBtn').addEventListener('click', exportCSV);
+    el('csvBtn').addEventListener('click',exportCSV);
 
     // Shareable state
-    function encodeState(){
-      var o = { sun:Math.round(sunlight), wat:Math.round(water), pol:Math.round(pollution), prey:Math.round(prey), pred:Math.round(pred) };
-      location.hash = btoa(JSON.stringify(o));
-    }
+    function encodeState(){ const o={sun:Math.round(sunlight),wat:Math.round(water),pol:Math.round(pollution),prey:Math.round(prey),pred:Math.round(pred)}; location.hash=btoa(JSON.stringify(o)); }
     function decodeState(){
-      if (!location.hash) return;
-      try {
-        var o = JSON.parse(atob(location.hash.slice(1)));
+      if(!location.hash) return;
+      try{
+        const o=JSON.parse(atob(location.hash.slice(1)));
         sunlight=o.sun; water=o.wat; pollution=o.pol; prey=o.prey; pred=o.pred;
         inputs.sunlight.value=sunlight; vals.sunlight.textContent=sunlight;
         inputs.water.value=water;       vals.water.textContent=water;
@@ -496,249 +376,106 @@
         inputs.prey0.value=prey;        vals.prey0.textContent=prey;
         inputs.pred0.value=pred;        vals.pred0.textContent=pred;
         logEvent('State loaded from URL');
-      } catch {}
+      }catch{}
     }
-    el('shareBtn').addEventListener('click', function(){ encodeState(); logEvent('State encoded into URL. Share this link.'); });
+    el('shareBtn').addEventListener('click',()=>{ encodeState(); logEvent('State encoded into URL. Share this link.'); });
 
-    // Event log and auto-explain
-    function logEvent(msg){
-      var box = el('elog');
-      var t = time.toFixed(1);
-      box.textContent = '[t=' + t + '] ' + msg + '\n' + box.textContent;
+    // Event log + missions
+    function logEvent(msg){ const box=el('elog'); const t=time.toFixed(1); box.textContent='[t='+t+'] '+msg+'\n'+box.textContent; }
+    let lastExplained={crash:false,overshoot:false,pollution:false};
+    function analyzeState(env,H){
+      if(!lastExplained.crash && pred<2 && prey>env.K_eff*0.6){ logEvent('Predator crash → prey release (boom likely).'); lastExplained.crash=true; }
+      if(!lastExplained.overshoot && prey>env.K_eff*1.1){ logEvent('Prey overshoot above K_eff → correction expected.'); lastExplained.overshoot=true; }
+      if(!lastExplained.pollution && pollution>=60){ logEvent('High pollution: ↑ predator mortality, ↓ prey growth.'); lastExplained.pollution=true; }
     }
-    var lastExplained = { crash:false, overshoot:false, pollution:false };
-    function analyzeState(env, H){
-      if (!lastExplained.crash && pred < 2 && prey > env.K_eff*0.6){
-        logEvent('Predator crash -> prey release (boom likely). Density-dependent control lost.');
-        lastExplained.crash = true;
-      }
-      if (!lastExplained.overshoot && prey > env.K_eff*1.1){
-        logEvent('Prey overshoot above K_eff -> expect correction (resource limits).');
-        lastExplained.overshoot = true;
-      }
-      if (!lastExplained.pollution && pollution >= 60){
-        logEvent('High pollution: increased predator mortality, reduced prey growth (stress).');
-        lastExplained.pollution = true;
-      }
-    }
-
-    // Missions
-    var mission = { m1:false, m2:false, m3:false, tHealthy:0 };
-    function missionsTick(env, H){
-      if (!mission.m1 && pred < 2) { el('m1').checked = mission.m1 = true; logEvent('Mission 1 complete.'); }
-      if (!mission.m2 && prey > env.K_eff*1.05 && prey < env.K_eff*1.02){ el('m2').checked = mission.m2 = true; logEvent('Mission 2 complete.'); }
-      if (seasonalOn && H > 70) mission.tHealthy += dt; else mission.tHealthy = 0;
-      if (!mission.m3 && mission.tHealthy >= 20){ el('m3').checked = mission.m3 = true; logEvent('Mission 3 complete.'); }
+    let mission={m1:false,m2:false,m3:false,tHealthy:0};
+    function missionsTick(env,H){
+      if(!mission.m1 && pred<2){ el('m1').checked=mission.m1=true; logEvent('Mission 1 complete.'); }
+      if(!mission.m2 && prey>env.K_eff*1.05 && prey<env.K_eff*1.02){ el('m2').checked=mission.m2=true; logEvent('Mission 2 complete.'); }
+      if(seasonalOn && H>70) mission.tHealthy+=dt; else mission.tHealthy=0;
+      if(!mission.m3 && mission.tHealthy>=20){ el('m3').checked=mission.m3=true; logEvent('Mission 3 complete.'); }
     }
 
     // Shock events
-    function applyTimedDelta(ref, key, delta, ms){
-      var orig = ref[key]; ref[key] = clamp(orig + delta, 0, 100);
-      setTimeout(function(){ ref[key] = orig; }, ms);
-    }
-    el('stormBtn').addEventListener('click', function(){ applyTimedDelta(window, 'water', 30, 10000); logEvent('Storm: water +30 for 10s.'); });
-    el('heatBtn').addEventListener('click', function(){ applyTimedDelta(window, 'sunlight', 20, 10000); applyTimedDelta(window, 'water', -20, 10000); logEvent('Heat wave: sunlight +20, water -20 for 10s.'); });
-    el('spillBtn').addEventListener('click', function(){ applyTimedDelta(window, 'pollution', 35, 10000); logEvent('Pollution spill: +35 for 10s.'); });
-    el('cullBtn').addEventListener('click', function(){ pred = Math.max(0, pred - 8); logEvent('Predator cull: -8 predators.'); });
+    function applyTimedDelta(ref,key,delta,ms){ const orig=ref[key]; ref[key]=clamp(orig+delta,0,100); setTimeout(()=>{ ref[key]=orig; },ms); }
+    el('stormBtn').addEventListener('click',()=>{ applyTimedDelta(window,'water',30,10000); logEvent('Storm: water +30 for 10s.'); });
+    el('heatBtn').addEventListener('click',()=>{ applyTimedDelta(window,'sunlight',20,10000); applyTimedDelta(window,'water',-20,10000); logEvent('Heat wave: sun +20, water -20 for 10s.'); });
+    el('spillBtn').addEventListener('click',()=>{ applyTimedDelta(window,'pollution',35,10000); logEvent('Pollution spill: +35 for 10s.'); });
+    el('cullBtn').addEventListener('click',()=>{ pred=Math.max(0,pred-8); logEvent('Predator cull: -8 predators.'); });
 
-    // Click-to-add animals
-    el('addPreyBtn').addEventListener('click', function(){ prey += 5; logEvent('Added 5 prey.'); });
-    el('addPredBtn').addEventListener('click', function(){ pred += 2; logEvent('Added 2 predators.'); });
+    // Click-to-add
+    el('addPreyBtn').addEventListener('click',()=>{ prey+=5; logEvent('Added 5 prey.'); });
+    el('addPredBtn').addEventListener('click',()=>{ pred+=2; logEvent('Added 2 predators.'); });
 
-    // Scene (Canvas)
-    var scene = el('scene');
-    var sctx = scene.getContext('2d');
-    function sizeScene(){ scene.width = scene.clientWidth; scene.height = scene.clientHeight; }
-    window.addEventListener('resize', sizeScene); sizeScene();
-    var preySprites = [], predSprites = [];
-    var MAX_SPRITES = 60;
-
-    function rand(a,b){ return a + Math.random()*(b-a); }
-    function spawn(list, n){
-      for(var i=0;i<n;i++){
-        list.push({ x: rand(10, scene.width-10), y: rand(10, scene.height-30), vx: rand(-0.6,0.6), vy: rand(-0.6,0.6) });
-      }
-    }
-    function trim(list, n){ while(list.length>n) list.pop(); }
-    function popToSprites(pop){ return Math.max(0, Math.min(MAX_SPRITES, Math.round(MAX_SPRITES*(1 - Math.exp(-pop/60))))); }
-    function wrap(p){
-      if(p.x<0) p.x+=scene.width; if(p.x>scene.width) p.x-=scene.width;
-      if(p.y<0) p.y+=scene.height; if(p.y>scene.height) p.y-=scene.height;
-    }
+    // ===== Scene (Canvas) =====
+    const scene=el('scene'); const sctx=scene.getContext('2d');
+    function sizeScene(){ scene.width=scene.clientWidth; scene.height=scene.clientHeight; }
+    window.addEventListener('resize',sizeScene); sizeScene();
+    let preySprites=[], predSprites=[]; const MAX_SPRITES=60;
+    const rand=(a,b)=>a+Math.random()*(b-a);
+    function spawn(list,n){ for(let i=0;i<n;i++){ list.push({x:rand(10,scene.width-10),y:rand(10,scene.height-30),vx:rand(-0.6,0.6),vy:rand(-0.6,0.6)}); } }
+    function trim(list,n){ while(list.length>n) list.pop(); }
+    const popToSprites=pop=>Math.max(0,Math.min(MAX_SPRITES,Math.round(MAX_SPRITES*(1-Math.exp(-pop/60)))));
+    function wrap(p){ if(p.x<0)p.x+=scene.width; if(p.x>scene.width)p.x-=scene.width; if(p.y<0)p.y+=scene.height; if(p.y>scene.height)p.y-=scene.height; }
     function stepSprites(){
-      // preds drift toward nearest prey
-      for(var i=0;i<predSprites.length;i++){
-        var pr = predSprites[i], best=null, bd2=1e9;
-        for(var j=0;j<preySprites.length;j++){
-          var py = preySprites[j], dx=py.x-pr.x, dy=py.y-pr.y, d2=dx*dx+dy*dy;
-          if(d2<bd2){ bd2=d2; best=py; }
-        }
-        if(best){
-          var dx=best.x-pr.x, dy=best.y-pr.y, d=Math.sqrt(dx*dx+dy*dy)+1e-6;
-          pr.vx += 0.02*(dx/d); pr.vy += 0.02*(dy/d);
-        }
-        pr.vx *= 0.98; pr.vy *= 0.98;
-        pr.x += pr.vx; pr.y += pr.vy; wrap(pr);
+      for(const pr of predSprites){
+        let best=null,bd2=1e9;
+        for(const py of preySprites){ const dx=py.x-pr.x, dy=py.y-pr.y, d2=dx*dx+dy*dy; if(d2<bd2){bd2=d2; best=py;} }
+        if(best){ const dx=best.x-pr.x, dy=best.y-pr.y, d=Math.hypot(dx,dy)+1e-6; pr.vx+=0.02*(dx/d); pr.vy+=0.02*(dy/d); }
+        pr.vx*=0.98; pr.vy*=0.98; pr.x+=pr.vx; pr.y+=pr.vy; wrap(pr);
       }
-      // prey flee nearest predator or wander
-      for(var k=0;k<preySprites.length;k++){
-        var p = preySprites[k], best=null, bd2=1e9;
-        for(var h=0;h<predSprites.length;h++){
-          var pr2 = predSprites[h], dx2=pr2.x-p.x, dy2=pr2.y-p.y, d22=dx2*dx2+dy2*dy2;
-          if(d22<bd2){ bd2=d22; best=pr2; }
-        }
-        if(best){
-          var dx3=p.x-best.x, dy3=p.y-best.y, d3=Math.sqrt(dx3*dx3+dy3*dy3)+1e-6;
-          p.vx += 0.025*(dx3/d3); p.vy += 0.025*(dy3/d3);
-        } else { p.vx += rand(-0.01,0.01); p.vy += rand(-0.01,0.01); }
-        var sp = Math.hypot(p.vx, p.vy); if(sp>1.0){ p.vx*=0.98; p.vy*=0.98; }
-        p.x += p.vx; p.y += p.vy; wrap(p);
+      for(const p of preySprites){
+        let best=null,bd2=1e9;
+        for(const pr of predSprites){ const dx=pr.x-p.x, dy=pr.y-p.y, d2=dx*dx+dy*dy; if(d2<bd2){bd2=d2; best=pr;} }
+        if(best){ const dx=p.x-best.x, dy=p.y-best.y, d=Math.hypot(dx,dy)+1e-6; p.vx+=0.025*(dx/d); p.vy+=0.025*(dy/d); }
+        else { p.vx+=rand(-0.01,0.01); p.vy+=rand(-0.01,0.01); }
+        const sp=Math.hypot(p.vx,p.vy); if(sp>1.0){ p.vx*=0.98; p.vy*=0.98; }
+        p.x+=p.vx; p.y+=p.vy; wrap(p);
       }
     }
-    function drawTriangle(x,y,ang,size){
-      sctx.beginPath();
-      sctx.moveTo(x + Math.cos(ang)*size, y + Math.sin(ang)*size);
-      sctx.lineTo(x + Math.cos(ang+2.5)*size*0.9, y + Math.sin(ang+2.5)*size*0.9);
-      sctx.lineTo(x + Math.cos(ang-2.5)*size*0.9, y + Math.sin(ang-2.5)*size*0.9);
-      sctx.closePath(); sctx.fill();
-    }
-    function healthNow(K){
-      var diversity = Math.max(0, 1 - Math.abs(prey - pred)/(prey + pred + 1));
-      var headroom = Math.max(0, 1 - Math.max(0, (prey - K))/K);
-      var pol = 1 - (pollution/100);
-      var raw = 100 * (0.45*diversity + 0.35*headroom + 0.20*pol);
-      return Math.max(0, Math.min(100, raw));
-    }
+    function drawTri(x,y,ang,size){ sctx.beginPath(); sctx.moveTo(x+Math.cos(ang)*size,y+Math.sin(ang)*size);
+      sctx.lineTo(x+Math.cos(ang+2.5)*size*0.9,y+Math.sin(ang+2.5)*size*0.9);
+      sctx.lineTo(x+Math.cos(ang-2.5)*size*0.9,y+Math.sin(ang-2.5)*size*0.9); sctx.closePath(); sctx.fill(); }
+    function healthNow(K){ const diversity=Math.max(0,1-Math.abs(prey-pred)/(prey+pred+1)); const headroom=Math.max(0,1-Math.max(0,(prey-K))/K); const pol=1-(pollution/100); return clamp(100*(0.45*diversity+0.35*headroom+0.20*pol),0,100); }
     function renderScene(){
-      var env = envModifiers();
-      var H = healthNow(env.K_eff);
-      var haze = pollution/100;
-      var grassH = Math.max(8, 60 * (env.K_eff / (K_base)));
-      var w=scene.width, h=scene.height, groundY=h-28;
-
-      // sky gradient with haze
-      var skyTop = 'rgba(' + Math.round(220*(1-haze)) + ',' + Math.round(235*(1-haze)) + ',255,1)';
-      var skyBot = 'rgba(' + Math.round(180*(1-haze)) + ',' + Math.round(210*(1-haze)) + ',240,1)';
-      var grad = sctx.createLinearGradient(0,0,0,groundY);
-      grad.addColorStop(0, skyTop); grad.addColorStop(1, skyBot);
-      sctx.fillStyle = grad; sctx.fillRect(0,0,w,groundY);
-      sctx.fillStyle = 'rgba(120,120,120,' + (0.18*haze) + ')';
-      sctx.fillRect(0,0,w,groundY);
-
-      // ground color by health
-      var gSat = 0.35 + 0.65*(H/100);
-      sctx.fillStyle = 'rgba(' + Math.round(40+60*gSat) + ',' + Math.round(120+90*gSat) + ',40,1)';
-      sctx.fillRect(0,groundY,w,28);
-
-      // grass blades
-      sctx.strokeStyle = sctx.fillStyle; sctx.lineWidth = 1;
-      for(var x=0; x<w; x+=6){
-        sctx.beginPath();
-        sctx.moveTo(x,groundY+2);
-        sctx.lineTo(x,groundY - grassH*0.3 - (Math.random()*4-2));
-        sctx.stroke();
-      }
-
-      // sprites
-      sctx.globalAlpha = 0.85;
-      sctx.fillStyle = PREY_COL;
-      for(var i=0;i<preySprites.length;i++){
-        var pr = preySprites[i];
-        sctx.beginPath(); sctx.arc(pr.x,pr.y,3.2,0,Math.PI*2); sctx.fill();
-      }
-      sctx.fillStyle = PRED_COL;
-      for(var j=0;j<predSprites.length;j++){
-        var pd = predSprites[j], ang = Math.atan2(pd.vy, pd.vx) || 0;
-        drawTriangle(pd.x,pd.y,ang,4.5);
-      }
-      sctx.globalAlpha = 1;
-
-      // day/night overlay
-      if (dayNightOn){
-        tSeason += dt; // reuse time base
-        var phase = (Math.sin((2*Math.PI/20)*tSeason)+1)/2; // 20s cycle
-        sctx.fillStyle = 'rgba(0,0,40,' + (0.25 + 0.35*(1-phase)) + ')';
-        sctx.fillRect(0,0,w,h);
-      }
+      const env=envModifiers(); const H=healthNow(env.K_eff); const haze=pollution/100; const grassH=Math.max(8,60*(env.K_eff/(K_base)));
+      const w=scene.width,h=scene.height, groundY=h-28;
+      const skyTop=`rgba(${Math.round(220*(1-haze))},${Math.round(235*(1-haze))},255,1)`;
+      const skyBot=`rgba(${Math.round(180*(1-haze))},${Math.round(210*(1-haze))},240,1)`;
+      const g=sctx.createLinearGradient(0,0,0,groundY); g.addColorStop(0,skyTop); g.addColorStop(1,skyBot);
+      sctx.fillStyle=g; sctx.fillRect(0,0,w,groundY); sctx.fillStyle=`rgba(120,120,120,${0.18*haze})`; sctx.fillRect(0,0,w,groundY);
+      const gSat=0.35+0.65*(H/100); sctx.fillStyle=`rgba(${Math.round(40+60*gSat)},${Math.round(120+90*gSat)},40,1)`; sctx.fillRect(0,groundY,w,28);
+      sctx.strokeStyle=sctx.fillStyle; sctx.lineWidth=1; for(let x=0;x<w;x+=6){ sctx.beginPath(); sctx.moveTo(x,groundY+2); sctx.lineTo(x,groundY-grassH*0.3-(Math.random()*4-2)); sctx.stroke(); }
+      sctx.globalAlpha=0.85; sctx.fillStyle=PREY_COL; for(const p of preySprites){ sctx.beginPath(); sctx.arc(p.x,p.y,3.2,0,Math.PI*2); sctx.fill(); }
+      sctx.fillStyle=PRED_COL; for(const p of predSprites){ const ang=Math.atan2(p.vy,p.vx)||0; drawTri(p.x,p.y,ang,4.5); }
+      sctx.globalAlpha=1;
+      if(dayNightOn){ tSeason+=dt; const phase=(Math.sin((2*Math.PI/20)*tSeason)+1)/2; sctx.fillStyle=`rgba(0,0,40,${0.25+0.35*(1-phase)})`; sctx.fillRect(0,0,w,h); }
     }
     function syncSpriteCounts(){
-      var targetPrey = popToSprites(prey);
-      var targetPred = popToSprites(pred);
-      if(preySprites.length < targetPrey) spawn(preySprites, targetPrey - preySprites.length);
-      if(predSprites.length < targetPred) spawn(predSprites, targetPred - predSprites.length);
-      trim(preySprites, targetPrey);
-      trim(predSprites, targetPred);
+      const tp=popToSprites(prey), td=popToSprites(pred);
+      if(preySprites.length<tp) spawn(preySprites,tp-preySprites.length);
+      if(predSprites.length<td) spawn(predSprites,td-predSprites.length);
+      trim(preySprites,tp); trim(predSprites,td);
     }
-    function animate(){
-      syncSpriteCounts();
-      stepSprites();
-      renderScene();
-      requestAnimationFrame(animate);
-    }
+    function animate(){ syncSpriteCounts(); stepSprites(); renderScene(); requestAnimationFrame(animate); }
     requestAnimationFrame(animate);
 
     // Scene clicks to add animals
-    scene.addEventListener('click', function(e){
-      var rect = scene.getBoundingClientRect();
-      var x = e.clientX - rect.left, y = e.clientY - rect.top;
-      if (e.shiftKey){
-        pred += 1;
-        predSprites.push({ x:x, y:y, vx:(Math.random()-0.5), vy:(Math.random()-0.5) });
-        logEvent('Added 1 predator at scene click.');
-      } else {
-        prey += 1;
-        preySprites.push({ x:x, y:y, vx:(Math.random()-0.5), vy:(Math.random()-0.5) });
-        logEvent('Added 1 prey at scene click.');
-      }
+    scene.addEventListener('click',e=>{
+      const r=scene.getBoundingClientRect(); const x=e.clientX-r.left, y=e.clientY-r.top;
+      if(e.shiftKey){ pred+=1; predSprites.push({x,y,vx:(Math.random()-0.5),vy:(Math.random()-0.5)}); logEvent('Added 1 predator at scene click.'); }
+      else { prey+=1; preySprites.push({x,y,vx:(Math.random()-0.5),vy:(Math.random()-0.5)}); logEvent('Added 1 prey at scene click.'); }
     });
 
-    // CSV + Share button hooks
-    el('csvBtn').addEventListener('click', exportCSV);
-    function encodeState(){ var o={ sun:Math.round(sunlight), wat:Math.round(water), pol:Math.round(pollution), prey:Math.round(prey), pred:Math.round(pred) }; location.hash=btoa(JSON.stringify(o)); }
-    function decodeState(){ if(!location.hash) return; try{ var o=JSON.parse(atob(location.hash.slice(1))); sunlight=o.sun; water=o.wat; pollution=o.pol; prey=o.prey; pred=o.pred;
-      inputs.sunlight.value=sunlight; vals.sunlight.textContent=sunlight; inputs.water.value=water; vals.water.textContent=water; inputs.pollution.value=pollution; vals.pollution.textContent=pollution; inputs.prey0.value=prey; vals.prey0.textContent=prey; inputs.pred0.value=pred; vals.pred0.textContent=pred; logEvent('State loaded from URL'); }catch{} }
-    el('shareBtn').addEventListener('click', function(){ encodeState(); logEvent('State encoded into URL. Share this link.'); });
+    // Share hooks
+    el('shareBtn').addEventListener('click',()=>{ const o={sun:Math.round(sunlight),wat:Math.round(water),pol:Math.round(pollution),prey:Math.round(prey),pred:Math.round(pred)}; location.hash=btoa(JSON.stringify(o)); logEvent('State encoded into URL. Share this link.'); });
 
-    // Event log & missions
-    function logEvent(msg){ var box = el('elog'); var t = time.toFixed(1); box.textContent = '[t=' + t + '] ' + msg + '\n' + box.textContent; }
-    var lastExplained = { crash:false, overshoot:false, pollution:false };
-    function analyzeState(env, H){
-      if (!lastExplained.crash && pred < 2 && prey > env.K_eff*0.6){ logEvent('Predator crash -> prey release (boom likely). Density-dependent control lost.'); lastExplained.crash = true; }
-      if (!lastExplained.overshoot && prey > env.K_eff*1.1){ logEvent('Prey overshoot above K_eff -> expect correction (resource limits).'); lastExplained.overshoot = true; }
-      if (!lastExplained.pollution && pollution >= 60){ logEvent('High pollution: increased predator mortality, reduced prey growth (stress).'); lastExplained.pollution = true; }
-    }
-    var mission = { m1:false, m2:false, m3:false, tHealthy:0 };
-    function missionsTick(env, H){
-      if (!mission.m1 && pred < 2) { el('m1').checked = mission.m1 = true; logEvent('Mission 1 complete.'); }
-      if (!mission.m2 && prey > env.K_eff*1.05 && prey < env.K_eff*1.02){ el('m2').checked = mission.m2 = true; logEvent('Mission 2 complete.'); }
-      if (seasonalOn && H > 70) mission.tHealthy += dt; else mission.tHealthy = 0;
-      if (!mission.m3 && mission.tHealthy >= 20){ el('m3').checked = mission.m3 = true; logEvent('Mission 3 complete.'); }
-    }
-
-    // Shock events
-    function applyTimedDelta(ref, key, delta, ms){ var orig = ref[key]; ref[key] = clamp(orig + delta, 0, 100); setTimeout(function(){ ref[key] = orig; }, ms); }
-    el('stormBtn').addEventListener('click', function(){ applyTimedDelta(window, 'water', 30, 10000); logEvent('Storm: water +30 for 10s.'); });
-    el('heatBtn').addEventListener('click', function(){ applyTimedDelta(window, 'sunlight', 20, 10000); applyTimedDelta(window, 'water', -20, 10000); logEvent('Heat wave: sunlight +20, water -20 for 10s.'); });
-    el('spillBtn').addEventListener('click', function(){ applyTimedDelta(window, 'pollution', 35, 10000); logEvent('Pollution spill: +35 for 10s.'); });
-    el('cullBtn').addEventListener('click', function(){ pred = Math.max(0, pred - 8); logEvent('Predator cull: -8 predators.'); });
-
-    // Click-to-add quick buttons
-    el('addPreyBtn').addEventListener('click', function(){ prey += 5; logEvent('Added 5 prey.'); });
-    el('addPredBtn').addEventListener('click', function(){ pred += 2; logEvent('Added 2 predators.'); });
-
-    // Run
-    decodeState();
-    el('stepBtn').click(); // prime sparklines with one step so scales exist
-
-    // Controls: start/pause
-    el('startPauseBtn').addEventListener('click', function(){
-      if (timer){ clearInterval(timer); timer = null; startPauseBtn.textContent = 'Start'; }
-      else { timer = setInterval(step, speedMs); startPauseBtn.textContent = 'Pause'; }
-    });
-
-    // Initialize baseline state
-    function initDefaults(){ reset({ sunlight:80, water:70, pollution:5, prey0:60, pred0:18 }); }
-    initDefaults();
+    // Init
+    (function init(){
+      decodeState();
+      reset({sunlight:80, water:70, pollution:5, prey0:60, pred0:18});
+      // no duplicate start listeners; press Start to animate the line chart continuously
+    })();
   </script>
 </body>
 </html>
