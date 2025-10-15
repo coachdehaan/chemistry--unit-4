@@ -115,4 +115,38 @@ function pxToNm(px){return isFinite(calib.A)?calib.A*px+calib.B:NaN;}
 function nmToPx(nm){return isFinite(calib.A)?(nm-calib.B)/calib.A:NaN;}
 function findPeaks(Y){
 const out=[],N=Y.length,maxY=Math.max(...Y)||1,th=0.18*maxY,minD=Math.floor(N/80);
-for(let i=1;i<N-1;i++){if(Y[i]>th&&Y[i]>Y[i-1]&&Y[i]>Y[i+1]){if(out.length&&(i-out
+for(let i=1;i<N-1;i++){if(Y[i]>th&&Y[i]>Y[i-1]&&Y[i]>Y[i+1]){if(out.length&&(i-out[out.length-1].px)<minD)continue;out.push({px:i,amp:Y[i]});}}
+return out.slice(0,8);}
+function drawPlot(Y){
+const W=plot.width,H=plot.height;ctxP.fillStyle='#000';ctxP.fillRect(0,0,W,H);
+ctxP.strokeStyle='#333';ctxP.fillStyle='#c9d1d9';ctxP.font='16px ui-monospace';
+const λ0=pxToNm(0),λ1=pxToNm(Y.length-1);
+if(isFinite(λ0)&&isFinite(λ1)){for(let lam=Math.round(Math.min(λ0,λ1)/50)*50;lam<=Math.max(λ0,λ1);lam+=50){
+const x=(nmToPx(lam)/(Y.length-1))*W;if(isFinite(x)){ctxP.beginPath();ctxP.moveTo(x,0);ctxP.lineTo(x,H);ctxP.stroke();ctxP.fillText(lam+' nm',x+4,22);}}}
+const maxY=Math.max(...Y)||1;ctxP.strokeStyle='#58a6ff';ctxP.lineWidth=2;ctxP.beginPath();
+for(let i=0;i<Y.length;i++){const x=i/(Y.length-1)*W,y=H-(Y[i]/maxY)*(H-30)-10;i?ctxP.lineTo(x,y):ctxP.moveTo(x,y);}ctxP.stroke();
+peaks.forEach((p,i)=>{const x=p.px/(Y.length-1)*W;ctxP.strokeStyle=colors[i%colors.length];ctxP.beginPath();ctxP.moveTo(x,0);ctxP.lineTo(x,H);ctxP.stroke();});
+const leg=$('#legend');leg.innerHTML='';peaks.forEach((p,i)=>{const nm=pxToNm(p.px);
+const d=document.createElement('div');d.className='legend-item';
+const s=document.createElement('span');s.className='swatch';s.style.background=colors[i%colors.length];
+const t=document.createElement('span');t.textContent=isFinite(nm)?nm.toFixed(1)+' nm':'px '+p.px;
+d.appendChild(s);d.appendChild(t);leg.appendChild(d);});}
+$('#qc').onclick=()=>{qcStage=1;$('#calState').textContent='Click Hg 546 green';};
+plot.addEventListener('click',e=>{
+const x=Math.round((e.offsetX/plot.width)*draw.width);
+if(qcStage===1){calib._x1=x;calib._y1=546.1;qcStage=2;$('#calState').textContent='Click Na 589 yellow';}
+else if(qcStage===2){calib._x2=x;calib._y2=589.0;qcStage=0;
+calib.A=(calib._y2-calib._y1)/(calib._x2-calib._x1);calib.B=calib._y1-calib.A*calib._x1;
+$('#calState').textContent='Calibrated';log(`λ=${calib.A.toFixed(6)}·px+${calib.B.toFixed(2)}`);}});
+$('#clearCal').onclick=()=>{calib={A:NaN,B:NaN};$('#calState').textContent='Uncalibrated';peaks=[];$('#legend').innerHTML='';};
+$('#findPeaks').onclick=()=>{const P=getProfile(),Y=P.L;peaks=findPeaks(Y);drawPlot(Y);};
+
+let last=0;function loop(t){requestAnimationFrame(loop);
+if(vid.readyState<2)return;if(t-last<33)return;last=t;
+ctxD.drawImage(vid,0,0,draw.width,draw.height);
+ctxD.strokeStyle='rgba(88,166,255,.9)';ctxD.strokeRect(0,roi.y,draw.width,roi.h);
+const P=getProfile();drawPlot(P.L);}
+fit();
+</script>
+</body>
+</html>
