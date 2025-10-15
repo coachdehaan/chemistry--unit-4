@@ -16,8 +16,6 @@
     .mut{color:#666;font-size:12px}
     .tiny{font-size:11px;line-height:1.2}
   </style>
-
-  <!-- Firebase SDKs -->
   <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -47,7 +45,7 @@
 
         <div id="rateCard" class="card" style="display:none">
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <h3 style="margin:0">Rate (1–10)</h3>
+            <h3 style="margin:0">Rate (0–10)</h3>
             <div class="mut">You: <span id="whoami" style="font-weight:600">—</span></div>
           </div>
           <div id="criteriaList" style="margin-top:10px;display:flex;flex-direction:column;gap:12px"></div>
@@ -84,7 +82,8 @@
         </div>
 
         <div style="margin-top:10px;display:flex;gap:8px">
-          <button id="resetSession" class="btn-ghost" title="Kick everyone and clear scores">Reset Session</button>
+          <button id="resetScores" class="btn-ghost" title="Zero all scores; keep participants">Reset Scores</button>
+          <button id="endSession" class="btn-ghost" title="Kick everyone off and clear">End Session</button>
         </div>
       </aside>
     </div>
@@ -134,7 +133,8 @@
     // ===== STATE =====
     const state = { db:null, me:{id:null,name:null}, online:false, studentRef:null };
     let cacheStudents = {};
-    let lastResetToken = null; // RESET BROADCAST
+    let lastSoftResetToken = null;
+    let lastHardResetToken = null;
     const basePath = () => `/classes/${CONFIG.classKey}`;
 
     // ===== UTIL =====
@@ -164,14 +164,22 @@
       if(!snap.exists()){ await cRef.set(DEFAULT_CRITERIA); CRITERIA = DEFAULT_CRITERIA.slice(); }
       else { const val = snap.val() || []; CRITERIA = Array.isArray(val) ? val : Object.values(val); }
 
-      // RESET BROADCAST listener — reload everyone on teacher reset
+      // Listen for teacher soft/hard resets
+      state.db.ref(`${basePath()}/control/softResetAt`).on('value', s=>{
+        const t = s.val();
+        if(t && t !== lastSoftResetToken){
+          lastSoftResetToken = t;
+          // Zero my sliders visually
+          $$('#criteriaList input[type=range]').forEach(r=>{ r.value = 0; r.dispatchEvent(new Event('input')); });
+        }
+      });
       state.db.ref(`${basePath()}/control/resetAt`).on('value', s=>{
         const t = s.val();
-        if(t && t !== lastResetToken){
-          lastResetToken = t;
+        if(t && t !== lastHardResetToken){
+          lastHardResetToken = t;
           try { if(state.studentRef) state.studentRef.remove(); } catch(e) {}
           localStorage.removeItem('present_uid');
-          location.reload(); // return to Join
+          location.reload(); // back to Join
         }
       });
 
@@ -179,7 +187,6 @@
     }
 
     function attachListeners(){
-      // Live roster & results
       state.db.ref(`${basePath()}/students`).on('value', snap=>{
         cacheStudents = snap.val() || {};
         renderResults(cacheStudents);
@@ -206,7 +213,7 @@
       renderSliders();
     }
 
-    // ===== SLIDERS =====
+    // ===== SLIDERS (0–10) =====
     function renderSliders(){
       const wrap = $('#criteriaList'); wrap.innerHTML = '';
       CRITERIA.forEach((c, idx)=>{
@@ -214,10 +221,10 @@
         div.innerHTML = `
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <div style="font-weight:600">${idx+1}. ${c.label}</div>
-            <div class="mut">1–${MAX_SCORE}</div>
+            <div class="mut">0–${MAX_SCORE}</div>
           </div>
-          <input type="range" min="1" max="${MAX_SCORE}" step="1" value="1" data-crit="${c.id}">
-          <div class="mut" style="text-align:right;margin-top:4px">Score: <strong data-val="${c.id}">1</strong></div>`;
+          <input type="range" min="0" max="${MAX_SCORE}" step="1" value="0" data-crit="${c.id}">
+          <div class="mut" style="text-align:right;margin-top:4px">Score: <strong data-val="${c.id}">0</strong></div>`;
         wrap.appendChild(div);
       });
 
@@ -231,13 +238,14 @@
       });
     }
 
-    // ===== RESULTS =====
+    // ===== RESULTS (live) =====
     function renderResults(students){
       const pool = Object.values(students || {});
       $('#participantsBadge').textContent = `${pool.length} participants`;
       $('#participantsList').textContent = pool.map(s=> s && s.name ? s.name : '—').join(', ');
 
       const res = CRITERIA.map(c=>{
+        // include zeros; ignore only unset
         const vals = pool
           .map(s => (s && s.scores && typeof s.scores[c.id] === 'number') ? Number(s.scores[c.id]) : null)
           .filter(v => v !== null);
@@ -270,14 +278,33 @@
     }
 
     // ===== TEACHER CONTROLS =====
-    function resetSession(){
+    async function resetScoresKeepParticipants(){
       if(!state.db) return;
-      if(!confirm('Reset session? (Kicks everyone off and clears scores.)')) return;
+      if(!confirm('Reset scores to 0 for all participants?')) return;
+
       const root = state.db.ref(basePath());
-      // 1) clear students
-      root.child('students').set({});
-      // 2) broadcast reset (server timestamp)
-      root.child('control/resetAt').set(firebase.database.ServerValue.TIMESTAMP); // RESET BROADCAST
+      const studentsSnap = await root.child('students').get();
+      const students = studentsSnap.val() || {};
+
+      // Build a multi-path update: set every scores/{critId}=0
+      const updates = {};
+      Object.keys(students).forEach(id=>{
+        CRITERIA.forEach(c=>{
+          updates[`students/${id}/scores/${c.id}`] = 0;
+        });
+      });
+      await root.update(updates);
+
+      // Broadcast soft reset so sliders snap to 0 visually without reload
+      await root.child('control/softResetAt').set(firebase.database.ServerValue.TIMESTAMP);
+    }
+
+    async function endSessionKickAll(){
+      if(!state.db) return;
+      if(!confirm('End session and kick everyone off?')) return;
+      const root = state.db.ref(basePath());
+      await root.child('students').set({}); // clear roster
+      await root.child('control/resetAt').set(firebase.database.ServerValue.TIMESTAMP); // force reload to Join
     }
 
     // ===== UI WIRES =====
@@ -297,7 +324,8 @@
       else alert('Wrong PIN');
     };
 
-    $('#resetSession').onclick = resetSession;
+    $('#resetScores').onclick = resetScoresKeepParticipants;
+    $('#endSession').onclick = endSessionKickAll;
   </script>
 </body>
 </html>
