@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Webcam Spectrometer – Mr. D (Simplified)</title>
+<title>Webcam Spectrometer – Mr. D (Fast)</title>
 <style>
   :root{--bg:#0d1117;--ink:#e6edf3;--mut:#9aa4ad;--acc:#58a6ff;--grid:#30363d}
   html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
@@ -21,19 +21,18 @@
   label{color:var(--mut)}
   input,select,button{background:#0b0f14;color:var(--ink);border:1px solid var(--grid);border-radius:8px;padding:8px 10px}
   button{cursor:pointer}
-  #plot{height:320px;width:100%;background:#000;border:1px solid var(--grid);border-radius:8px}
+  #plot{height:340px;width:100%;background:#000;border:1px solid var(--grid);border-radius:8px}
   #log{white-space:pre-wrap;background:#0b0f14;border:1px solid var(--grid);border-radius:8px;padding:8px;min-height:56px}
   .pill{padding:2px 8px;border:1px solid var(--grid);border-radius:999px}
   .small{font-size:12px;color:var(--mut)}
-  .toggle{color:var(--acc);text-decoration:underline;cursor:pointer}
-  .hidden{display:none}
   .badge{background:#1f6feb;border:1px solid #2f81f7;color:#fff;border-radius:999px;padding:2px 8px;font-size:12px}
+  #tooltip{position:absolute;pointer-events:none;background:#111;border:1px solid #444;color:#fff;padding:4px 6px;border-radius:6px;font:13px ui-monospace,Consolas,Menlo}
 </style>
 </head>
 <body>
 <header>
   <h1>Webcam Spectrometer</h1>
-  <span id="httpsWarn" class="warn" style="display:none">Not HTTPS. Use GitHub Pages (https://) or camera will be blocked.</span>
+  <span id="httpsWarn" class="warn" style="display:none">Not HTTPS. Use GitHub Pages (https://) or camera is blocked.</span>
   <span class="pill">Flow: Start → Quick Cal → Find Peaks</span>
 </header>
 
@@ -44,6 +43,7 @@
     <div class="p-b" id="viewwrap">
       <video id="vid" playsinline muted autoplay></video>
       <canvas id="draw"></canvas>
+      <div id="tooltip" style="display:none;"></div>
     </div>
     <div class="p-b">
       <div class="row">
@@ -51,15 +51,16 @@
         <label>Camera <select id="cams"></select></label>
         <label>Res
           <select id="res">
-            <option>640x480</option>
-            <option selected>1280x720</option>
+            <option selected>640x480</option>
+            <option>1280x720</option>
             <option>1920x1080</option>
           </select>
         </label>
-        <label>Avg rows <input id="avg" type="number" value="10" min="1" max="200" style="width:70px"></label>
-        <label>Smooth <input id="smooth" type="number" value="3" min="1" max="25" style="width:60px"></label>
+        <label>Avg rows <input id="avg" type="number" value="8" min="1" max="200" style="width:70px"></label>
+        <label>Smooth <input id="smooth" type="number" value="2" min="1" max="25" style="width:60px"></label>
+        <span class="small" id="fps">FPS: –</span>
       </div>
-      <div class="row small">Drag the rectangle to cover the brightest horizontal band. Shift + drag to change height.</div>
+      <div class="row small">Drag rectangle to cover the brightest horizontal band. Shift+drag changes height.</div>
       <div class="row">
         <button id="snap">Save PNG</button>
         <button id="csv">Export CSV</button>
@@ -90,97 +91,61 @@
         <label>Subtract BG <input id="bg" type="checkbox"></label>
         <span id="cursor" class="small">Hover: λ — nm</span>
       </div>
-
-      <div class="row small">
-        <span class="toggle" id="advToggle">Show Advanced Calibration</span>
-      </div>
-      <div id="adv" class="hidden">
-        <div class="p-h">Advanced Calibration</div>
-        <div class="p-b">
-          <div class="row">
-            <b>2-point (linear):</b>
-            <button class="pick" data-idx="0">Pick px A</button> λA
-            <input class="lam" data-idx="0" type="number" value="546.1" step="0.1" style="width:90px"> <span id="p0" class="small">pxA: –</span>
-            <button class="pick" data-idx="1">Pick px B</button> λB
-            <input class="lam" data-idx="1" type="number" value="589.0" step="0.1" style="width:90px"> <span id="p1" class="small">pxB: –</span>
-            <button id="apply2">Apply 2-pt</button> <span id="eq2" class="small"></span>
-          </div>
-          <div class="row">
-            <b>3-point (quadratic):</b>
-            <button class="pick" data-idx="2">Pick px C</button> λC
-            <input class="lam" data-idx="2" type="number" value="656.3" step="0.1" style="width:90px"> <span id="p2" class="small">pxC: –</span>
-            <button id="apply3">Apply 3-pt</button> <span id="eq3" class="small"></span>
-          </div>
-          <div class="small">Known lines: Hg 435.8, 546.1, 577.0/579.1; Na 589.0; H-α 656.3; K 766.5/769.9.</div>
-        </div>
-      </div>
     </div>
   </section>
 </main>
 
 <script>
-const $ = s => document.querySelector(s);
+const $=s=>document.querySelector(s);
 const vid=$('#vid'), draw=$('#draw'), plot=$('#plot');
-const ctxD=draw.getContext('2d'), ctxP=plot.getContext('2d');
-const log = m => { $('#log').textContent += ($('#log').textContent?'\n':'')+m; console.log(m); };
+const ctxD=draw.getContext('2d',{willReadFrequently:true});
+const ctxP=plot.getContext('2d',{willReadFrequently:true});
+const tooltip=$('#tooltip');
+const log=m=>{ $('#log').textContent += ($('#log').textContent?'\n':'')+m; console.log(m); };
+if(!window.isSecureContext) $('#httpsWarn').style.display='inline-block';
 
-if (!window.isSecureContext) $('#httpsWarn').style.display='inline-block';
-
-let stream=null, roi={y:260,h:50}, dragging=false, lastY=0, picking=null, bgProfile=null;
-let peaks=[]; // {px, nm?, amp}
-let calib={kind:'linear',A:NaN,B:NaN,a:0,b:1,c:0,px:[null,null,null],nm:[546.1,589.0,656.3]};
-let W=1280,H=720;
+let stream=null, roi={y:220,h:44}, dragging=false,lastY=0, pickingQC=0, bgProfile=null, peaks=[];
+let calib={kind:'linear',A:NaN,B:NaN,a:0,b:1,c:0};
+let W=640,H=480, PW=800; // processing width
+const proc=document.createElement('canvas'); proc.width=PW; const pctx=proc.getContext('2d',{willReadFrequently:true});
 
 function fitCanvas(){
   draw.width = vid.videoWidth||W;
   draw.height = vid.videoHeight||H;
-  plot.width = plot.clientWidth;
-  plot.height = plot.clientHeight;
+  plot.width = plot.clientWidth; plot.height = plot.clientHeight||340;
+  // preset grid so it isn't blank
+  ctxP.fillStyle='#000'; ctxP.fillRect(0,0,plot.width,plot.height);
+  ctxP.fillStyle='#c9d1d9'; ctxP.font='14px ui-monospace,Consolas,Menlo';
+  ctxP.fillText('Start Camera → Quick Cal → Find Peaks', 12, 24);
 }
 
 async function enumerateCams(){
-  try{
-    const devs = await navigator.mediaDevices.enumerateDevices();
-    const cams = devs.filter(d=>d.kind==='videoinput');
-    const sel=$('#cams'); sel.innerHTML='';
-    cams.forEach((d,i)=>{ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||('Camera '+(i+1)); sel.appendChild(o); });
-    if(!cams.length) log('No cameras found. Check OS privacy settings and browser permissions.');
-  }catch(e){ log('enumerateDevices: '+e.name+' — '+e.message); }
+  const devs=await navigator.mediaDevices.enumerateDevices();
+  const cams=devs.filter(d=>d.kind==='videoinput');
+  const sel=$('#cams'); sel.innerHTML='';
+  cams.forEach((d,i)=>{const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||('Camera '+(i+1)); sel.appendChild(o);});
+  if(!cams.length) log('No cameras found. Check macOS Privacy → Camera and browser permissions.');
 }
 
-function makeConstraints(pref){
+function makeConstraints(devId){
   const [w,h]=$('#res').value.split('x').map(Number);
-  if(pref?.deviceId) return {video:{deviceId:{exact:pref.deviceId},width:{ideal:w},height:{ideal:h}},audio:false};
-  return {video:{width:{ideal:w},height:{ideal:h}},audio:false};
+  return devId? {video:{deviceId:{exact:devId},width:{ideal:w},height:{ideal:h}},audio:false}
+              : {video:{width:{ideal:w},height:{ideal:h}},audio:false};
 }
 
 async function startCamera(){
   $('#log').textContent='';
   if(!window.isSecureContext){ log('ERROR: Not HTTPS. Use GitHub Pages.'); return; }
-
   if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-  try{
-    // Permission primer
-    const s=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
-    s.getTracks().forEach(t=>t.stop());
-  }catch(e){ /* ignored */ }
-
+  try{ const s=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); s.getTracks().forEach(t=>t.stop()); }catch(e){}
   await enumerateCams();
   const devId=$('#cams').value;
-  let err=null;
-  try{
-    stream = await navigator.mediaDevices.getUserMedia(makeConstraints({deviceId:devId}));
-  }catch(e){
-    err=e; log('Primary constraints failed: '+e.name+' — '+e.message);
-    try{ stream = await navigator.mediaDevices.getUserMedia(makeConstraints()); }catch(e2){ err=e2; }
-  }
-  if(!stream){ log('All camera attempts failed. Try 640×480 and allow permissions.'); return; }
-
-  vid.srcObject=stream;
-  try{ await vid.play(); }catch(e){ log('video.play(): '+e.name); }
+  try{ stream=await navigator.mediaDevices.getUserMedia(makeConstraints(devId)); }
+  catch(e){ log('getUserMedia failed: '+e.name+' — '+e.message); return; }
+  vid.srcObject=stream; await vid.play();
   await new Promise(res=>{ if(vid.readyState>=2) res(); else vid.onloadedmetadata=res; });
-  fitCanvas();
-  requestAnimationFrame(loop);
+  W=vid.videoWidth||W; H=vid.videoHeight||H; fitCanvas();
+  loop();
   log('Camera started: '+(stream.getVideoTracks()[0]?.label||'unknown'));
 }
 $('#start').onclick=startCamera;
@@ -194,27 +159,30 @@ $('#viewwrap').addEventListener('mousedown',e=>{
 window.addEventListener('mousemove',e=>{
   if(!dragging) return;
   const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
-  if(dragging==='y'){ roi.y=Math.max(0, Math.min(draw.height-roi.h, y - roi.h/2)); }
-  else if(dragging==='h'){ roi.h=Math.max(2, Math.min(draw.height-roi.y, Math.abs(y-lastY))); }
+  if(dragging==='y') roi.y=Math.max(0, Math.min(draw.height-roi.h, y - roi.h/2));
+  else roi.h=Math.max(8, Math.min(draw.height-roi.y, Math.abs(y-lastY)));
 });
 window.addEventListener('mouseup',()=> dragging=false);
 
-// Data pipeline
+// data pipeline (downscaled)
 function getProfile(){
+  // scale source row region to PW x rows
   const avg=Math.max(1, parseInt($('#avg').value,10));
   const y0=Math.max(0, Math.round(roi.y + roi.h/2 - avg/2));
-  const w=draw.width, rows=Math.min(draw.height,avg);
-  const data=ctxD.getImageData(0,y0,w,rows).data;
-  const R=new Float32Array(w), G=new Float32Array(w), B=new Float32Array(w);
+  const rows=Math.min(draw.height,avg);
+  proc.height=rows; // small strip
+  pctx.drawImage(draw, 0,y0, draw.width, rows, 0,0, PW, rows);
+  const data=pctx.getImageData(0,0,PW,rows).data;
+  const R=new Float32Array(PW), G=new Float32Array(PW), B=new Float32Array(PW);
   for(let row=0; row<rows; row++){
-    for(let x=0; x<w; x++){
-      const i=(row*w+x)*4; R[x]+=data[i]; G[x]+=data[i+1]; B[x]+=data[i+2];
+    for(let x=0; x<PW; x++){
+      const i=(row*PW + x)*4; R[x]+=data[i]; G[x]+=data[i+1]; B[x]+=data[i+2];
     }
   }
-  for(let x=0;x<w;x++){ R[x]/=rows; G[x]/=rows; B[x]/=rows; }
-  const gamma = Math.max(0.3, parseFloat($('#gamma').value));
-  const L=new Float32Array(w);
-  for(let x=0;x<w;x++){
+  for(let x=0;x<PW;x++){ R[x]/=rows; G[x]/=rows; B[x]/=rows; }
+  const gamma=Math.max(0.3, parseFloat($('#gamma').value));
+  const L=new Float32Array(PW);
+  for(let x=0;x<PW;x++){
     const r=Math.pow(R[x]/255,1/gamma), g=Math.pow(G[x]/255,1/gamma), b=Math.pow(B[x]/255,1/gamma);
     L[x]=0.2126*r+0.7152*g+0.0722*b;
   }
@@ -229,186 +197,132 @@ function getProfile(){
   };
   return {R:smooth(R),G:smooth(G),B:smooth(B),L:smooth(L)};
 }
-
 function pxToNm(px){
-  if(Number.isFinite(calib.A) && Number.isFinite(calib.B) && calib.kind==='linear') return calib.A*px + calib.B;
+  if(Number.isFinite(calib.A) && calib.kind==='linear') return calib.A*px + calib.B;
   if(calib.kind==='quad') return calib.a*px*px + calib.b*px + calib.c;
   return NaN;
 }
 function nmToPx(nm){
   if(calib.kind==='linear' && Number.isFinite(calib.A)) return (nm - calib.B)/calib.A;
   if(calib.kind==='quad'){
-    const {a,b,c}=calib; const A=a,B=b,C=c-nm, D=B*B-4*A*C;
+    const {a,b,c}=calib; const A=a,B=b,C=c-nm,D=B*B-4*A*C;
     if(D<=0) return NaN;
     const r1=(-B+Math.sqrt(D))/(2*A), r2=(-B-Math.sqrt(D))/(2*A);
-    return (r1>=0&&r1<=draw.width)?r1:r2;
+    return (r1>=0&&r1<=PW)?r1:r2;
   }
   return NaN;
 }
 
-// Peak detection (simple prominence/local maxima)
-function findPeaksIn(Y){
-  const N=Y.length, peaks=[];
-  const maxY = Math.max(...Y) || 1;
-  const thresh = 0.15*maxY;        // amplitude threshold
-  const minDist = Math.floor(N/80); // spacing
+// peak detection
+function findPeaks(Y){
+  const N=Y.length, out=[];
+  const maxY=Math.max(...Y)||1, thresh=0.18*maxY, minDist=Math.floor(N/80);
   for(let i=1;i<N-1;i++){
     if(Y[i]>thresh && Y[i]>Y[i-1] && Y[i]>Y[i+1]){
-      // refine peak: local 5-pt max
-      let j=i, best=i, bestV=Y[i];
-      for(let k=Math.max(0,i-2); k<=Math.min(N-1,i+2); k++){ if(Y[k]>bestV){ bestV=Y[k]; best=k; } }
-      i=best;
-      // distance check
-      if(peaks.length && (i - peaks[peaks.length-1].px) < minDist) continue;
-      peaks.push({px:i, amp:bestV});
+      let best=i, v=Y[i];
+      for(let k=i-2;k<=i+2;k++){ if(k>=0&&k<N&&Y[k]>v){v=Y[k]; best=k;} }
+      if(out.length && (best - out[out.length-1].px)<minDist) continue;
+      out.push({px:best, amp:v});
     }
   }
-  // limit to top 10 by amplitude
-  peaks.sort((a,b)=>b.amp-a.amp);
-  return peaks.slice(0,10).sort((a,b)=>a.px-b.px);
+  out.sort((a,b)=>b.amp-a.amp);
+  return out.slice(0,12).sort((a,b)=>a.px-b.px);
 }
 
-function drawPlot(){
-  if(vid.readyState>=2){
-    ctxD.drawImage(vid,0,0,draw.width,draw.height);
-    ctxD.strokeStyle='rgba(88,166,255,.9)'; ctxD.lineWidth=2;
-    ctxD.strokeRect(0,roi.y,draw.width,roi.h);
-  }
-  const P=getProfile();
-  if($('#bg').checked && !bgProfile) bgProfile=P;
-  const m=$('#mode').value;
-  const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
-  const base = ($('#bg').checked && bgProfile) ? bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'] : null;
-  const Yb = base ? Y.map((v,i)=>Math.max(0, v-base[i])) : Y;
-
-  // canvas size
-  plot.width=plot.clientWidth; plot.height=plot.clientHeight;
+// draw plot
+function drawPlot(Y){
+  plot.width=plot.clientWidth; plot.height=plot.clientHeight||340;
   const Wp=plot.width, Hp=plot.height;
-
-  // background
   ctxP.fillStyle='#000'; ctxP.fillRect(0,0,Wp,Hp);
-
-  // axes/grid
-  ctxP.strokeStyle='#333'; ctxP.fillStyle='#c9d1d9'; ctxP.lineWidth=1;
-  ctxP.font='13px ui-monospace,Consolas,Menlo,monospace';
-  const λ0=pxToNm(0), λ1=pxToNm(draw.width);
+  ctxP.strokeStyle='#333'; ctxP.fillStyle='#c9d1d9'; ctxP.lineWidth=1.5;
+  ctxP.font='15px ui-monospace,Consolas,Menlo';
+  const λ0=pxToNm(0), λ1=pxToNm(PW-1);
   if(isFinite(λ0)&&isFinite(λ1)){
     const lo=Math.round(Math.min(λ0,λ1)/50)*50, hi=Math.max(λ0,λ1);
     for(let lam=lo; lam<=hi; lam+=50){
-      const x=(nmToPx(lam)/draw.width)*Wp;
+      const x=(nmToPx(lam)/PW)*Wp;
       if(isFinite(x)){
         ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
-        ctxP.fillText(`${lam} nm`, x+4, 16);
+        ctxP.fillText(`${lam} nm`, x+4, 18);
       }
     }
-  }else{
-    ctxP.fillText('Uncalibrated: peak labels show px. Use Quick Cal (Hg 546 → Na 589).', 8, 18);
+  } else {
+    ctxP.fillText('Uncalibrated: use Quick Cal (Hg 546 → Na 589) on plot or preview.', 10, 22);
   }
-
-  // plot line
-  const maxY=Math.max(...Yb)||1;
+  const maxY=Math.max(...Y)||1;
   ctxP.strokeStyle='#58a6ff'; ctxP.lineWidth=2; ctxP.beginPath();
-  for(let i=0;i<Yb.length;i++){
-    const x=(i/draw.width)*Wp, y=Hp - (Yb[i]/maxY)*(Hp-26) - 6;
+  for(let i=0;i<Y.length;i++){
+    const x=(i/(PW-1))*Wp, y=Hp - (Y[i]/maxY)*(Hp-28) - 8;
     if(i===0) ctxP.moveTo(x,y); else ctxP.lineTo(x,y);
   }
   ctxP.stroke();
-
-  // peaks overlays
-  ctxP.font='14px ui-monospace,Consolas,Menlo,monospace';
+  // peaks
+  ctxP.font='15px ui-monospace,Consolas,Menlo';
   ctxP.textBaseline='bottom';
   for(const pk of peaks){
-    const x=(pk.px/draw.width)*Wp;
-    ctxP.strokeStyle='#f06'; ctxP.lineWidth=1.5;
-    ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
-    const nm = pxToNm(pk.px);
-    const label = isFinite(nm)? `${nm.toFixed(1)} nm` : `px ${pk.px}`;
-    ctxP.fillStyle='#fff';
-    ctxP.fillText(label, x+4, Hp-6);
+    const x=(pk.px/(PW-1))*Wp;
+    ctxP.strokeStyle='#f06'; ctxP.lineWidth=1.5; ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
+    const nm=pxToNm(pk.px); const label=isFinite(nm)?`${nm.toFixed(1)} nm`:`px ${pk.px}`;
+    ctxP.fillStyle='#fff'; ctxP.fillText(label, x+4, Hp-6);
   }
-
-  requestAnimationFrame(drawPlot);
 }
-requestAnimationFrame(drawPlot);
 
-// Peaks button
+// hover tooltip
+plot.addEventListener('mousemove', e=>{
+  const r=plot.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top;
+  const px=Math.max(0, Math.min(PW-1, Math.round((x/plot.width)*(PW-1))));
+  const lam=pxToNm(px);
+  $('#cursor').textContent = isFinite(lam)? `Hover: λ ${lam.toFixed(1)} nm` : `Hover: px ${px}`;
+});
+$('#viewwrap').addEventListener('mousemove', e=>{
+  const r=$('#viewwrap').getBoundingClientRect();
+  const x=e.clientX-r.left;
+  const px=Math.max(0, Math.min(PW-1, Math.round((x/r.width)*(PW-1))));
+  const lam=pxToNm(px);
+  tooltip.style.left=(e.clientX - r.left + 12)+'px';
+  tooltip.style.top=(e.clientY - r.top + 12)+'px';
+  tooltip.textContent = isFinite(lam)? `${lam.toFixed(1)} nm` : `px ${px}`;
+  tooltip.style.display='block';
+});
+$('#viewwrap').addEventListener('mouseleave', ()=> tooltip.style.display='none');
+
+// Quick Cal (click two peaks on plot OR preview)
+let qcStage=0;
+$('#qc').onclick=()=>{ qcStage=1; $('#calState').textContent='QuickCal: click Hg 546 (green)'; $('#calState').style.background='#9e6a03'; };
+function handleCalClick(px){
+  if(qcStage===0) return;
+  if(qcStage===1){ // first
+    calib.kind='linear'; calib.A=NaN; calib.B=NaN;
+    calib._x1=px; calib._y1=546.1; qcStage=2; $('#calState').textContent='QuickCal: click Na 589 (yellow)';
+  } else if(qcStage===2){
+    calib._x2=px; calib._y2=589.0; qcStage=0;
+    const x1=calib._x1, x2=calib._x2, y1=calib._y1, y2=calib._y2;
+    calib.A=(y2-y1)/(x2-x1); calib.B=y1 - calib.A*x1;
+    $('#calState').textContent='Calibrated'; $('#calState').style.background='#1f6feb';
+    log(`λ = ${calib.A.toFixed(6)}·px + ${calib.B.toFixed(2)}`);
+  }
+}
+plot.addEventListener('click', e=>{
+  const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
+  const px=Math.max(0, Math.min(PW-1, Math.round((x/plot.width)*(PW-1))));
+  handleCalClick(px);
+});
+$('#viewwrap').addEventListener('click', e=>{
+  const r=$('#viewwrap').getBoundingClientRect(), x=e.clientX-r.left;
+  const px=Math.max(0, Math.min(PW-1, Math.round((x/r.width)*(PW-1))));
+  handleCalClick(px);
+});
+
+$('#clearCal').onclick=()=>{ calib={kind:'linear',A:NaN,B:NaN,a:0,b:1,c:0}; $('#calState').textContent='Uncalibrated'; $('#calState').style.background='#1f6feb'; peaks=[]; };
+
+// Peaks
 $('#findPeaks').onclick=()=>{
-  const P=getProfile();
-  const m=$('#mode').value;
+  const P=getProfile(); const m=$('#mode').value;
   const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
   const base = ($('#bg').checked && bgProfile) ? bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'] : null;
   const Yb = base ? Y.map((v,i)=>Math.max(0, v-base[i])) : Y;
-  peaks = findPeaksIn(Yb);
-  log(`Peaks: ${peaks.map(p=> isFinite(pxToNm(p.px))? pxToNm(p.px).toFixed(1)+' nm' : 'px '+p.px).join(', ')}`);
-};
-
-// Hover readout
-plot.addEventListener('mousemove', e=>{
-  const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.max(0, Math.min(draw.width-1, Math.round(x/plot.width*draw.width)));
-  const lam=pxToNm(px);
-  $('#cursor').textContent = isFinite(lam) ? `Hover: λ ${lam.toFixed(1)} nm` : `Hover: px ${px}`;
-});
-
-// Quick Cal: two clicks map to 546.1 nm then 589.0 nm
-let qcStage=0;
-$('#qc').onclick=()=>{
-  qcStage=1;
-  $('#calState').textContent='QuickCal: click Hg 546 (green) peak';
-  $('#calState').style.background='#9e6a03';
-};
-plot.addEventListener('click', e=>{
-  if(qcStage===0) return;
-  const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.round(x/plot.width*draw.width);
-  if(qcStage===1){
-    calib.px[0]=px; calib.nm[0]=546.1; qcStage=2;
-    $('#calState').textContent='QuickCal: click Na 589 (yellow) peak';
-  } else if(qcStage===2){
-    calib.px[1]=px; calib.nm[1]=589.0; qcStage=0;
-    // apply linear
-    const [x1,x2]=[calib.px[0],calib.px[1]], [y1,y2]=[calib.nm[0],calib.nm[1]];
-    calib.kind='linear'; calib.A=(y2-y1)/(x2-x1); calib.B=y1 - calib.A*x1;
-    $('#calState').textContent='Calibrated';
-    $('#calState').style.background='#1f6feb';
-    log(`Calibrated: λ = ${calib.A.toFixed(5)}·px + ${calib.B.toFixed(2)}`);
-  }
-});
-// Clear cal
-$('#clearCal').onclick=()=>{
-  calib={kind:'linear',A:NaN,B:NaN,a:0,b:1,c:0,px:[null,null,null],nm:[546.1,589.0,656.3]};
-  $('#calState').textContent='Uncalibrated';
-  $('#calState').style.background='#1f6feb';
-  peaks=[];
-};
-
-// Advanced panel
-$('#advToggle').onclick=()=> $('#adv').classList.toggle('hidden');
-
-// Advanced picks
-for (const l of document.querySelectorAll('.lam')){
-  l.onchange=()=>{ calib.nm[parseInt(l.dataset.idx,10)]=parseFloat(l.value); };
-}
-for (const b of document.querySelectorAll('.pick')){
-  b.onclick=()=>{ picking=parseInt(b.dataset.idx,10); log('Click a peak on the plot to assign pixel.'); };
-}
-$('#apply2').onclick=()=>{
-  const [x1,x2]=[calib.px[0],calib.px[1]], [y1,y2]=[calib.nm[0],calib.nm[1]];
-  if(x1==null||x2==null) return log('Pick two pixels first.');
-  calib.kind='linear'; calib.A=(y2-y1)/(x2-x1); calib.B=y1 - calib.A*x1;
-  $('#calState').textContent='Calibrated';
-  log(`λ = ${calib.A.toFixed(5)}·px + ${calib.B.toFixed(2)}`);
-};
-$('#apply3').onclick=()=>{
-  const x=[0,1,2].map(i=>calib.px[i]), y=[0,1,2].map(i=>calib.nm[i]);
-  if(x.some(v=>v==null)) return log('Pick three pixels first.');
-  const [x1,x2,x3]=x,[y1,y2,y3]=y; const D=(x1-x2)*(x1-x3)*(x2-x3);
-  const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
-  const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
-  const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
-  calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
-  $('#calState').textContent='Calibrated (3-pt)';
-  log(`λ = ${a.toExponential(3)}·px² + ${b.toFixed(5)}·px + ${c.toFixed(2)}`);
+  peaks = findPeaks(Yb);
+  log('Peaks: '+peaks.map(p=> isFinite(pxToNm(p.px))? pxToNm(p.px).toFixed(1)+' nm' : 'px '+p.px).join(', '));
 };
 
 // snapshot/csv
@@ -418,8 +332,8 @@ $('#snap').onclick=()=>{
   const a=document.createElement('a'); a.download='spectrum.png'; a.href=c.toDataURL('image/png'); a.click();
 };
 $('#csv').onclick=()=>{
-  const P=getProfile(); const mode=$('#mode').value;
-  const Y=mode==='r'?P.R: mode==='g'?P.G: mode==='b'?P.B: P.L;
+  const P=getProfile(); const m=$('#mode').value;
+  const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
   let rows='px,lambda_nm,intensity\n';
   for(let i=0;i<Y.length;i++){
     const lam=pxToNm(i); rows+=`${i},${isFinite(lam)?lam.toFixed(3):''},${Y[i].toFixed(6)}\n`;
@@ -428,15 +342,27 @@ $('#csv').onclick=()=>{
   a.href=URL.createObjectURL(blob); a.download='spectrum.csv'; a.click();
 };
 
-function loop(){
+// main loop (throttled ~20 fps)
+let last=0; function loop(t){
   requestAnimationFrame(loop);
-  if(vid.readyState>=2){
-    ctxD.drawImage(vid,0,0,draw.width,draw.height);
-    ctxD.strokeStyle='rgba(88,166,255,.9)'; ctxD.lineWidth=2;
-    ctxD.strokeRect(0,roi.y,draw.width,roi.h);
-  }
-  drawPlot();
+  if(vid.readyState<2) return;
+  if(t-last<50) return; last=t; // ~20 fps
+  // draw preview
+  ctxD.drawImage(vid,0,0,draw.width,draw.height);
+  ctxD.strokeStyle='rgba(88,166,255,.9)'; ctxD.lineWidth=2;
+  ctxD.strokeRect(0,roi.y,draw.width,roi.h);
+  // profile & plot
+  const P=getProfile();
+  if($('#bg').checked && !bgProfile) bgProfile=P;
+  const m=$('#mode').value;
+  const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
+  const base = ($('#bg').checked && bgProfile) ? bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'] : null;
+  const Yb = base ? Y.map((v,i)=>Math.max(0, v-base[i])) : Y;
+  drawPlot(Yb);
+  // fps
+  const dt=(t-last)||50; $('#fps').textContent='FPS: '+(1000/dt).toFixed(1);
 }
+fitCanvas();
 </script>
 </body>
 </html>
