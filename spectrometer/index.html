@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Webcam Spectrometer – Color Peaks + Small ROI</title>
+<title>Webcam Spectrometer – Hybrid Stable</title>
 <style>
   :root{--bg:#0d1117;--ink:#e6edf3;--mut:#9aa4ad;--acc:#58a6ff;--grid:#30363d}
   html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
@@ -14,8 +14,8 @@
   .panel{border:1px solid var(--grid);border-radius:10px;overflow:hidden;background:#0f141b}
   .p-h{padding:8px 10px;background:#0b0f14;border-bottom:1px solid var(--grid);font-weight:700}
   .p-b{padding:10px}
-  #viewwrap{position:relative;background:#000}
   video,canvas{max-width:100%;display:block}
+  #viewwrap{position:relative;background:#000}
   #draw{position:absolute;inset:0;pointer-events:none}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0}
   label{color:var(--mut)}
@@ -23,76 +23,48 @@
   button{cursor:pointer}
   #plot{height:340px;width:100%;background:#000;border:1px solid var(--grid);border-radius:8px}
   #log{white-space:pre-wrap;background:#0b0f14;border:1px solid var(--grid);border-radius:8px;padding:8px;min-height:56px}
-  .pill{padding:2px 8px;border:1px solid var(--grid);border-radius:999px}
-  .small{font-size:12px;color:var(--mut)}
   .badge{background:#1f6feb;border:1px solid #2f81f7;color:#fff;border-radius:999px;padding:2px 8px;font-size:12px}
   #legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
   .legend-item{display:flex;align-items:center;gap:6px;background:#0b0f14;border:1px solid #2a2f35;border-radius:8px;padding:4px 8px;font:14px ui-monospace,Consolas,Menlo}
   .swatch{width:12px;height:12px;border-radius:3px;border:1px solid #222}
-  #tooltip{position:absolute;pointer-events:none;background:#111;border:1px solid #444;color:#fff;padding:4px 6px;border-radius:6px;font:14px ui-monospace,Consolas,Menlo}
 </style>
 </head>
 <body>
 <header>
   <h1>Webcam Spectrometer</h1>
-  <span id="httpsWarn" class="warn" style="display:none">Not HTTPS. Use GitHub Pages (https://).</span>
-  <span class="pill">Flow: Start → Quick Cal → Find Peaks</span>
+  <span id="httpsWarn" class="warn" style="display:none">Not HTTPS. Use GitHub Pages (https://)</span>
 </header>
 
 <main>
-  <!-- LEFT: preview -->
   <section class="panel">
     <div class="p-h">Live Preview</div>
     <div class="p-b" id="viewwrap">
       <video id="vid" playsinline muted autoplay></video>
       <canvas id="draw"></canvas>
-      <div id="tooltip" style="display:none;"></div>
     </div>
     <div class="p-b">
       <div class="row">
         <button id="start">Start Camera</button>
         <label>Camera <select id="cams"></select></label>
-        <label>Res
-          <select id="res">
-            <option selected>640x480</option>
-            <option>1280x720</option>
-            <option>1920x1080</option>
-          </select>
-        </label>
+        <label>Res <select id="res"><option selected>640x480</option><option>1280x720</option></select></label>
         <label>Avg rows <input id="avg" type="number" value="8" min="1" max="200" style="width:70px"></label>
         <label>Smooth <input id="smooth" type="number" value="2" min="1" max="25" style="width:60px"></label>
-        <span class="small">Tip: drag ROI to the brightest rainbow; Shift=height, ⌥Alt=width</span>
+        <span id="fps" style="font-size:12px;color:#9aa4ad">FPS –</span>
       </div>
       <div class="row">
-        <button id="snap">Save PNG</button>
-        <button id="csv">Export CSV</button>
-        <span class="badge" id="calState">Uncalibrated</span>
+        <button id="qc">Quick Cal (Hg 546 → Na 589)</button>
+        <button id="clearCal">Clear</button>
+        <button id="findPeaks">Find Peaks</button>
+        <span id="calState" class="badge">Uncalibrated</span>
       </div>
-      <div class="row"><div id="log" class="small"></div></div>
+      <div id="log" class="small"></div>
     </div>
   </section>
 
-  <!-- RIGHT: spectrum -->
   <section class="panel">
     <div class="p-h">Spectrum</div>
     <div class="p-b">
       <canvas id="plot"></canvas>
-      <div class="row">
-        <button id="qc">Quick Cal (Hg 546 → Na 589)</button>
-        <button id="clearCal">Clear Cal</button>
-        <button id="findPeaks">Find Peaks</button>
-        <label>Channel
-          <select id="mode">
-            <option value="lum" selected>Luminance</option>
-            <option value="r">Red</option>
-            <option value="g">Green</option>
-            <option value="b">Blue</option>
-          </select>
-        </label>
-        <label>Gamma <input id="gamma" type="number" value="1.0" step="0.1" min="0.3" max="3" style="width:70px"></label>
-        <label>Subtract BG <input id="bg" type="checkbox"></label>
-        <span id="cursor" class="small">Hover: λ — nm</span>
-      </div>
       <div id="legend"></div>
     </div>
   </section>
@@ -100,294 +72,47 @@
 
 <script>
 const $=s=>document.querySelector(s);
-const vid=$('#vid'), draw=$('#draw'), plot=$('#plot');
+const vid=$('#vid'),draw=$('#draw'),plot=$('#plot');
 const ctxD=draw.getContext('2d',{willReadFrequently:true});
 const ctxP=plot.getContext('2d',{willReadFrequently:true});
-const tooltip=$('#tooltip');
-const log=m=>{ $('#log').textContent += ($('#log').textContent?'\n':'')+m; console.log(m); };
-if(!window.isSecureContext) $('#httpsWarn').style.display='inline-block';
+const log=m=>{$('#log').textContent+=($('#log').textContent?'\n':'')+m;console.log(m)};
+if(!window.isSecureContext)$('#httpsWarn').style.display='inline-block';
+let stream=null,roi={y:220,h:44},calib={A:NaN,B:NaN},peaks=[],qcStage=0,W=640,H=480;
+const colors=['#ff4d4d','#2ecc71','#3498db','#f1c40f','#9b59b6','#e67e22','#1abc9c','#e84393'];
 
-let stream=null;
-// ROI is now a small box: x,y,w,h
-let roi={x:100,y:180,w:220,h:60};
-let dragging=false, dragMode='move', last={x:0,y:0}, bgProfile=null, peaks=[];
-let qcStage=0;
-let calib={kind:'linear',A:NaN,B:NaN};
-let W=640,H=480;
+function fit(){draw.width=vid.videoWidth||W;draw.height=vid.videoHeight||H;
+plot.width=plot.clientWidth;plot.height=340;
+ctxP.fillStyle='#000';ctxP.fillRect(0,0,plot.width,plot.height);
+ctxP.fillStyle='#c9d1d9';ctxP.font='16px ui-monospace';ctxP.fillText('Start Camera → Quick Cal → Find Peaks',12,26);}
+window.onresize=fit;
 
-const PEAK_COLORS = ['#ff4d4d','#2ecc71','#3498db','#f1c40f','#9b59b6','#e67e22','#1abc9c','#e84393','#16a085','#c0392b'];
+async function enumerate(){const devs=await navigator.mediaDevices.enumerateDevices();
+const cams=devs.filter(d=>d.kind==='videoinput');const sel=$('#cams');sel.innerHTML='';
+cams.forEach((d,i)=>{const o=document.createElement('option');o.value=d.deviceId;o.textContent=d.label||'Cam '+(i+1);sel.appendChild(o);});}
+function makeC(id){const[w,h]=$('#res').value.split('x').map(Number);
+return id?{video:{deviceId:{exact:id},width:{ideal:w},height:{ideal:h}},audio:false}:{video:{width:{ideal:w},height:{ideal:h}},audio:false};}
+async function startCam(){
+$('#log').textContent='';
+if(!window.isSecureContext){log('ERROR – needs HTTPS');return;}
+if(stream){stream.getTracks().forEach(t=>t.stop());}
+await enumerate();const id=$('#cams').value;
+try{stream=await navigator.mediaDevices.getUserMedia(makeC(id));}catch(e){log(e);return;}
+vid.srcObject=stream;await vid.play();await new Promise(r=>vid.onloadedmetadata=r);
+W=vid.videoWidth;H=vid.videoHeight;fit();requestAnimationFrame(loop);
+log('Camera started');}
+$('#start').onclick=startCam;
 
-function fitCanvas(){
-  draw.width=vid.videoWidth||W; draw.height=vid.videoHeight||H;
-  plot.width=plot.clientWidth; plot.height=plot.clientHeight||340;
-  ctxP.fillStyle='#000'; ctxP.fillRect(0,0,plot.width,plot.height);
-  ctxP.fillStyle='#c9d1d9'; ctxP.font='16px ui-monospace,Consolas,Menlo';
-  ctxP.fillText('Start Camera → Quick Cal → Find Peaks', 12, 26);
-}
-window.onresize=fitCanvas;
-
-async function enumerateCams(){
-  const devs=await navigator.mediaDevices.enumerateDevices();
-  const cams=devs.filter(d=>d.kind==='videoinput');
-  const sel=$('#cams'); sel.innerHTML='';
-  cams.forEach((d,i)=>{ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||('Camera '+(i+1)); sel.appendChild(o); });
-  if(!cams.length) log('No cameras found. Check macOS Privacy → Camera and browser permissions.');
-}
-function makeConstraints(devId){
-  const [w,h]=$('#res').value.split('x').map(Number);
-  return devId? {video:{deviceId:{exact:devId},width:{ideal:w},height:{ideal:h}},audio:false}
-              : {video:{width:{ideal:w},height:{ideal:h}},audio:false};
-}
-async function startCamera(){
-  $('#log').textContent='';
-  if(!window.isSecureContext){ log('ERROR: Not HTTPS. Use GitHub Pages.'); return; }
-  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-  try{ const s=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); s.getTracks().forEach(t=>t.stop()); }catch(e){}
-  await enumerateCams();
-  const devId=$('#cams').value;
-  try{ stream=await navigator.mediaDevices.getUserMedia(makeConstraints(devId)); }
-  catch(e){ log('getUserMedia failed: '+e.name+' — '+e.message); return; }
-  vid.srcObject=stream; await vid.play();
-  await new Promise(res=>{ if(vid.readyState>=2) res(); else vid.onloadedmetadata=res; });
-  W=vid.videoWidth||W; H=vid.videoHeight||H; fitCanvas();
-  requestAnimationFrame(loop);
-  log('Camera started: '+(stream.getVideoTracks()[0]?.label||'unknown'));
-}
-$('#start').onclick=startCamera;
-
-// ROI interactions
-$('#viewwrap').addEventListener('mousedown',e=>{
-  const r=$('#viewwrap').getBoundingClientRect();
-  const x=e.clientX-r.left, y=e.clientY-r.top;
-  last.x=x; last.y=y;
-  if(e.shiftKey) dragMode='height';
-  else if(e.altKey || e.metaKey) dragMode='width';
-  else dragMode='move';
-  dragging=true;
-});
-window.addEventListener('mousemove',e=>{
-  if(!dragging) return;
-  const r=$('#viewwrap').getBoundingClientRect();
-  const x=e.clientX-r.left, y=e.clientY-r.top;
-  const dx=x-last.x, dy=y-last.y;
-  if(dragMode==='move'){
-    roi.x = Math.max(0, Math.min(draw.width - roi.w, roi.x + dx));
-    roi.y = Math.max(0, Math.min(draw.height - roi.h, roi.y + dy));
-  }else if(dragMode==='height'){
-    roi.h = Math.max(8, Math.min(draw.height - roi.y, roi.h + dy));
-  }else if(dragMode==='width'){
-    roi.w = Math.max(40, Math.min(draw.width - roi.x, roi.w + dx));
-  }
-  last.x=x; last.y=y;
-});
-window.addEventListener('mouseup',()=> dragging=false);
-
-// Data pipeline using ROI box
 function getProfile(){
-  const avg=Math.max(1, parseInt($('#avg').value,10));
-  const y0=Math.max(roi.y, Math.round(roi.y + roi.h/2 - avg/2));
-  const rows=Math.min(roi.h,avg), w=roi.w;
-  const data=ctxD.getImageData(roi.x, y0, w, rows).data;
-  const R=new Float32Array(w), G=new Float32Array(w), B=new Float32Array(w);
-  for(let row=0; row<rows; row++){
-    for(let x=0; x<w; x++){
-      const i=(row*w+x)*4; R[x]+=data[i]; G[x]+=data[i+1]; B[x]+=data[i+2];
-    }
-  }
-  for(let x=0;x<w;x++){ R[x]/=rows; G[x]/=rows; B[x]/=rows; }
-  const gamma=Math.max(0.3, parseFloat($('#gamma').value));
-  const L=new Float32Array(w);
-  for(let x=0;x<w;x++){
-    const r=Math.pow(R[x]/255,1/gamma), g=Math.pow(G[x]/255,1/gamma), b=Math.pow(B[x]/255,1/gamma);
-    L[x]=0.2126*r+0.7152*g+0.0722*b;
-  }
-  const k=Math.max(1, parseInt($('#smooth').value,10));
-  const smooth=A=>{
-    const out=new Float32Array(A.length);
-    for(let i=0;i<A.length;i++){
-      const i0=Math.max(0,i-k), i1=Math.min(A.length-1,i+k);
-      let s=0; for(let j=i0;j<=i1;j++) s+=A[j];
-      out[i]=s/(i1-i0+1);
-    } return out;
-  };
-  return {R:smooth(R),G:smooth(G),B:smooth(B),L:smooth(L)};
-}
-
-function pxToNm(px){
-  if(Number.isFinite(calib.A)) return calib.A*px + calib.B;
-  return NaN;
-}
-function nmToPx(nm){
-  if(Number.isFinite(calib.A)) return (nm - calib.B)/calib.A;
-  return NaN;
-}
-
+const avg=parseInt($('#avg').value)||8;const y0=Math.max(0,roi.y);
+const data=ctxD.getImageData(0,y0,draw.width,avg).data;
+const R=new Float32Array(draw.width),G=new Float32Array(draw.width),B=new Float32Array(draw.width);
+for(let r=0;r<avg;r++){for(let x=0;x<draw.width;x++){const i=(r*draw.width+x)*4;R[x]+=data[i];G[x]+=data[i+1];B[x]+=data[i+2];}}
+for(let x=0;x<draw.width;x++){R[x]/=avg;G[x]/=avg;B[x]/=avg;}
+const L=new Float32Array(draw.width);
+for(let x=0;x<draw.width;x++){L[x]=0.2126*R[x]+0.7152*G[x]+0.0722*B[x];}
+return {R,G,B,L};}
+function pxToNm(px){return isFinite(calib.A)?calib.A*px+calib.B:NaN;}
+function nmToPx(nm){return isFinite(calib.A)?(nm-calib.B)/calib.A:NaN;}
 function findPeaks(Y){
-  const N=Y.length, out=[];
-  const maxY=Math.max(...Y)||1, thresh=0.18*maxY, minDist=Math.floor(N/80);
-  for(let i=1;i<N-1;i++){
-    if(Y[i]>thresh && Y[i]>Y[i-1] && Y[i]>Y[i+1]){
-      let best=i, v=Y[i];
-      for(let k=i-2;k<=i+2;k++){ if(k>=0&&k<N&&Y[k]>v){v=Y[k]; best=k;} }
-      if(out.length && (best - out[out.length-1].px)<minDist) continue;
-      out.push({px:best, amp:v});
-    }
-  }
-  out.sort((a,b)=>b.amp-a.amp);
-  return out.slice(0,10).sort((a,b)=>a.px-b.px);
-}
-
-function drawPlot(Y){
-  plot.width=plot.clientWidth; plot.height=plot.clientHeight||340;
-  const Wp=plot.width, Hp=plot.height;
-  ctxP.fillStyle='#000'; ctxP.fillRect(0,0,Wp,Hp);
-  ctxP.strokeStyle='#333'; ctxP.fillStyle='#c9d1d9'; ctxP.lineWidth=1.5;
-  ctxP.font='16px ui-monospace,Consolas,Menlo';
-
-  const λ0=pxToNm(0), λ1=pxToNm(Y.length-1);
-  if(isFinite(λ0)&&isFinite(λ1)){
-    const lo=Math.round(Math.min(λ0,λ1)/50)*50, hi=Math.max(λ0,λ1);
-    for(let lam=lo; lam<=hi; lam+=50){
-      const x=(nmToPx(lam)/(Y.length-1))*Wp;
-      if(isFinite(x)){
-        ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
-        ctxP.fillText(`${lam} nm`, x+4, 22);
-      }
-    }
-  } else {
-    ctxP.fillText('Uncalibrated: Quick Cal (Hg 546 → Na 589) on plot or preview.', 10, 26);
-  }
-
-  const maxY=Math.max(...Y)||1;
-  ctxP.strokeStyle='#58a6ff'; ctxP.lineWidth=2; ctxP.beginPath();
-  for(let i=0;i<Y.length;i++){
-    const x=(i/(Y.length-1))*Wp, y=Hp - (Y[i]/maxY)*(Hp-30) - 10;
-    if(i===0) ctxP.moveTo(x,y); else ctxP.lineTo(x,y);
-  }
-  ctxP.stroke();
-
-  // Draw colored peak lines (no text here to avoid clutter)
-  peaks.forEach((pk,i)=>{
-    const x=(pk.px/(Y.length-1))*Wp;
-    ctxP.strokeStyle=PEAK_COLORS[i % PEAK_COLORS.length];
-    ctxP.lineWidth=2;
-    ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
-  });
-
-  // Build legend under the plot (color → wavelength)
-  const legend=$('#legend');
-  legend.innerHTML='';
-  peaks.forEach((pk,i)=>{
-    const nm=pxToNm(pk.px);
-    const item=document.createElement('div');
-    item.className='legend-item';
-    const sw=document.createElement('span');
-    sw.className='swatch'; sw.style.background=PEAK_COLORS[i%PEAK_COLORS.length];
-    const txt=document.createElement('span');
-    txt.textContent = isFinite(nm) ? `${nm.toFixed(1)} nm` : `px ${pk.px}`;
-    item.appendChild(sw); item.appendChild(txt);
-    legend.appendChild(item);
-  });
-}
-
-// hover wavelength on plot
-plot.addEventListener('mousemove', e=>{
-  const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const N = currentYLength();
-  const px=Math.max(0, Math.min(N-1, Math.round((x/plot.width)*(N-1))));
-  const lam=pxToNm(px);
-  $('#cursor').textContent = isFinite(lam)? `Hover: λ ${lam.toFixed(1)} nm` : `Hover: px ${px}`;
-});
-// hover wavelength on preview
-$('#viewwrap').addEventListener('mousemove', e=>{
-  const r=$('#viewwrap').getBoundingClientRect(), x=e.clientX-r.left;
-  const N = currentYLength();
-  const rel = Math.max(0, Math.min(roi.w-1, Math.round((x - (roi.x * r.width/draw.width)) / (roi.w * r.width/draw.width) * (roi.w-1))));
-  const lam=pxToNm(rel);
-  tooltip.style.left=(e.clientX - r.left + 12)+'px';
-  tooltip.style.top=(e.clientY - r.top + 12)+'px';
-  tooltip.textContent = isFinite(lam)? `${lam.toFixed(1)} nm` : '';
-  tooltip.style.display='block';
-});
-$('#viewwrap').addEventListener('mouseleave', ()=> tooltip.style.display='none');
-
-function currentYLength(){ return Math.max(roi.w, 2); }
-
-// Quick Cal: two clicks (plot OR preview)
-function handleCalClick(px){
-  if(qcStage===0) return;
-  if(qcStage===1){
-    calib._x1=px; calib._y1=546.1; qcStage=2; $('#calState').textContent='QuickCal: click Na 589 (yellow)';
-  } else if(qcStage===2){
-    calib._x2=px; calib._y2=589.0; qcStage=0;
-    const x1=calib._x1, x2=calib._x2, y1=calib._y1, y2=calib._y2;
-    calib.A=(y2-y1)/(x2-x1); calib.B=y1 - calib.A*x1;
-    $('#calState').textContent='Calibrated';
-    log(`λ = ${calib.A.toFixed(6)}·px + ${calib.B.toFixed(2)}`);
-  }
-}
-$('#qc').onclick=()=>{ qcStage=1; $('#calState').textContent='QuickCal: click Hg 546 (green)'; };
-plot.addEventListener('click', e=>{
-  const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const N=currentYLength();
-  const px=Math.max(0, Math.min(N-1, Math.round((x/plot.width)*(N-1))));
-  handleCalClick(px);
-});
-$('#viewwrap').addEventListener('click', e=>{
-  const r=$('#viewwrap').getBoundingClientRect(), x=e.clientX-r.left;
-  // convert preview x to ROI px
-  const roiScreenX = roi.x * (r.width/draw.width);
-  const roiScreenW = roi.w * (r.width/draw.width);
-  if(x<roiScreenX || x>roiScreenX+roiScreenW) return; // clicked outside ROI
-  const px = Math.max(0, Math.min(roi.w-1, Math.round((x - roiScreenX)/roiScreenW * (roi.w-1))));
-  handleCalClick(px);
-});
-$('#clearCal').onclick=()=>{ calib={kind:'linear',A:NaN,B:NaN}; $('#calState').textContent='Uncalibrated'; peaks=[]; $('#legend').innerHTML=''; };
-
-// peaks
-$('#findPeaks').onclick=()=>{
-  const P=getProfile(); const m=$('#mode').value;
-  const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
-  const base = ($('#bg').checked && bgProfile) ? bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'] : null;
-  const Yb = base ? Y.map((v,i)=>Math.max(0, v-base[i])) : Y;
-  peaks = findPeaks(Yb);
-  log('Peaks: '+peaks.map(p=> isFinite(pxToNm(p.px))? pxToNm(p.px).toFixed(1)+' nm' : 'px '+p.px).join(', '));
-};
-
-// snapshot/csv
-$('#snap').onclick=()=>{
-  const c=document.createElement('canvas'); c.width=draw.width; c.height=draw.height;
-  c.getContext('2d').drawImage(draw,0,0);
-  const a=document.createElement('a'); a.download='spectrum.png'; a.href=c.toDataURL('image/png'); a.click();
-};
-$('#csv').onclick=()=>{
-  const P=getProfile(); const m=$('#mode').value;
-  const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
-  let rows='px,lambda_nm,intensity\n';
-  for(let i=0;i<Y.length;i++){
-    const lam=pxToNm(i); rows+=`${i},${isFinite(lam)?lam.toFixed(3):''},${Y[i].toFixed(6)}\n`;
-  }
-  const blob=new Blob([rows],{type:'text/csv'}); const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download='spectrum.csv'; a.click();
-};
-
-// main loop (~30 fps)
-let last=0; function loop(t){
-  requestAnimationFrame(loop);
-  if(vid.readyState<2) return;
-  if(t-last<33) return; last=t;
-  ctxD.drawImage(vid,0,0,draw.width,draw.height);
-  // ROI overlay
-  ctxD.strokeStyle='rgba(88,166,255,.95)'; ctxD.lineWidth=2;
-  ctxD.strokeRect(roi.x, roi.y, roi.w, roi.h);
-  // profile & plot
-  const P=getProfile();
-  if($('#bg').checked && !bgProfile) bgProfile=P;
-  const m=$('#mode').value;
-  const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
-  drawPlot(Y);
-}
-fitCanvas();
-</script>
-</body>
-</html>
+const out=[],N=Y.length,maxY=Math.max(...Y)||1,th=0.18*maxY,minD=Math.floor(N/80);
+for(let i=1;i<N-1;i++){if(Y[i]>th&&Y[i]>Y[i-1]&&Y[i]>Y[i+1]){if(out.length&&(i-out
