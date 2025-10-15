@@ -1,8 +1,9 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Presentation – Live Class Rater</title>
+  <title>Presentation — Live Class Rater</title>
   <style>
     body{font-family:system-ui,Arial,sans-serif;margin:24px;line-height:1.35;background:#f7f7f7}
     .wrap{max-width:1000px;margin:0 auto}
@@ -14,7 +15,13 @@
     input[type="range"]{width:100%}
     .mut{color:#666;font-size:12px}
     .tiny{font-size:11px;line-height:1.2}
-  </style>  <!-- Firebase SDKs -->  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script></head>
+  </style>
+
+  <!-- Firebase SDKs -->
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+</head>
 <body>
   <div class="wrap">
     <header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -23,88 +30,80 @@
         <span id="connectionBadge" class="badge">offline (local)</span>
         <button id="loginBtn" class="btn-ghost" title="Teacher login">Login</button>
       </div>
-    </header><div class="row">
-  <!-- LEFT: Student join + sliders -->
-  <section style="display:flex;flex-direction:column;gap:12px">
-    <div id="joinCard" class="card">
-      <h3 style="margin:0 0 8px 0">Join</h3>
-      <label class="mut">Your name</label>
-      <input id="nameInput" style="width:100%;padding:.6rem;border:1px solid #ccc;border-radius:10px" placeholder="e.g., Jane S." />
-      <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
-        <button id="joinBtn" class="btn">Join & Rate</button>
-        <span id="joinStatus" class="mut"></span>
-      </div>
-    </div>
+    </header>
 
-    <div id="rateCard" class="card" style="display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h3 style="margin:0">Rate (1–10)</h3>
-        <div class="mut">You: <span id="whoami" style="font-weight:600">—</span></div>
-      </div>
-      <div id="criteriaList" style="margin-top:10px;display:flex;flex-direction:column;gap:12px"></div>
-      <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
-        <div>Total: <strong id="totalScore">0</strong></div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button id="submitBtn" class="btn">Submit</button>
-          <span id="submitNote" class="mut"></span>
+    <div class="row">
+      <!-- LEFT: Student join + sliders -->
+      <section style="display:flex;flex-direction:column;gap:12px">
+        <div id="joinCard" class="card">
+          <h3 style="margin:0 0 8px 0">Join</h3>
+          <label class="mut">Your name</label>
+          <input id="nameInput" style="width:100%;padding:.6rem;border:1px solid #ccc;border-radius:10px" placeholder="e.g., Jane S." />
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <button id="joinBtn" class="btn">Join & Rate</button>
+            <span id="joinStatus" class="mut"></span>
+          </div>
         </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- RIGHT: Results -->
-  <aside id="resultsCard" class="card" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <h3 style="margin:0">Results</h3>
-      <span id="participantsBadge" class="badge">0 participants</span>
-    </div>
+        <div id="rateCard" class="card" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h3 style="margin:0">Rate (1–10)</h3>
+            <div class="mut">You: <span id="whoami" style="font-weight:600">—</span></div>
+          </div>
+          <div id="criteriaList" style="margin-top:10px;display:flex;flex-direction:column;gap:12px"></div>
+          <div style="margin-top:10px;display:flex;justify-content:flex-end;align-items:center">
+            <div class="mut">Totals update as you slide.</div>
+          </div>
+        </div>
+      </section>
 
-    <div class="tiny" style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-      <span class="mut">Mode:</span>
-      <button id="modeLive" class="btn-ghost">Live</button>
-      <button id="modeSubmitted" class="btn-ghost">Submitted</button>
-    </div>
-    <div id="resultModeNote" class="mut tiny" style="margin-bottom:8px">
-      Live = everyone present; Submitted = only students who tapped Submit.
-    </div>
+      <!-- RIGHT: Results (teacher PIN) -->
+      <aside id="resultsCard" class="card" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <h3 style="margin:0">Results (Live)</h3>
+          <span id="participantsBadge" class="badge">0 participants</span>
+        </div>
 
-    <div id="resultsSummary" style="display:flex;flex-direction:column;gap:6px"></div>
+        <div id="resultsSummary" style="display:flex;flex-direction:column;gap:6px"></div>
 
-    <div style="border-top:1px solid #eee;margin-top:10px;padding-top:8px" class="tiny">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><strong>Final average</strong> (by category)</div>
-        <div style="font-weight:700;font-size:18px" id="finalAverage">0.00</div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
-        <div>Class total average</div>
-        <div id="classTotalAvg" style="font-weight:600">0.00</div>
-      </div>
-      <div class="mut tiny">Max total = <span id="maxTotal"></span></div>
+        <div style="border-top:1px solid #eee;margin-top:10px;padding-top:8px" class="tiny">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Final average</strong> (by category)</div>
+            <div style="font-weight:700;font-size:18px" id="finalAverage">0.00</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+            <div>Class total average</div>
+            <div id="classTotalAvg" style="font-weight:600">0.00</div>
+          </div>
+          <div class="mut tiny">Max total = <span id="maxTotal"></span></div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="tiny" style="font-weight:700;margin-bottom:4px">Participants</div>
+          <div id="participantsList" class="tiny" style="color:#333"></div>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button id="resetSession" class="btn-ghost" title="Kick everyone and clear scores">Reset Session</button>
+        </div>
+      </aside>
     </div>
+  </div>
 
-    <div style="margin-top:10px">
-      <div class="tiny" style="font-weight:700;margin-bottom:4px">Participants</div>
-      <div id="participantsList" class="tiny" style="color:#333"></div>
-    </div>
-
-    <div style="margin-top:10px;display:flex;gap:8px">
-      <button id="resetScores" class="btn-ghost">Reset scores</button>
-      <button id="resetAll" class="btn-ghost">Reset ALL</button>
-    </div>
-  </aside>
-</div>
-
-  </div>  <!-- Teacher login modal -->  <dialog id="loginDlg" style="border:none;border-radius:12px;max-width:380px;width:92%">
+  <!-- Teacher login modal -->
+  <dialog id="loginDlg" style="border:none;border-radius:12px;max-width:380px;width:92%">
     <form method="dialog" style="padding:16px">
       <h3 style="margin:0 0 8px 0">Teacher Login</h3>
-      <p class="mut tiny" style="margin-top:0">Enter PIN to unlock the Results panel. Share this PIN if you want the class to see results.</p>
+      <p class="mut tiny" style="margin-top:0">Enter PIN to unlock the Results panel.</p>
       <input id="pinInput" type="password" style="width:100%;padding:.6rem;border:1px solid #ccc;border-radius:10px" placeholder="PIN" />
       <div style="display:flex;gap:8px;margin-top:10px">
         <button id="unlockBtn" class="btn" value="unlock">Unlock</button>
         <button class="btn-ghost" value="cancel">Close</button>
       </div>
     </form>
-  </dialog>  <script>
+  </dialog>
+
+  <script>
     // ===== CONFIG =====
     const CONFIG = {
       classKey: "chem_presentation",
@@ -125,13 +124,12 @@
         { id: uid(), label: "Visuals" },
         { id: uid(), label: "Engagement" },
         { id: uid(), label: "Delivery" }
-      ],
-      presenceTimeoutMs: 120000 // 2 min presence window
+      ]
     };
     const MAX_SCORE = 10;
 
     // ===== STATE =====
-    const state = { db:null, me:{id:null,name:null}, online:false, submitted:false, mode:'live' };
+    const state = { db:null, me:{id:null,name:null}, online:false, studentRef:null };
     let cacheStudents = {};
     const basePath = () => `/classes/${CONFIG.classKey}`;
 
@@ -140,11 +138,10 @@
     const $$ = s => Array.from(document.querySelectorAll(s));
     function uid(){ return Math.random().toString(36).slice(2,9); }
     function mean(a){ return a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0; }
-    function now(){ return Date.now(); }
     function show(el,on){ el.style.display = on ? '' : 'none'; }
     function badge(txt){ $('#connectionBadge').textContent = txt; }
 
-    // ===== FIREBASE =====
+    // ===== FIREBASE INIT =====
     function dbInit(){
       if(!CONFIG.useFirebase){ badge('offline (local)'); return; }
       try{
@@ -159,38 +156,42 @@
     function attachListeners(){
       const cRef = state.db.ref(`${basePath()}/criteria`);
       cRef.once('value').then(s=>{ if(!s.exists()) cRef.set(CONFIG.criteria); });
+      // Live roster & results
       state.db.ref(`${basePath()}/students`).on('value', snap=>{
         cacheStudents = snap.val() || {};
         renderResults(cacheStudents);
       });
     }
 
-    // ===== JOIN / PRESENCE =====
+    // ===== JOIN / LIVE PRESENCE =====
     function ensureClientId(){
       let id = localStorage.getItem('present_uid');
       if(!id){ id = uid(); localStorage.setItem('present_uid', id); }
       state.me.id = id; return id;
     }
-    function joinClass(name){
-      ensureClientId(); state.me.name = name; state.submitted = false;
+    async function joinClass(name){
+      ensureClientId(); state.me.name = name;
       $('#whoami').textContent = name; show($('#rateCard'), true); show($('#joinCard'), false);
-      const scores = Object.fromEntries(CONFIG.criteria.map(c=> [c.id, 1]));
-      saveStudent({ name, scores, submitted:false, lastSeen: now() });
-      startPresence();
-      renderSliders();
-    }
-    function startPresence(){
-      if(!state.db) return;
-      setInterval(()=>{
-        state.db.ref(`${basePath()}/students/${state.me.id}/lastSeen`).set(now());
-      }, 20000);
-    }
-    function saveStudent(patch){
-      if(!state.db) return;
-      state.db.ref(`${basePath()}/students/${state.me.id}`).update(patch);
+
+      const id = state.me.id;
+      state.studentRef = state.db.ref(`${basePath()}/students/${id}`);
+
+      // Seed scores at 1 for visibility
+      const seed = Object.fromEntries(CONFIG.criteria.map(c => [c.id, 1]));
+      await state.studentRef.set({ name, scores: seed });
+
+      // TRUE presence: remove node when tab closes/disconnects
+      try { state.studentRef.onDisconnect().remove(); } catch (e) {}
+
+      // Also remove on refresh/unload (so they rejoin clean)
+      window.addEventListener('beforeunload', () => {
+        try { state.studentRef.remove(); } catch(e) {}
+      });
+
+      renderSliders(); // make sliders immediately usable
     }
 
-    // ===== SLIDERS =====
+    // ===== SLIDERS (instant write-through) =====
     function renderSliders(){
       const wrap = $('#criteriaList'); wrap.innerHTML = '';
       CONFIG.criteria.forEach((c, idx)=>{
@@ -204,37 +205,24 @@
           <div class="mut" style="text-align:right;margin-top:4px">Score: <strong data-val="${c.id}">1</strong></div>`;
         wrap.appendChild(div);
       });
+
       wrap.querySelectorAll('input[type=range]').forEach(r=>{
         r.oninput = ()=>{
-          const id = r.dataset.crit; const v = Number(r.value);
+          const id = r.dataset.crit;
+          const v = Number(r.value);
           wrap.querySelector(`[data-val="${id}"]`).textContent = v;
-          updateMyTotal();
-          if(!state.submitted) saveStudent({ [`scores/${id}`]: v });
+          if(state.studentRef) state.studentRef.child(`scores/${id}`).set(v);
         };
       });
-      updateMyTotal();
-    }
-    function updateMyTotal(){
-      const vals = $$('#criteriaList input[type=range]').map(r=> Number(r.value));
-      const sum = vals.reduce((a,b)=> a+b, 0);
-      $('#totalScore').textContent = sum.toFixed(1);
     }
 
-    // ===== RESULTS =====
+    // ===== RESULTS (live-only) =====
     function renderResults(students){
-      const nowTs = now();
-      let pool = Object.values(students || {});
-      if(state.mode === 'submitted'){
-        pool = pool.filter(s => s && s.submitted === true && (nowTs - (s.lastSeen||0) < CONFIG.presenceTimeoutMs));
-      } else {
-        pool = pool.filter(s => s && (nowTs - (s.lastSeen||0) < CONFIG.presenceTimeoutMs));
-      }
-
-      // participants
+      const pool = Object.values(students || {}); // everyone with an open page
       $('#participantsBadge').textContent = `${pool.length} participants`;
-      $('#participantsList').textContent = pool.map(s=> s.name || '—').join(', ');
+      $('#participantsList').textContent = pool.map(s=> s && s.name ? s.name : '—').join(', ');
 
-      // per-category averages
+      // Per-category averages
       const res = CONFIG.criteria.map(c=>{
         const vals = pool.map(s => Number((s.scores||{})[c.id] || 0));
         return { label:c.label, avg: mean(vals) };
@@ -248,32 +236,22 @@
         box.appendChild(row);
       });
 
-      // final average (mean of category averages)
+      // Final average (mean of category avgs)
       const finalAvg = mean(res.map(a=> a.avg || 0));
       $('#finalAverage').textContent = (finalAvg||0).toFixed(2);
 
-      // class total average (mean of per-student totals)
+      // Class total average (mean of each student's sum)
       const totals = pool.map(s => CONFIG.criteria.reduce((sum,c)=> sum + Number((s.scores||{})[c.id] || 0), 0));
       const maxTot = CONFIG.criteria.length * MAX_SCORE;
       $('#classTotalAvg').textContent = `${(mean(totals)||0).toFixed(2)} / ${maxTot}`;
       $('#maxTotal').textContent = maxTot;
     }
 
-    // ===== RESET =====
-    function resetScores(){
+    // ===== TEACHER CONTROLS =====
+    function resetSession(){
       if(!state.db) return;
-      if(!confirm('Reset scores (keep participants)?')) return;
-      const ref = state.db.ref(`${basePath()}/students`);
-      ref.once('value').then(s=>{
-        const obj=s.val()||{};
-        Object.keys(obj).forEach(id=>{ if(obj[id]){ obj[id].scores={}; obj[id].submitted=false; }});
-        ref.set(obj);
-      });
-    }
-    function resetAll(){
-      if(!state.db) return;
-      if(!confirm('Reset ALL (clear participants & scores)?')) return;
-      state.db.ref(basePath()).set({ criteria: CONFIG.criteria, students: {} });
+      if(!confirm('Reset session? (Kicks everyone off and clears scores.)')) return;
+      state.db.ref(`${basePath()}/students`).set({});
     }
 
     // ===== UI WIRES =====
@@ -285,27 +263,15 @@
       $('#joinStatus').textContent='';
       joinClass(name);
     };
-    $('#submitBtn').onclick = ()=>{
-      state.submitted = true;
-      saveStudent({ submitted:true });
-      $$('#criteriaList input[type=range]').forEach(r=> r.disabled = true);
-      $('#submitNote').textContent = 'Submitted.';
-    };
+
     $('#loginBtn').onclick = ()=> $('#loginDlg').showModal();
     $('#unlockBtn').onclick = (e)=>{
       e.preventDefault();
       if($('#pinInput').value === CONFIG.teacherPin){ show($('#resultsCard'), true); $('#loginDlg').close(); }
       else alert('Wrong PIN');
     };
-    $('#resetScores').onclick = resetScores;
-    $('#resetAll').onclick = resetAll;
 
-    // mode toggles
-    document.addEventListener('DOMContentLoaded', ()=>{
-      const ml = document.getElementById('modeLive');
-      const ms = document.getElementById('modeSubmitted');
-      if(ml) ml.onclick = ()=>{ state.mode='live'; renderResults(cacheStudents); };
-      if(ms) ms.onclick = ()=>{ state.mode='submitted'; renderResults(cacheStudents); };
-    });
-  </script></body>
+    $('#resetSession').onclick = resetSession;
+  </script>
+</body>
 </html>
