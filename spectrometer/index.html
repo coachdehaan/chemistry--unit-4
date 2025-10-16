@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Webcam Spectrometer – Mr. D (Final)</title>
+<title>Webcam Spectrometer – Mr. D (nm-axis + auto-cal)</title>
 <style>
   :root{--bg:#0d1117;--ink:#e6edf3;--mut:#8b949e;--acc:#58a6ff;--grid:#30363d}
   html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,Segoe UI,Roboto,Helvetica,Arial}
@@ -37,6 +37,7 @@
 </header>
 
 <main>
+  <!-- LEFT: PREVIEW -->
   <section class="panel">
     <div class="p-h">Live Preview</div>
     <div class="p-b" id="viewwrap">
@@ -44,7 +45,7 @@
       <canvas id="draw"></canvas>
     </div>
 
-    <div class="p-h">Capture / Calibration</div>
+    <div class="p-h">Capture / Controls</div>
     <div class="p-b">
       <div class="row">
         <button id="start">Start Camera</button>
@@ -58,18 +59,24 @@
         </label>
       </div>
       <div class="row">
-        <label>ROI size <input id="roiSize" type="number" value="200" min="40" max="400" style="width:80px"></label>
+        <label>ROI size <input id="roiSize" type="number" value="200" min="120" max="500" style="width:80px"></label>
         <label>Smooth <input id="smooth" type="number" value="3" min="1" max="25" style="width:60px"></label>
         <button id="autoH">Auto-Cal (H₂)</button>
+        <button id="autoRough">Auto-Cal (Rough)</button>
         <button id="findPeaks">Find Peaks</button>
+        <button id="snap">Snapshot PNG</button>
+        <button id="csv">Export CSV</button>
       </div>
-      <div class="row small">Drag the blue square over the bright rainbow band (Shift+drag = resize)</div>
+      <div class="row small">
+        Drag the blue square over a bright 1st-order band (Shift+drag = resize). Front camera is mirrored; drag obeys mirror.
+      </div>
       <div id="log" class="small"></div>
     </div>
   </section>
 
+  <!-- RIGHT: PLOT -->
   <section class="panel">
-    <div class="p-h">Intensity vs Wavelength</div>
+    <div class="p-h">Intensity vs Wavelength (nm)</div>
     <div class="p-b">
       <canvas id="plot"></canvas>
       <div class="row">
@@ -92,93 +99,351 @@
 
 <script>
 const $=s=>document.querySelector(s);
-const vid=$('#vid'),draw=$('#draw'),plot=$('#plot');
-const ctxD=draw.getContext('2d'),ctxP=plot.getContext('2d');
-const log=t=>{$('#log').textContent+=(($('#log').textContent?'\n':'')+t);console.log(t);}
-if(!window.isSecureContext)$('#httpsWarn').style.display='inline-block';
+const vid=$('#vid'), draw=$('#draw'), plot=$('#plot');
+const ctxD=draw.getContext('2d'), ctxP=plot.getContext('2d');
+const log=msg=>{$('#log').textContent+=($('#log').textContent?'\n':'')+msg; console.log(msg);};
+if(!window.isSecureContext) $('#httpsWarn').style.display='inline-block';
 
-let stream=null,mirrorX=false,dragging=false,last={x:0,y:0};
+let stream=null, mirrorX=false;
+let dragging=false, last={x:0,y:0};
+let selectedDeviceId=null;
+
+// ROI square (pixel domain relative to full frame)
 let roi={x:200,y:200,w:200,h:200};
-function clampROI(){roi.w=Math.max(120,Math.min(draw.width,roi.w));roi.h=roi.w;
-roi.x=Math.max(0,Math.min(draw.width-roi.w,roi.x));
-roi.y=Math.max(0,Math.min(draw.height-roi.h,roi.y));}
-$('#roiSize').oninput=()=>{roi.w=roi.h=parseInt($('#roiSize').value,10);clampROI();};
-
-$('#viewwrap').onmousedown=e=>{const r=e.currentTarget.getBoundingClientRect();
-last.x=e.clientX-r.left;last.y=e.clientY-r.top;dragging=e.shiftKey?'resize':'move';};
-window.onmousemove=e=>{
-if(!dragging)return;const r=$('#viewwrap').getBoundingClientRect();
-const x=e.clientX-r.left,y=e.clientY-r.top;
-if(dragging==='move'){roi.x+=x-last.x;roi.y+=y-last.y;}
-else{roi.w+=y-last.y;roi.h=roi.w;$('#roiSize').value=Math.round(roi.w);}
-last.x=x;last.y=y;clampROI();};
-window.onmouseup=()=>dragging=false;
-
-async function startCamera(){
-if(stream){stream.getTracks().forEach(t=>t.stop());}
-await navigator.mediaDevices.getUserMedia({video:true});
-const devs=await navigator.mediaDevices.enumerateDevices();
-const cams=devs.filter(d=>d.kind==='videoinput');
-const sel=$('#cams');sel.innerHTML='';cams.forEach((d,i)=>{const o=document.createElement('option');
-o.value=d.deviceId;o.textContent=d.label||`Camera ${i+1}`;sel.appendChild(o);});
-stream=await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:sel.value||cams[0].deviceId}},audio:false});
-vid.srcObject=stream;await vid.play();
-const facing=stream.getVideoTracks()[0].getSettings().facingMode||'';mirrorX=(facing==='user');
-if(mirrorX)$('#viewwrap').classList.add('mirror');else $('#viewwrap').classList.remove('mirror');
-draw.width=vid.videoWidth;draw.height=vid.videoHeight;requestAnimationFrame(loop);log('Camera started');
+function clampROI(){
+  roi.w=Math.max(120,Math.min(draw.width,roi.w));
+  roi.h=roi.w;
+  roi.x=Math.max(0,Math.min(draw.width-roi.w,roi.x));
+  roi.y=Math.max(0,Math.min(draw.height-roi.h,roi.y));
 }
-$('#start').onclick=startCamera;
+$('#roiSize').oninput=()=>{roi.w=roi.h=parseInt($('#roiSize').value,10)||200;clampROI();};
 
+// Dragging (mirror-aware)
+$('#viewwrap').addEventListener('mousedown',e=>{
+  const r=$('#viewwrap').getBoundingClientRect();
+  last.x=e.clientX-r.left; last.y=e.clientY-r.top;
+  dragging = e.shiftKey ? 'resize' : 'move';
+});
+window.onmousemove = e => {
+  if (!dragging) return;
+  const r = $('#viewwrap').getBoundingClientRect();
+  const x = e.clientX - r.left;
+  const y = e.clientY - r.top;
+  let dx = x - last.x;
+  let dy = y - last.y;
+  if (mirrorX && dragging === 'move') dx = -dx;
+  if (dragging === 'move') { roi.x += dx; roi.y += dy; }
+  else { roi.w += dy; roi.h = roi.w; $('#roiSize').value = Math.round(roi.w); }
+  last.x = x; last.y = y; clampROI();
+};
+window.onmouseup = ()=> dragging=false;
+
+// Fit canvas sizes
+function fitCanvas(){
+  draw.width = vid.videoWidth || 1280;
+  draw.height = vid.videoHeight || 720;
+  clampROI();
+  plot.width = plot.clientWidth;
+  plot.height = plot.clientHeight;
+}
+window.addEventListener('resize', fitCanvas);
+
+// ---------- CAMERA ----------
+function makeConstraints(deviceId){
+  const [w,h] = ($('#res').value||'1280x720').split('x').map(Number);
+  return deviceId
+    ? {video:{deviceId:{exact:deviceId}, width:{ideal:w}, height:{ideal:h}}, audio:false}
+    : {video:{width:{ideal:w}, height:{ideal:h}}, audio:false};
+}
+async function enumerateCams(){
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cams = devices.filter(d=>d.kind==='videoinput');
+  const sel = $('#cams');
+  const keep = selectedDeviceId || sel.value;
+  sel.innerHTML='';
+  cams.forEach((d,i)=>{
+    const opt=document.createElement('option');
+    opt.value=d.deviceId; opt.textContent=d.label||`Camera ${i+1}`;
+    sel.appendChild(opt);
+  });
+  if (keep && cams.some(c=>c.deviceId===keep)) sel.value = keep;
+  else if (cams[0]) sel.value = cams[0].deviceId;
+  selectedDeviceId = sel.value || null;
+  if(!cams.length) log('No cameras found.');
+}
+async function startWith(deviceId){
+  if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  let lastErr=null;
+  for(const d of [deviceId,null]){
+    try{ stream=await navigator.mediaDevices.getUserMedia(makeConstraints(d)); break; }
+    catch(e){ lastErr=e; log(`getUserMedia failed: ${e.name} — ${e.message}`); stream=null; }
+  }
+  if(!stream){ log('All camera attempts failed.'); return; }
+  vid.srcObject=stream; try{ await vid.play(); }catch(e){ log('video.play: '+e.name); }
+  const facing = stream.getVideoTracks()[0]?.getSettings()?.facingMode || '';
+  mirrorX = (facing==='user');
+  if (mirrorX) $('#viewwrap').classList.add('mirror'); else $('#viewwrap').classList.remove('mirror');
+  await new Promise(res=>{ if(vid.readyState>=2) res(); else vid.onloadedmetadata=res; });
+  fitCanvas(); requestAnimationFrame(loop);
+  log('Camera started: '+(stream.getVideoTracks()[0]?.label||'unknown'));
+  setTimeout(()=>{ enumerateCams().catch(()=>{}); }, 400);
+}
+$('#start').onclick = async ()=>{
+  $('#log').textContent='';
+  if(!('mediaDevices' in navigator)){ log('ERROR: mediaDevices not available.'); return; }
+  if(!window.isSecureContext){ log('ERROR: Not HTTPS.'); return; }
+  try{ const s=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); s.getTracks().forEach(t=>t.stop()); }catch{}
+  await enumerateCams(); await startWith($('#cams').value);
+};
+$('#cams').addEventListener('change', async e=>{ selectedDeviceId=e.target.value; await startWith(selectedDeviceId); });
+$('#res').addEventListener('change', async ()=>{ await startWith(selectedDeviceId || $('#cams').value); });
+if (navigator.mediaDevices?.addEventListener){
+  navigator.mediaDevices.addEventListener('devicechange', async ()=>{
+    const prev = selectedDeviceId; await enumerateCams();
+    if ($('#cams').value !== prev){ await startWith($('#cams').value); }
+  });
+}
+
+// ---------- DATA PIPE ----------
 function getProfile(){
-const y0=Math.max(0,Math.round(roi.y)),rows=Math.max(1,Math.round(roi.h));
-const sx=mirrorX?(draw.width-roi.x-roi.w):roi.x;
-const data=ctxD.getImageData(sx,y0,roi.w,rows).data;
-const R=new Float32Array(roi.w),G=new Float32Array(roi.w),B=new Float32Array(roi.w);
-for(let r=0;r<rows;r++){for(let x=0;x<roi.w;x++){const i=(r*roi.w+x)*4;R[x]+=data[i];G[x]+=data[i+1];B[x]+=data[i+2];}}
-for(let x=0;x<roi.w;x++){R[x]/=rows;G[x]/=rows;B[x]/=rows;}
-const g=Math.max(0.3,parseFloat($('#gamma').value));
-const L=new Float32Array(roi.w);
-for(let x=0;x<roi.w;x++){const r=Math.pow(R[x]/255,1/g),gr=Math.pow(G[x]/255,1/g),b=Math.pow(B[x]/255,1/g);
-L[x]=0.2126*r+0.7152*gr+0.0722*b;}
-return {R,G,B,L};
+  const rows = Math.max(1, Math.round(roi.h));
+  const y0 = Math.max(0, Math.round(roi.y));
+  const sx = mirrorX ? (draw.width - roi.x - roi.w) : roi.x; // mirrored sampling for front cam
+
+  const data = ctxD.getImageData(Math.round(sx), Math.round(y0), Math.round(roi.w), rows).data;
+  const R=new Float32Array(roi.w),G=new Float32Array(roi.w),B=new Float32Array(roi.w);
+  for(let r=0;r<rows;r++){
+    for(let x=0;x<roi.w;x++){
+      const i=(r*roi.w + x)*4; R[x]+=data[i]; G[x]+=data[i+1]; B[x]+=data[i+2];
+    }
+  }
+  for(let x=0;x<roi.w;x++){ R[x]/=rows; G[x]/=rows; B[x]/=rows; }
+
+  const gamma=Math.max(0.3, parseFloat($('#gamma').value)||1.0);
+  const L=new Float32Array(roi.w);
+  for(let x=0;x<roi.w;x++){
+    const r=Math.pow(R[x]/255,1/gamma), g=Math.pow(G[x]/255,1/gamma), b=Math.pow(B[x]/255,1/gamma);
+    L[x]=0.2126*r+0.7152*g+0.0722*b;
+  }
+  // horizontal smoothing
+  const k=Math.max(1,parseInt($('#smooth').value,10)||1);
+  const smooth=A=>{
+    const out=new Float32Array(A.length);
+    for(let i=0;i<A.length;i++){
+      const i0=Math.max(0,i-k), i1=Math.min(A.length-1,i+k);
+      let s=0; for(let j=i0;j<=i1;j++) s+=A[j]; out[i]=s/(i1-i0+1);
+    } return out;
+  };
+  return {R:smooth(R),G:smooth(G),B:smooth(B),L:smooth(L)};
 }
 
 function findLocalPeaks(Y,{relProm=0.04}={}){
-const minDist=Math.max(8,Math.round(Y.length/40));const absMax=Math.max(...Y)||1;
-const minProm=absMax*relProm,cand=[];
-for(let i=1;i<Y.length-1;i++){if(Y[i]>Y[i-1]&&Y[i]>=Y[i+1]){
-let base=Math.min(Y[i-8]||Y[i],Y[i+8]||Y[i]);const prom=Y[i]-base;
-if(prom>=minProm)cand.push({idx:i,amp:Y[i]});}}
-cand.sort((a,b)=>b.amp-a.amp);
-const kept=[];for(const c of cand){if(kept.every(k=>Math.abs(k.idx-c.idx)>=minDist))kept.push(c);}return kept;}
+  const minDist=Math.max(8,Math.round(Y.length/40));
+  const absMax=Math.max(...Y)||1;
+  const minProm=absMax*relProm;
+  const cand=[];
+  for(let i=1;i<Y.length-1;i++){
+    if(Y[i]>Y[i-1] && Y[i]>=Y[i+1]){
+      const left = Y[Math.max(0,i-8)], right = Y[Math.min(Y.length-1,i+8)];
+      const base = Math.min(left??Y[i], right??Y[i]);
+      const prom = Y[i]-base;
+      if (prom>=minProm) cand.push({idx:i, amp:Y[i], prom});
+    }
+  }
+  cand.sort((a,b)=>b.amp-a.amp);
+  const kept=[];
+  for(const c of cand){ if(kept.every(k=>Math.abs(k.idx-c.idx)>=minDist)) kept.push(c); }
+  return kept;
+}
 
+// ---------- CALIBRATION (px ↔ nm) ----------
+let calibrated=false;
+let calib={kind:'linear',A:NaN,B:NaN,a:NaN,b:NaN,c:NaN}; // domain is 0..roi.w-1
+
+function pxToNm(px){
+  if(!calibrated) return NaN;
+  const lam = (calib.kind==='linear') ? (calib.A*px + calib.B)
+              : (calib.a*px*px + calib.b*px + calib.c);
+  return lam;
+}
+function nmToPx(nm){
+  if(!calibrated) return NaN;
+  if(calib.kind==='linear') return (nm - calib.B)/calib.A;
+  // quadratic inverse
+  const {a,b,c}=calib; const A=a, B=b, C=c-nm, D=B*B-4*A*C;
+  if(D<=0) return NaN;
+  const r1=(-B+Math.sqrt(D))/(2*A), r2=(-B-Math.sqrt(D))/(2*A);
+  // keep the root in ROI domain
+  if (r1>=0 && r1<=roi.w) return r1;
+  if (r2>=0 && r2<=roi.w) return r2;
+  return NaN;
+}
+
+// Auto-Cal (H₂): 3 peaks → 434/486/656 nm (quadratic)
+$('#autoH').onclick=()=>{
+  const Y=getProfile().L;
+  const found=findLocalPeaks(Y,{relProm:0.05});
+  if(found.length<3){ log('Auto-Cal (H₂): need ≥3 bright H lines in ROI. Enlarge ROI / brighten / use H lamp.'); return; }
+  // choose 3 most-separated peaks
+  found.sort((a,b)=>a.idx-b.idx);
+  const left=found[0], right=found[found.length-1];
+  // find a middle that’s not too close to either edge
+  let mid=found[Math.floor(found.length/2)];
+  // make sure they’re reasonably separated
+  if (right.idx-left.idx < Math.max(60, roi.w*0.35)) { log('Auto-Cal (H₂): peaks too close. Widen ROI / align 1st-order band.'); return; }
+
+  const x1=left.idx, x2=mid.idx, x3=right.idx;
+  const y1=434.0,   y2=486.1,   y3=656.3;
+  const D=(x1-x2)*(x1-x3)*(x2-x3);
+  const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
+  const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
+  const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
+  calib={kind:'quad',a,b,c}; calibrated=true;
+  log(`Auto-Cal (H₂): px [${x1}, ${x2}, ${x3}] → λ [434, 486.1, 656.3] nm`);
+};
+
+// Auto-Cal (Rough): leftmost → 450 nm, rightmost → 650 nm (linear)
+$('#autoRough').onclick=()=>{
+  const Y=getProfile().L;
+  const found=findLocalPeaks(Y,{relProm:0.04});
+  if(found.length<1){
+    log('Auto-Cal (Rough): no peaks found — enlarge ROI / brighten signal.');
+    return;
+  }
+  found.sort((a,b)=>a.idx-b.idx);
+  const left=found[0], right=found[found.length-1];
+  if (right.idx - left.idx < Math.max(40, roi.w*0.25)){
+    // fall back: use ROI edges as anchors (assume left≈450, right≈650)
+    const x1=0, x2=roi.w-1, y1=450, y2=650;
+    const A=(y2-y1)/(x2-x1), B=y1-A*x1;
+    calib={kind:'linear',A,B}; calibrated=true;
+    log('Auto-Cal (Rough): used ROI edges → ~450–650 nm.');
+    return;
+  }
+  const x1=left.idx, x2=right.idx, y1=450, y2=650;
+  const A=(y2-y1)/(x2-x1), B=y1 - A*x1;
+  calib={kind:'linear',A,B}; calibrated=true;
+  log(`Auto-Cal (Rough): px [${x1}, ${x2}] → λ ~[450, 650] nm (linear)`);
+};
+
+// ---------- PEAKS / LEGEND ----------
 let peaks=[];
 $('#findPeaks').onclick=()=>{
-const P=getProfile();const Y=P.L;const found=findLocalPeaks(Y);const N=Math.min(found.length,parseInt($('#topN').value,10)||5);
-peaks=found.slice(0,N);const leg=$('#legend');leg.innerHTML='';
-for(const p of peaks){const item=document.createElement('div');item.className='legend-item';
-const sw=document.createElement('span');sw.className='sw';sw.style.background='#58a6ff';
-const lbl=document.createElement('span');lbl.textContent=`px ${p.idx}`;item.append(sw,lbl);leg.appendChild(item);}
-log('Found '+peaks.length+' peaks.');
+  const Y=getProfile().L;
+  const found=findLocalPeaks(Y,{relProm:0.04});
+  const N=Math.max(1, Math.min(10, parseInt($('#topN').value,10)||5));
+  peaks = found.slice(0,N).map(p=>{
+    const lam = pxToNm(p.idx);
+    return {idx:p.idx, amp:p.amp, lam};
+  });
+  const leg=$('#legend'); leg.innerHTML='';
+  for(const p of peaks){
+    const item=document.createElement('div'); item.className='legend-item';
+    const sw=document.createElement('span'); sw.className='sw'; sw.style.background='#58a6ff';
+    const lbl=document.createElement('span');
+    lbl.textContent = isFinite(p.lam) ? `${p.lam.toFixed(1)} nm (px ${p.idx})` : `px ${p.idx}`;
+    item.append(sw,lbl); leg.appendChild(item);
+  }
+  log('Find Peaks: '+peaks.length);
 };
 
-$('#autoH').onclick=()=>{
-const P=getProfile().L;const found=findLocalPeaks(P);if(found.length<3){log('Auto-Cal: not enough peaks');return;}
-const top=found.slice(0,3).sort((a,b)=>a.idx-b.idx);
-log('Auto-Cal peaks px '+top.map(p=>p.idx).join(', '));
-};
-
+// ---------- DRAW LOOP ----------
 function drawPlot(){
-if(vid.readyState>=2){ctxD.drawImage(vid,0,0,draw.width,draw.height);
-ctxD.strokeStyle='rgba(88,166,255,.9)';ctxD.lineWidth=2;ctxD.strokeRect(roi.x,roi.y,roi.w,roi.h);}
-const P=getProfile();const Y=P.L;plot.width=plot.clientWidth;plot.height=plot.clientHeight;
-const Wp=plot.width,Hp=plot.height;ctxP.fillStyle='#000';ctxP.fillRect(0,0,Wp,Hp);
-const max=Math.max(...Y)||1;ctxP.strokeStyle='#58a6ff';ctxP.lineWidth=2;ctxP.beginPath();
-for(let i=0;i<Y.length;i++){const x=i/roi.w*Wp;const y=Hp-(Y[i]/max)*(Hp-70)-20;if(i===0)ctxP.moveTo(x,y);else ctxP.lineTo(x,y);}
-ctxP.stroke();
-requestAnimationFrame(drawPlot);}
-function loop(){requestAnimationFrame(loop);}
+  // draw preview and ROI
+  if(vid.readyState>=2){
+    ctxD.drawImage(vid,0,0,draw.width,draw.height);
+    ctxD.strokeStyle='rgba(88,166,255,.9)'; ctxD.lineWidth=2;
+    ctxD.strokeRect(roi.x,roi.y,roi.w,roi.h);
+  }
+
+  const P=getProfile();
+  const m=$('#mode').value;
+  const Y = m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
+
+  plot.width = plot.clientWidth; plot.height = plot.clientHeight;
+  const Wp=plot.width, Hp=plot.height;
+
+  ctxP.fillStyle='#000'; ctxP.fillRect(0,0,Wp,Hp);
+
+  // axes (nm if calibrated, else px)
+  ctxP.font='18px ui-monospace,Consolas,Menlo';
+  ctxP.fillStyle='#cfd6de'; ctxP.strokeStyle='#333'; ctxP.lineWidth=1;
+
+  if (calibrated){
+    const VIS_MIN=380, VIS_MAX=780, step=50;
+    for(let lam=VIS_MIN; lam<=VIS_MAX; lam+=step){
+      const px = nmToPx(lam);
+      if(!isFinite(px)) continue;
+      const x=(px/roi.w)*Wp;
+      if (x<0 || x>Wp) continue;
+      ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
+      ctxP.fillText(`${lam} nm`, x+4, 22);
+    }
+    ctxP.fillText('Wavelength (nm)', 10, Hp-10);
+  } else {
+    const stepPx=Math.max(20,Math.round(roi.w/5));
+    for(let p=0;p<=roi.w;p+=stepPx){
+      const x=(p/roi.w)*Wp;
+      ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
+      ctxP.fillText(`${p} px`, x+4, 22);
+    }
+    ctxP.fillText('Pixel (uncalibrated)', 10, Hp-10);
+  }
+
+  ctxP.save(); ctxP.rotate(-Math.PI/2);
+  ctxP.fillText('Relative intensity (a.u.)', -Hp+10, 16);
+  ctxP.restore();
+
+  // dynamic headroom plot
+  const max = Math.max(...Y)||1;
+  ctxP.strokeStyle='#58a6ff'; ctxP.lineWidth=2; ctxP.beginPath();
+  for(let i=0;i<Y.length;i++){
+    const x = (i/roi.w)*Wp;
+    const y = Hp - (Y[i]/max)*(Hp-70) - 20;
+    if(i===0) ctxP.moveTo(x,y); else ctxP.lineTo(x,y);
+  }
+  ctxP.stroke();
+
+  // peak markers
+  if(peaks.length){
+    for(const pk of peaks){
+      const x=(pk.idx/roi.w)*Wp;
+      ctxP.strokeStyle='#58a6ff'; ctxP.lineWidth=2;
+      ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
+
+      const txt = isFinite(pk.lam) ? `${pk.lam.toFixed(1)} nm` : `px ${pk.idx}`;
+      const pad=4; const w=ctxP.measureText(txt).width+pad*2;
+      ctxP.fillStyle='rgba(15,20,27,0.9)'; ctxP.fillRect(x+4,6,w,20);
+      ctxP.strokeStyle='#2a2f35'; ctxP.lineWidth=1; ctxP.strokeRect(x+4,6,w,20);
+      ctxP.fillStyle='#58a6ff'; ctxP.fillText(txt,x+4+pad,21);
+
+      const y = Hp - ( (pk.amp||max)/max )*(Hp-70) - 20;
+      ctxP.beginPath(); ctxP.arc(x,y,3,0,Math.PI*2); ctxP.fill();
+    }
+  }
+
+  requestAnimationFrame(drawPlot);
+}
+function loop(){ requestAnimationFrame(loop); }
 requestAnimationFrame(drawPlot);
+
+// ---------- SNAPSHOT / CSV ----------
+$('#snap').onclick=()=>{
+  const c=document.createElement('canvas'); c.width=draw.width; c.height=draw.height;
+  c.getContext('2d').drawImage(draw,0,0);
+  const a=document.createElement('a'); a.download='spectrum.png'; a.href=c.toDataURL('image/png'); a.click();
+};
+$('#csv').onclick=()=>{
+  const P=getProfile(); const Y=P.L;
+  let rows = calibrated ? 'px_roi,lambda_nm,intensity\n' : 'px_roi,intensity\n';
+  for(let i=0;i<Y.length;i++){
+    const lam = pxToNm(i);
+    rows += calibrated ? `${i},${isFinite(lam)?lam.toFixed(3):''},${Y[i].toFixed(6)}\n`
+                       : `${i},${Y[i].toFixed(6)}\n`;
+  }
+  const blob=new Blob([rows],{type:'text/csv'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='spectrum.csv'; a.click();
+};
 </script>
 </body>
 </html>
