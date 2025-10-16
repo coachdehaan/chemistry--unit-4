@@ -90,12 +90,12 @@
         </label>
       </div>
       <div class="row">
-        <label>Avg rows <input id="avg" type="number" value="12" min="1" max="200" style="width:70px"></label>
+        <label>ROI size <input id="roiSize" type="number" value="120" min="40" max="400" style="width:80px"></label>
         <label>Smooth <input id="smooth" type="number" value="3" min="1" max="25" style="width:60px"></label>
         <button id="snap">Snapshot PNG</button>
         <button id="csv">Export CSV</button>
       </div>
-      <div class="row small">Drag the rectangle to center the brightest horizontal band. Shift+drag to change height.</div>
+      <div class="row small">Drag the square to the brightest 1st-order band. Shift+drag to resize quickly.</div>
       <div class="row"><div id="log" class="small"></div></div>
     </div>
 
@@ -116,8 +116,9 @@
         <button id="apply3">Apply 3-pt</button> <span id="eq3" class="small"></span>
       </div>
       <div class="row">
+        <button id="autoH">Auto-Cal (Hydrogen)</button>
         <button id="quickH">Hydrogen Quick-Cal</button>
-        <span class="small">Guided 3-point using H-γ 434.0, H-β 486.1, H-α 656.3 nm.</span>
+        <span class="small">Auto-detect 434/486/656 nm lines and fit.</span>
       </div>
       <div class="small">Known lines: Hg 435.8, 546.1, 577.0/579.1; Na 589.0; H-α 656.3; K 766.5/769.9.</div>
     </div>
@@ -162,35 +163,35 @@
         <h4>Setup</h4>
         <ul>
           <li>Click <span class="kbd">Start Camera</span> → allow camera.</li>
-          <li>Drag the rectangle so it covers the bright horizontal spectrum band (Shift+drag to adjust height).</li>
-          <li>Pick resolution (720p is fine). Use <span class="kbd">Avg rows</span> ≈ 8–16, <span class="kbd">Smooth</span> ≈ 3–7.</li>
+          <li>Drag the <b>square</b> so it covers the bright horizontal spectrum band (use the slider or Shift+drag to resize).</li>
+          <li>Use <span class="kbd">Smooth</span> ≈ 3–7.</li>
         </ul>
       </div>
       <div class="step">
-        <h4>Optional: Quick Calibration (Hydrogen)</h4>
+        <h4>Calibration</h4>
         <ul>
-          <li>Click <span class="kbd">Hydrogen Quick-Cal</span>.</li>
-          <li>On the graph, click peaks in order: H-γ ~ 434 nm (violet), H-β ~ 486 nm (cyan/blue), H-α ~ 656 nm (red).</li>
-          <li>Axis switches to <b>Wavelength (nm)</b>. If you skip this, X-axis is <b>pixels</b>.</li>
+          <li><span class="kbd">Auto-Cal (Hydrogen)</span> tries to find 434/486/656 nm automatically.</li>
+          <li>Or <span class="kbd">Hydrogen Quick-Cal</span> → click peaks: 434 → 486 → 656 nm.</li>
+          <li>If skipped, X-axis shows <b>pixels</b>; after cal, shows <b>nm</b>.</li>
         </ul>
       </div>
       <div class="step">
         <h4>Measure</h4>
         <ul>
-          <li>Hover to read cursor wavelength (nm) or pixels.</li>
-          <li>Click <span class="kbd">Find Peaks</span> → top N strongest lines are labeled + color-coded.</li>
+          <li>Hover the graph to read pixel/nm at the cursor.</li>
+          <li><span class="kbd">Find Peaks</span> → labels the top N lines inside the ROI square.</li>
         </ul>
       </div>
       <div class="step">
         <h4>Capture</h4>
         <ul>
-          <li><span class="kbd">Snapshot PNG</span> for an image of the spectrum band.</li>
-          <li><span class="kbd">Export CSV</span> for the numeric profile (px, λ if calibrated, intensity).</li>
+          <li><span class="kbd">Snapshot PNG</span> saves the preview overlay.</li>
+          <li><span class="kbd">Export CSV</span> saves px, (λ), intensity from the ROI.</li>
         </ul>
       </div>
     </div>
     <div class="callout">
-      <b>Tip:</b> If using the front camera, the preview and math are mirrored so peaks line up visually. For best results, dim ambient light and keep the spectrum band centered in the rectangle.
+      <b>Tip:</b> If using the front camera, preview is mirrored. Internally the sampling is mirrored too, so plot lines up with what you see.
     </div>
     <div class="print-note">Print: File → Print (this sheet is formatted for one page).</div>
   </div>
@@ -285,15 +286,15 @@
 </section>
 
 <!-- Hydrogen Quick-Cal overlay -->
-<div id="wiz">
-  <div class="card">
-    <h3>Hydrogen Quick-Cal</h3>
-    <p id="wizMsg">Step 1 of 3 — On the graph, click the <b>violet</b> peak <b>H-γ (434.0 nm)</b>.</p>
+<div id="wiz" style="display:none;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:1000">
+  <div class="card" style="background:#0f141b;border:1px solid var(--grid);border-radius:10px;max-width:520px;width:92%;padding:12px">
+    <h3 style="margin:0 0 6px 0;font-size:16px">Hydrogen Quick-Cal</h3>
+    <p id="wizMsg" class="small">Step 1 of 3 — On the graph, click the <b>violet</b> peak <b>H-γ (434.0 nm)</b>.</p>
     <ul class="small">
-      <li>Keep the bright hydrogen band inside the preview rectangle.</li>
+      <li>Keep the bright hydrogen band inside the preview square.</li>
       <li>Click peaks on the <b>graph</b> (not the video).</li>
     </ul>
-    <div class="actions">
+    <div class="actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
       <button id="wizCancel">Cancel</button>
     </div>
   </div>
@@ -306,8 +307,17 @@ const ctxD=draw.getContext('2d'), ctxP=plot.getContext('2d');
 const log=msg=>{$('#log').textContent+=($('#log').textContent?'\n':'')+msg; console.log(msg);};
 if(!window.isSecureContext) $('#httpsWarn').style.display='inline-block';
 
-let stream=null, roi={y:260,h:50}, dragging=false, lastY=0, picking=null, bgProfile=null;
+let stream=null, dragging=false, last={x:0,y:0}, picking=null, bgProfile=null;
 let W=1280,H=720;
+
+/* ROI is a movable square */
+let roi={x:200,y:220,w:120,h:120};
+function clampROI(){
+  roi.w = Math.max(40, Math.min(draw.width, roi.w));
+  roi.h = roi.w; // keep square
+  roi.x = Math.max(0, Math.min(draw.width - roi.w, roi.x));
+  roi.y = Math.max(0, Math.min(draw.height - roi.h, roi.y));
+}
 
 /* calibration state */
 let calibrated=false;
@@ -317,7 +327,7 @@ window.calib = calib; // for diagram
 /* peaks + mirror */
 let peaks=[]; let mirrorX=false;
 
-/* selection memory */
+/* camera selection memory */
 let selectedDeviceId = null;
 
 /* sync plot to preview size */
@@ -336,6 +346,7 @@ window.addEventListener('resize', syncPlotSize);
 function fitCanvas(){
   draw.width = vid.videoWidth || W;
   draw.height = vid.videoHeight || H;
+  clampROI();
   plot.width = plot.clientWidth;
   plot.height = plot.clientHeight;
   syncPlotSize();
@@ -448,26 +459,39 @@ if (navigator.mediaDevices && 'addEventListener' in navigator.mediaDevices){
   });
 }
 
-/* ROI drag */
+/* ROI interactions: drag to move, Shift+drag to resize; slider changes size */
+$('#roiSize').addEventListener('change', ()=>{
+  const s = Math.max(40, Math.min(400, parseInt($('#roiSize').value,10) || 120));
+  roi.w = roi.h = s; clampROI();
+});
 $('#viewwrap').addEventListener('mousedown',e=>{
-  const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
-  if(e.shiftKey){ dragging='h'; lastY=y; } else { dragging='y'; lastY=y; }
+  const r=$('#viewwrap').getBoundingClientRect();
+  last.x = e.clientX - r.left; last.y = e.clientY - r.top; dragging = e.shiftKey ? 'resize' : 'move';
 });
 window.addEventListener('mousemove',e=>{
   if(!dragging) return;
-  const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
-  if(dragging==='y'){ roi.y=Math.max(0,Math.min(draw.height-roi.h, y - roi.h/2)); }
-  else if(dragging==='h'){ roi.h=Math.max(2,Math.min(draw.height-roi.y, Math.abs(y-lastY))); }
-  syncPlotSize();
+  const r=$('#viewwrap').getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  if(dragging==='move'){
+    roi.x += (x - last.x); roi.y += (y - last.y);
+  } else {
+    // resize proportional to vertical motion
+    roi.w += (y - last.y); roi.h = roi.w;
+    $('#roiSize').value = Math.round(roi.w);
+  }
+  last.x = x; last.y = y;
+  clampROI();
 });
 window.addEventListener('mouseup',()=> dragging=false);
 
-/* data slice */
+/* compute profile from ROI (mirroring aware) */
 function getProfile(){
-  const avg=Math.max(1,parseInt($('#avg').value,10));
-  const y0=Math.max(0,Math.round(roi.y + roi.h/2 - avg/2));
-  const w=draw.width, rows=Math.min(draw.height,avg);
-  const data=ctxD.getImageData(0,y0,w,rows).data;
+  const s = Math.max(1, Math.min(draw.height, Math.round(roi.h)));
+  const x0 = Math.round(roi.x), y0 = Math.round(roi.y + roi.h/2 - s/2);
+  const w  = Math.round(roi.w), rows = Math.max(1, s);
+  const sx = mirrorX ? (draw.width - x0 - w) : x0; // mirror sample if front cam
+  const data=ctxD.getImageData(sx, Math.max(0,y0), w, rows).data;
+
   const R=new Float32Array(w),G=new Float32Array(w),B=new Float32Array(w);
   for(let row=0;row<rows;row++){
     for(let x=0;x<w;x++){
@@ -475,12 +499,14 @@ function getProfile(){
     }
   }
   for(let x=0;x<w;x++){ R[x]/=rows; G[x]/=rows; B[x]/=rows; }
+
   const gamma=Math.max(0.3,parseFloat($('#gamma').value));
   const L=new Float32Array(w);
   for(let x=0;x<w;x++){
     const r=Math.pow(R[x]/255,1/gamma), g=Math.pow(G[x]/255,1/gamma), b=Math.pow(B[x]/255,1/gamma);
     L[x]=0.2126*r+0.7152*g+0.0722*b;
   }
+  // additional horizontal smoothing
   const k=Math.max(1,parseInt($('#smooth').value,10));
   const smooth=A=>{
     const out=new Float32Array(A.length);
@@ -491,13 +517,10 @@ function getProfile(){
     } return out;
   };
   const out={R:smooth(R),G:smooth(G),B:smooth(B),L:smooth(L)};
-  if(mirrorX){
-    for(const key of ['R','G','B','L']) out[key] = Float32Array.from(out[key]).reverse();
-  }
   return out;
 }
 
-/* wavelength mapping */
+/* wavelength mapping in ROI pixel space */
 function pxToNm(px){
   if(!calibrated) return NaN;
   return calib.kind==='linear' ? calib.A*px + calib.B : (calib.a*px*px + calib.b*px + calib.c);
@@ -507,25 +530,25 @@ function nmToPx(nm){
   if(calib.kind==='linear') return (nm - calib.B)/calib.A;
   const {a,b,c}=calib; const A=a,B=b,C=c-nm,D=B*B-4*A*C; if(D<=0) return NaN;
   const r1=(-B+Math.sqrt(D))/(2*A), r2=(-B-Math.sqrt(D))/(2*A);
-  return (r1>=0&&r1<=draw.width)?r1:r2;
+  return (r1>=0&&r1<=roi.w)?r1:r2;
 }
-window.pxToNm = pxToNm; // for diagram
+window.pxToNm = pxToNm; // for concept diagram
 
 /* cursor readout */
 plot.addEventListener('mousemove',e=>{
   const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.max(0,Math.min(draw.width-1,Math.round(x/plot.width*draw.width)));
+  const px=Math.max(0,Math.min(roi.w-1,Math.round(x/plot.width*roi.w)));
   const lam=pxToNm(px);
   $('#cursor').textContent = calibrated ? `px:${px} , λ:${isFinite(lam)?lam.toFixed(1):'–'} nm`
                                        : `px:${px} (uncalibrated)`;
 });
 
-/* calibration UI */
+/* calibration UI (manual picks on ROI pixel axis) */
 for(const l of document.querySelectorAll('.lam')) l.onchange=()=>{ calib.nm[parseInt(l.dataset.idx,10)]=parseFloat(l.value); };
-for(const b of document.querySelectorAll('.pick')) b.onclick=()=>{ picking=parseInt(b.dataset.idx,10); log('Click a peak on the plot to assign pixel.'); };
+for(const b of document.querySelectorAll('.pick')) b.onclick=()=>{ picking=parseInt(b.dataset.idx,10); log('Click a peak on the plot to assign pixel (ROI space).'); };
 plot.addEventListener('click',e=>{
   const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.round(x/plot.width*draw.width);
+  const px=Math.round(x/plot.width*roi.w);
   if(picking!==null){
     calib.px[picking]=px; $('#p'+picking).textContent=`px${['A','B','C'][picking]}: ${px}`; picking=null; return;
   }
@@ -553,7 +576,7 @@ $('#apply3').onclick=()=>{
   $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)} (quadratic)`;
 };
 
-/* Hydrogen Quick-Cal */
+/* Hydrogen Quick-Cal (guided clicks) */
 const HQ = {active:false, stage:0};
 const H_LINES = [434.0, 486.1, 656.3];
 function startHydrogenQuickCal(){
@@ -589,7 +612,7 @@ function spectrumColor(lam){
   return '#ff5866';
 }
 
-/* compute displayed spectrum */
+/* compute displayed spectrum from ROI */
 function currentSpectrum(){
   const P=getProfile();
   const m=$('#mode').value;
@@ -600,9 +623,9 @@ function currentSpectrum(){
   return Yb;
 }
 
-/* simple peak finder */
+/* simple local-peak finder */
 function findLocalPeaks(Y, opts={}){
-  const minDist = opts.minDist ?? 12;
+  const minDist = opts.minDist ?? Math.max(8, Math.round(Y.length/40));
   const relProm = opts.relProm ?? 0.08;
   const absMax = Math.max(...Y) || 1;
   const minProm = absMax * relProm;
@@ -627,11 +650,77 @@ function findLocalPeaks(Y, opts={}){
   return kept;
 }
 
-/* Find Peaks */
+/* Auto-Cal (Hydrogen): detect 3 strongest peaks and fit to 434/486/656 nm (either orientation) */
+function r2(y, yhat){
+  let ssTot=0, ssRes=0; const mean=y.reduce((a,b)=>a+b,0)/y.length;
+  for(let i=0;i<y.length;i++){ ssTot+=(y[i]-mean)**2; ssRes+=(y[i]-yhat[i])**2; }
+  return 1 - (ssRes/(ssTot||1));
+}
+function quadFit(px, nm){
+  const [x1,x2,x3]=px, [y1,y2,y3]=nm; const D=(x1-x2)*(x1-x3)*(x2-x3);
+  const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
+  const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
+  const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
+  return {a,b,c};
+}
+function evalFit(coeff, x){ return coeff.a*x*x + coeff.b*x + coeff.c; }
+
+async function autoCalHydrogen(){
+  const Y = currentSpectrum();
+  if (Y.length < 10){ log('Auto-Cal: ROI too small.'); return; }
+
+  // find candidate peaks
+  const cand = findLocalPeaks(Y, {relProm:0.06});
+  if (cand.length < 3){ log('Auto-Cal: not enough peaks found. Make sure H lamp is bright and ROI is on a first-order band.'); return; }
+
+  // take top 3 by amplitude, sort by position
+  const top3 = cand.slice(0,3).sort((a,b)=>a.idx-b.idx);
+  const pxs = top3.map(p=>p.idx);
+
+  // two hypotheses for orientation
+  const targetA = [434.0,486.1,656.3];      // left→right = short→long
+  const targetB = [...targetA].reverse();   // left→right = long→short
+
+  const fitA = quadFit(pxs, targetA);
+  const fitB = quadFit(pxs, targetB);
+
+  // score by mapping those three points + midpoints
+  function score(coeff){
+    const yhat = pxs.map(x=>evalFit(coeff,x));
+    const y    = targetA; // compare to increasing order reference by sorting by nm
+    // To be fair, compute residuals against whichever assignment matches each coeff:
+    // compute residual sum for exact assigned targets used to fit
+    const res = pxs.map((x,i)=>evalFit(coeff,x) - (coeff===fitA?targetA[i]:targetB[i]));
+    const rmse = Math.sqrt(res.reduce((s,v)=>s+v*v,0)/res.length);
+    // endpoints sanity within visible range
+    const endL = evalFit(coeff, 0);
+    const endR = evalFit(coeff, roi.w-1);
+    const inRange = (end)=> (end>=350 && end<=850);
+    const penalty = (inRange(endL)&&inRange(endR))? 0 : 1000;
+    return rmse + penalty;
+  }
+
+  const sA = score(fitA), sB = score(fitB);
+  const best = sA <= sB ? fitA : fitB;
+  const used = sA <= sB ? targetA : targetB;
+
+  // lock calibration
+  calibrated = true; calib.kind='quad'; calib.a=best.a; calib.b=best.b; calib.c=best.c;
+  // also store the clicks for UI readout
+  calib.px = pxs.slice();
+  calib.nm = used.slice();
+  $('#eq3').textContent=`λ = ${best.a.toExponential(3)}·px² + ${best.b.toFixed(4)}·px + ${best.c.toFixed(2)}  (Auto H)`;
+  $('#p0').textContent = `pxA: ${pxs[0]}`; $('#p1').textContent = `pxB: ${pxs[1]}`; $('#p2').textContent = `pxC: ${pxs[2]}`;
+
+  log(`Auto-Cal: peaks at px ${pxs.join(', ')} → fit to ${used.join('/')} nm.`);
+}
+$('#autoH').onclick = autoCalHydrogen;
+
+/* Find Peaks button (in ROI pixel axis) */
 $('#findPeaks').onclick = ()=>{
   const Y = currentSpectrum();
   const N = Math.max(1, Math.min(10, parseInt($('#topN').value,10) || 5));
-  const found = findLocalPeaks(Y, {minDist: Math.round(draw.width/120) || 10, relProm: 0.07});
+  const found = findLocalPeaks(Y, {relProm: 0.07});
   found.sort((a,b)=>b.amp-a.amp);
   const top = found.slice(0,N);
 
@@ -656,13 +745,17 @@ $('#findPeaks').onclick = ()=>{
 function drawPlot() {
   if (vid.readyState >= 2) {
     ctxD.drawImage(vid, 0, 0, draw.width, draw.height);
+    // ROI overlay
     ctxD.strokeStyle = 'rgba(88,166,255,.9)';
     ctxD.lineWidth = 2;
-    ctxD.strokeRect(0, roi.y, draw.width, roi.h);
+    ctxD.strokeRect(roi.x, roi.y, roi.w, roi.h);
   }
 
-  const Yb = currentSpectrum();
+  const P = getProfile(); // also clamps ROI if needed
+  const m=$('#mode').value;
+  const Y = m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
 
+  // canvas sizing respects CSS + sync
   plot.width = plot.clientWidth;
   plot.height = plot.clientHeight;
   const Wp = plot.width, Hp = plot.height;
@@ -683,19 +776,19 @@ function drawPlot() {
     for(let lam=VIS_MIN; lam<=VIS_MAX; lam+=step){
       const px = nmToPx(lam);
       if(!isFinite(px)) continue;
-      const x = (px / draw.width) * Wp;
+      const x = (px / roi.w) * Wp;
       ctxP.beginPath(); ctxP.moveTo(x, 0); ctxP.lineTo(x, Hp); ctxP.stroke();
       ctxP.fillText(`${lam} nm`, x+4, 22);
     }
     ctxP.fillText('Wavelength (nm)', 10, Hp-10);
   } else {
-    const stepPx = 200;
-    for(let p=0; p<=draw.width; p+=stepPx){
-      const x=(p/draw.width)*Wp;
+    const stepPx = Math.max(20, Math.round(roi.w/5));
+    for(let p=0; p<=roi.w; p+=stepPx){
+      const x=(p/roi.w)*Wp;
       ctxP.beginPath(); ctxP.moveTo(x, 0); ctxP.lineTo(x, Hp); ctxP.stroke();
       ctxP.fillText(`${p} px`, x+4, 22);
     }
-    ctxP.fillText('Pixel', 10, Hp-10);
+    ctxP.fillText('Pixel (ROI)', 10, Hp-10);
   }
 
   // Y label
@@ -705,13 +798,13 @@ function drawPlot() {
   ctxP.restore();
 
   // plot curve with headroom
-  const max = Math.max(...Yb) || 1;
+  const max = Math.max(...Y) || 1;
   ctxP.strokeStyle = '#58a6ff';
   ctxP.lineWidth = 2;
   ctxP.beginPath();
-  for (let i = 0; i < Yb.length; i++) {
-    const x = (i / draw.width) * Wp;
-    const y = Hp - (Yb[i] / max) * (Hp - 50) - 10;
+  for (let i = 0; i < Y.length; i++) {
+    const x = (i / roi.w) * Wp;
+    const y = Hp - (Y[i] / max) * (Hp - 50) - 10;
     if (i === 0) ctxP.moveTo(x, y); else ctxP.lineTo(x, y);
   }
   ctxP.stroke();
@@ -719,7 +812,7 @@ function drawPlot() {
   // peaks
   if (peaks.length){
     for(const pk of peaks){
-      const x = (pk.px / draw.width) * Wp;
+      const x = (pk.px / roi.w) * Wp;
       ctxP.strokeStyle = pk.color; ctxP.lineWidth = 2;
       ctxP.beginPath(); ctxP.moveTo(x, 0); ctxP.lineTo(x, Hp); ctxP.stroke();
 
@@ -740,6 +833,23 @@ function drawPlot() {
 }
 function loop(){ requestAnimationFrame(loop); }
 requestAnimationFrame(drawPlot);
+
+/* snapshot/csv (ROI-aware) */
+$('#snap').onclick=()=>{
+  const c=document.createElement('canvas'); c.width=draw.width; c.height=draw.height;
+  const g=c.getContext('2d'); g.drawImage(draw,0,0);
+  const a=document.createElement('a'); a.download='spectrum.png'; a.href=c.toDataURL('image/png'); a.click();
+};
+$('#csv').onclick=()=>{
+  const P=getProfile(); const mode=$('#mode').value;
+  const Y=mode==='r'?P.R: mode==='g'?P.G: mode==='b'?P.B: P.L;
+  let rows='px_roi,lambda_nm,intensity\n';
+  for(let i=0;i<Y.length;i++){
+    const lam=pxToNm(i); rows+=`${i},${isFinite(lam)?lam.toFixed(3):''},${Y[i].toFixed(6)}\n`;
+  }
+  const blob=new Blob([rows],{type:'text/csv'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='spectrum.csv'; a.click();
+};
 
 /* ===== Concept Diagram glue ===== */
 (function(){
