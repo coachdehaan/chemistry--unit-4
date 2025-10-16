@@ -9,12 +9,15 @@
     .wrap{max-width:1000px;margin:0 auto}
     .row{display:grid;grid-template-columns:2fr 1fr;gap:12px}
     .card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:14px 16px}
-    .btn{padding:.5rem 1rem;border-radius:.75rem;border:1px solid #111;background:#111;color:#fff;font-weight:600}
-    .btn-ghost{padding:.35rem .65rem;border-radius:.65rem;border:1px solid #ddd;background:#fff}
+    .btn{padding:.5rem 1rem;border-radius:.75rem;border:1px solid #111;background:#111;color:#fff;font-weight:600;cursor:pointer}
+    .btn-ghost{padding:.35rem .65rem;border-radius:.65rem;border:1px solid #ddd;background:#fff;cursor:pointer}
     .badge{font-size:.7rem;padding:.2rem .5rem;border-radius:9999px;background:#eef}
     input[type="range"]{width:100%}
     .mut{color:#666;font-size:12px}
     .tiny{font-size:11px;line-height:1.2}
+    .rowline{display:flex;gap:8px;align-items:center;margin:.35rem 0}
+    .rowline input[type="text"]{flex:1;padding:.45rem;border:1px solid #ccc;border-radius:8px}
+    .pill{font-size:10px;border:1px solid #ddd;border-radius:9999px;padding:.15rem .4rem}
   </style>
   <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -81,7 +84,8 @@
           <div id="participantsList" class="tiny" style="color:#333"></div>
         </div>
 
-        <div style="margin-top:10px;display:flex;gap:8px">
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button id="editCriteriaBtn" class="btn-ghost" title="Add / remove / rename categories">Edit Criteria</button>
           <button id="resetScores" class="btn-ghost" title="Zero all scores; keep participants">Reset Scores</button>
           <button id="endSession" class="btn-ghost" title="Kick everyone off and clear">End Session</button>
         </div>
@@ -98,6 +102,24 @@
       <div style="display:flex;gap:8px;margin-top:10px">
         <button id="unlockBtn" class="btn" value="unlock">Unlock</button>
         <button class="btn-ghost" value="cancel">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Criteria editor modal -->
+  <dialog id="criteriaDlg" style="border:none;border-radius:12px;max-width:520px;width:92%">
+    <form method="dialog" style="padding:16px" onsubmit="return false;">
+      <h3 style="margin:0 0 6px 0">Edit Criteria</h3>
+      <p class="mut tiny" style="margin-top:0">Change labels, add or remove rows. Saving updates everyone live.</p>
+      <div id="criteriaEditor"></div>
+      <div class="mut tiny" style="margin-top:4px">
+        <span class="pill">Tip</span> Removing a row hides it everywhere. Use <em>Reset Scores</em> to zero new rows for all students.
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button id="addRowBtn" class="btn-ghost" type="button">Add Row</button>
+        <span style="flex:1"></span>
+        <button id="saveCriteriaBtn" class="btn">Save</button>
+        <button id="closeCriteriaBtn" class="btn-ghost">Close</button>
       </div>
     </form>
   </dialog>
@@ -120,7 +142,7 @@
     };
     const MAX_SCORE = 10;
 
-    // ===== STABLE, SHARED CRITERIA =====
+    // ===== DEFAULT STABLE CRITERIA =====
     const DEFAULT_CRITERIA = [
       { id: "content",    label: "Content Accuracy" },
       { id: "clarity",    label: "Clarity" },
@@ -142,13 +164,18 @@
     function show(el,on){ el.style.display = on ? '' : 'none'; }
     function badge(txt){ $('#connectionBadge').textContent = txt; }
     function uid(){ return Math.random().toString(36).slice(2,9); }
+    function throttle(fn, ms){ let t=0, lastArgs=null;
+      return (...args)=>{ const now=Date.now();
+        lastArgs=args; if(now - t >= ms){ t=now; fn(...lastArgs); }
+      };
+    }
 
-    // ===== RESET TOKEN GUARD (persist without reload) =====
+    // ===== RESET TOKEN GUARD =====
     function seenKey(k){ return `present_seen_${CONFIG.classKey}_${k}`; }
     function getSeen(k){ return Number(localStorage.getItem(seenKey(k)) || 0); }
     function setSeen(k, v){ localStorage.setItem(seenKey(k), String(v)); }
 
-    // ===== FIREBASE INIT (no double init) =====
+    // ===== FIREBASE INIT =====
     function dbInit(){
       if(!CONFIG.useFirebase){ badge('offline (local)'); return; }
       try{
@@ -169,12 +196,11 @@
       if(!snap.exists()){ await cRef.set(DEFAULT_CRITERIA); CRITERIA = DEFAULT_CRITERIA.slice(); }
       else { const val = snap.val() || []; CRITERIA = Array.isArray(val) ? val : Object.values(val); }
 
-      // Listen for teacher soft/hard resets (guarded, no reloads)
+      // Resets
       state.db.ref(`${basePath()}/control/softResetAt`).on('value', s=>{
         const t = Number(s.val() || 0);
         if(t && t > getSeen('soft')){
           setSeen('soft', t);
-          // Zero sliders visually & write zeros if joined
           if(state.joined){
             $$('#criteriaList input[type=range]').forEach(r=>{
               r.value = 0;
@@ -183,16 +209,23 @@
           }
         }
       });
-
       state.db.ref(`${basePath()}/control/resetAt`).on('value', s=>{
         const t = Number(s.val() || 0);
         if(!t || t <= getSeen('hard')) return;
         setSeen('hard', t);
-        // Hard reset: return to Join view WITHOUT reloading
         goToJoinView();
       });
 
+      // Live roster & results
       attachListeners();
+
+      // React live to criteria edits from teacher
+      state.db.ref(`${basePath()}/criteria`).on('value', s=>{
+        const val = s.val() || [];
+        CRITERIA = Array.isArray(val) ? val : Object.values(val);
+        if(state.joined) renderSliders();   // rebuild sliders on the fly
+        renderResults(cacheStudents);       // recompute max totals and layout
+      });
     }
 
     function attachListeners(){
@@ -200,11 +233,8 @@
         cacheStudents = snap.val() || {};
         renderResults(cacheStudents);
       });
-
-      // connectivity indicator using RTDB .info/connected
       state.db.ref('.info/connected').on('value', s=>{
-        const ok = !!s.val();
-        badge(ok ? 'online (firebase)' : 'offline (local)');
+        badge(s.val() ? 'online (firebase)' : 'offline (local)');
       });
     }
 
@@ -214,17 +244,14 @@
       if(!id){ id = uid(); localStorage.setItem('present_uid', id); }
       state.me.id = id; return id;
     }
-
     async function joinClass(name){
       ensureClientId(); state.me.name = name; state.joined = true;
       $('#whoami').textContent = name; show($('#rateCard'), true); show($('#joinCard'), false);
 
       const id = state.me.id;
       state.studentRef = state.db.ref(`${basePath()}/students/${id}`);
-
       await state.studentRef.set({ name }); // no seeded scores
 
-      // Presence cleanup only if joined
       try { state.studentRef.onDisconnect().remove(); } catch (e) {}
       window.addEventListener('beforeunload', () => {
         if(state.studentRef){ try { state.studentRef.remove(); } catch(e) {} }
@@ -232,16 +259,11 @@
 
       renderSliders();
     }
-
-    // Return to Join WITHOUT reload (used by hard reset)
     function goToJoinView(){
-      // Remove my presence node if exists
       if(state.studentRef){ try { state.studentRef.remove(); } catch(e) {} }
       state.studentRef = null;
       state.joined = false;
-      // Clear my local id so next join is fresh
       localStorage.removeItem('present_uid');
-      // Reset UI
       $('#nameInput').value = '';
       $('#whoami').textContent = '—';
       $('#criteriaList').innerHTML = '';
@@ -264,17 +286,21 @@
         wrap.appendChild(div);
       });
 
+      // Throttled write-through
       wrap.querySelectorAll('input[type=range]').forEach(r=>{
+        const send = throttle((critId,v)=>{
+          if(state.studentRef) state.studentRef.child(`scores/${critId}`).set(v);
+        }, 80); // cap writes
         r.oninput = ()=>{
           const critId = r.dataset.crit;
           const v = Number(r.value);
           wrap.querySelector(`[data-val="${critId}"]`).textContent = v;
-          if(state.studentRef) state.studentRef.child(`scores/${critId}`).set(v);
+          send(critId, v);
         };
       });
     }
 
-    // ===== RESULTS (live) =====
+    // ===== RESULTS =====
     function renderResults(students){
       const pool = Object.values(students || {});
       $('#participantsBadge').textContent = `${pool.length} participants`;
@@ -331,16 +357,78 @@
 
     async function endSessionKickAll(){
       if(!state.db) return;
+      if(!confirm('End session and kick everyone off?')) return; // confirmation
       const root = state.db.ref(basePath());
       await root.child('students').set({});
       await root.child('control/resetAt').set(firebase.database.ServerValue.TIMESTAMP);
-      // Note: clients return to Join view; no reloads
+    }
+
+    // ===== CRITERIA EDITOR =====
+    function openCriteriaEditor(){
+      const cont = $('#criteriaEditor');
+      cont.innerHTML = '';
+      // Work on a local draft so user can cancel
+      const draft = CRITERIA.map(c => ({ id: c.id, label: c.label }));
+
+      function renderDraft(){
+        cont.innerHTML = '';
+        draft.forEach((c, idx)=>{
+          const row = document.createElement('div');
+          row.className = 'rowline';
+          row.innerHTML = `
+            <span class="tiny" style="width:1.5rem;text-align:right">${idx+1}.</span>
+            <input type="text" value="${c.label.replace(/"/g,'&quot;')}" data-id="${c.id}" placeholder="Label">
+            <button type="button" data-del="${c.id}" class="btn-ghost">Remove</button>
+            <span class="pill tiny" title="ID (stable)">${c.id}</span>
+          `;
+          cont.appendChild(row);
+        });
+      }
+      renderDraft();
+
+      $('#addRowBtn').onclick = ()=>{
+        draft.push({ id: uid(), label: '' });
+        renderDraft();
+      };
+
+      cont.onclick = (e)=>{
+        const id = e.target.getAttribute('data-del');
+        if(id){
+          const ix = draft.findIndex(x=>x.id===id);
+          if(ix>=0){ draft.splice(ix,1); renderDraft(); }
+        }
+      };
+      cont.oninput = (e)=>{
+        const inp = e.target;
+        if(inp && inp.matches('input[type="text"]')){
+          const id = inp.getAttribute('data-id');
+          const row = draft.find(x=>x.id===id);
+          if(row) row.label = inp.value;
+        }
+      };
+
+      $('#saveCriteriaBtn').onclick = async ()=>{
+        // validate
+        const cleaned = draft.map(d=> ({ id: d.id, label: d.label.trim() }))
+                             .filter(d=> d.label.length>0);
+        if(cleaned.length===0){ alert('Need at least one criterion.'); return; }
+        // Save to DB (overwrite array)
+        await state.db.ref(`${basePath()}/criteria`).set(cleaned);
+        // Optionally zero new rows for everyone?
+        if(confirm('Zero scores for all current participants now?')){
+          await resetScoresKeepParticipants();
+        }
+        $('#criteriaDlg').close();
+      };
+      $('#closeCriteriaBtn').onclick = ()=> $('#criteriaDlg').close();
+      $('#criteriaDlg').showModal();
     }
 
     // ===== UI WIRES =====
     window.addEventListener('load', ()=> { dbInit(); });
 
     $('#joinBtn').onclick = ()=>{
+      if (state.joined) return; // double-join guard
       const name = $('#nameInput').value.trim();
       if(!name){ $('#joinStatus').textContent='Enter a name.'; return; }
       $('#joinStatus').textContent='';
@@ -350,10 +438,13 @@
     $('#loginBtn').onclick = ()=> $('#loginDlg').showModal();
     $('#unlockBtn').onclick = (e)=>{
       e.preventDefault();
-      if($('#pinInput').value === CONFIG.teacherPin){ show($('#resultsCard'), true); $('#loginDlg').close(); }
-      else alert('Wrong PIN');
+      if($('#pinInput').value === CONFIG.teacherPin){
+        show($('#resultsCard'), true);
+        $('#loginDlg').close();
+      } else alert('Wrong PIN');
     };
 
+    $('#editCriteriaBtn').onclick = openCriteriaEditor;
     $('#resetScores').onclick = resetScoresKeepParticipants;
     $('#endSession').onclick = endSessionKickAll;
   </script>
