@@ -296,42 +296,69 @@ $('#wizCancel').onclick = cancelHydrogenQuickCal;
 // Peaks etc. (drawing + legend) remain from your current build
 
 // Draw loop (unchanged core)
-function drawPlot(){
-  if(vid.readyState>=2){
-    ctxD.drawImage(vid,0,0,draw.width,draw.height);
-    ctxD.strokeStyle='rgba(88,166,255,.9)'; ctxD.lineWidth=2;
-    ctxD.strokeRect(0,roi.y,draw.width,roi.h);
+function drawPlot() {
+  if (vid.readyState >= 2) {
+    ctxD.drawImage(vid, 0, 0, draw.width, draw.height);
+    ctxD.strokeStyle = 'rgba(88,166,255,.9)';
+    ctxD.lineWidth = 2;
+    ctxD.strokeRect(0, roi.y, draw.width, roi.h);
   }
-  const P=getProfile(); if($('#bg').checked && !bgProfile) bgProfile=P;
-  const m=$('#mode').value;
-  const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
-  const Yb=($('#bg').checked && bgProfile)? Y.map((v,i)=>Math.max(0, v - bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'][i])) : Y;
 
-  plot.width=plot.clientWidth; plot.height=plot.clientHeight;
-  const Wp=plot.width, Hp=plot.height;
-  ctxP.fillStyle='#000'; ctxP.fillRect(0,0,Wp,Hp);
+  const P = getProfile();
+  if ($('#bg').checked && !bgProfile) bgProfile = P;
 
-  const nm0=pxToNm(0), nm1=pxToNm(draw.width);
-  if(isFinite(nm0)&&isFinite(nm1)){
-    const step=50, lo=Math.round(Math.min(nm0,nm1)/step)*step, hi=Math.max(nm0,nm1);
-    ctxP.strokeStyle='#333'; ctxP.fillStyle='#cfd6de'; ctxP.lineWidth=1; ctxP.font='16px ui-monospace,Consolas,Menlo';
-    for(let lam=lo;lam<=hi;lam+=step){
-      const x=(nmToPx(lam)/draw.width)*Wp;
-      if(isFinite(x)){ ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke(); ctxP.fillText(`${lam} nm`, x+4, 18); }
+  const m = $('#mode').value;
+  const Y = m === 'r' ? P.R : m === 'g' ? P.G : m === 'b' ? P.B : P.L;
+  const Yb = ($('#bg').checked && bgProfile)
+    ? Y.map((v, i) => Math.max(0, v - bgProfile[m === 'r' ? 'R' : m === 'g' ? 'G' : m === 'b' ? 'B' : 'L'][i]))
+    : Y;
+
+  plot.width = plot.clientWidth;
+  plot.height = plot.clientHeight;
+  const Wp = plot.width, Hp = plot.height;
+  ctxP.fillStyle = '#000';
+  ctxP.fillRect(0, 0, Wp, Hp);
+
+  const nm0 = pxToNm(0), nm1 = pxToNm(draw.width);
+  ctxP.font = '18px ui-monospace,Consolas,Menlo';
+  ctxP.fillStyle = '#cfd6de';
+  ctxP.strokeStyle = '#333';
+  ctxP.lineWidth = 1;
+
+  if (isFinite(nm0) && isFinite(nm1)) {
+    const span = Math.abs(nm1 - nm0);
+    const step = span > 500 ? 100 : 50;
+    const lo = Math.round(Math.min(nm0, nm1) / step) * step;
+    const hi = Math.max(nm0, nm1);
+    for (let lam = lo; lam <= hi; lam += step) {
+      const x = (nmToPx(lam) / draw.width) * Wp;
+      if (isFinite(x)) {
+        ctxP.beginPath();
+        ctxP.moveTo(x, 0);
+        ctxP.lineTo(x, Hp);
+        ctxP.stroke();
+        ctxP.fillText(`${lam}`, x + 4, 22); // single row, larger font
+      }
     }
   } else {
-    ctxP.fillStyle='#cfd6de'; ctxP.font='16px ui-monospace,Consolas,Menlo';
-    ctxP.fillText('Calibrate to show wavelength scale.', 8, 18);
+    ctxP.fillText('Calibrate to show wavelength scale.', 10, 24);
   }
 
-  const max=Math.max(...Yb)||1; ctxP.strokeStyle='#58a6ff'; ctxP.lineWidth=2; ctxP.beginPath();
-  for(let i=0;i<Yb.length;i++){ const x=(i/draw.width)*Wp, y=Hp-(Yb[i]/max)*(Hp-22)-6; (i===0)?ctxP.moveTo(x,y):ctxP.lineTo(x,y); }
+  const max = Math.max(...Yb) || 1;
+  ctxP.strokeStyle = '#58a6ff';
+  ctxP.lineWidth = 2;
+  ctxP.beginPath();
+  for (let i = 0; i < Yb.length; i++) {
+    const x = (i / draw.width) * Wp;
+    const y = Hp - (Yb[i] / max) * (Hp - 50) - 10; // expanded headroom
+    if (i === 0) ctxP.moveTo(x, y);
+    else ctxP.lineTo(x, y);
+  }
   ctxP.stroke();
-
-  // (Peak drawing left as-is from your current build)
 
   requestAnimationFrame(drawPlot);
 }
+
 function loop(){ requestAnimationFrame(loop); }
 requestAnimationFrame(drawPlot);
 </script>
