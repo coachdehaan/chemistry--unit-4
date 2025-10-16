@@ -34,6 +34,8 @@
   #log{white-space:pre-wrap;background:#0b0f14;border:1px solid var(--grid);border-radius:8px;padding:8px;min-height:64px}
   .small{font-size:12px;color:var(--mut)}
 
+  #clipWarn{color:#ff8a3c;display:none}
+
   /* Quick-Cal overlay */
   #wiz{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:1000}
   #wiz .card{background:#0f141b;border:1px solid var(--grid);border-radius:10px;max-width:520px;width:92%;padding:12px}
@@ -99,7 +101,7 @@
         <button id="snap">Snapshot PNG</button>
         <button id="csv">Export CSV</button>
       </div>
-      <div class="row small">Drag the <b>blue square</b> over a bright 1st-order band. Shift+drag to resize. Front camera is mirrored; dragging obeys mirror.</div>
+      <div class="row small">Drag the blue square to cover a bright 1st-order band. Shift+drag to resize. Front camera is mirrored; dragging obeys mirror.</div>
       <div class="row"><div id="log" class="small"></div></div>
     </div>
 
@@ -149,9 +151,11 @@
         <label>Gamma <input id="gamma" type="number" value="1.0" step="0.1" min="0.3" max="3" style="width:70px"></label>
         <label>Subtract BG <input id="bg" type="checkbox"></label>
         <label>Auto scale Y <input id="autoY" type="checkbox" checked></label>
+        <label>Log scale <input id="logY" type="checkbox"></label>
         <button id="findPeaks">Find Peaks</button>
         <label>Top N <input id="topN" type="number" value="5" min="1" max="10" style="width:56px"></label>
         <span class="small">Cursor: <span id="cursor">px: –, λ: – nm</span></span>
+        <span id="clipWarn" class="small">SENSOR CLIP: dim/close slit</span>
       </div>
 
       <div id="legend" style="padding-bottom:6px"></div>
@@ -185,7 +189,7 @@
         <ul>
           <li>Hover the graph for wavelength (nm) or pixels if uncalibrated.</li>
           <li>Click <span class="kbd">Find Peaks</span> to label the strongest lines.</li>
-          <li>Keep <span class="kbd">Auto scale Y</span> on to avoid clipping.</li>
+          <li>Keep <span class="kbd">Auto scale Y</span> on. Try <span class="kbd">Log scale</span> if a line is very bright.</li>
         </ul>
       </div>
       <div class="step">
@@ -196,7 +200,7 @@
         </ul>
       </div>
     </div>
-    <div class="callout">Tip: Dim room lights, align a single bright 1st-order band in the ROI, and avoid saturating the sensor.</div>
+    <div class="callout">Tip: If you see “SENSOR CLIP,” dim the source, narrow the slit, or move the lamp away to avoid saturation.</div>
   </div>
 </details>
 
@@ -405,7 +409,7 @@ if (navigator.mediaDevices?.addEventListener){
 function getProfile(){
   const rows = Math.max(1, Math.round(roi.h));
   const y0 = Math.max(0, Math.round(roi.y));
-  const sx = mirrorX ? (draw.width - roi.x - roi.w) : roi.x; // mirrored sampling for front cam
+  const sx = mirrorX ? (draw.width - roi.x - roi.w) : roi.x;
 
   const data = ctxD.getImageData(Math.round(sx), Math.round(y0), Math.round(roi.w), rows).data;
   const R=new Float32Array(roi.w),G=new Float32Array(roi.w),B=new Float32Array(roi.w);
@@ -467,12 +471,7 @@ function spectrumColor(lam){
 // ---------- CALIBRATION ----------
 let calibrated=false;
 let calib={kind:'linear',A:NaN,B:NaN,a:NaN,b:NaN,c:NaN}; // domain is 0..roi.w-1
-
-function pxToNm(px){
-  if(!calibrated) return NaN;
-  return (calib.kind==='linear') ? (calib.A*px + calib.B)
-                                 : (calib.a*px*px + calib.b*px + calib.c);
-}
+function pxToNm(px){ if(!calibrated) return NaN; return (calib.kind==='linear') ? (calib.A*px + calib.B) : (calib.a*px*px + calib.b*px + calib.c); }
 function nmToPx(nm){
   if(!calibrated) return NaN;
   if(calib.kind==='linear') return (nm - calib.B)/calib.A;
@@ -484,11 +483,17 @@ function nmToPx(nm){
   return NaN;
 }
 
-// Manual pick UI (px is relative to ROI width)
+// Manual pick UI
 let picking=null; const picksPx=[null,null,null]; const picksNm=[546.1,589.0,656.3];
 for(const l of document.querySelectorAll('.lam')) l.onchange=()=>{ picksNm[parseInt(l.dataset.idx,10)]=parseFloat(l.value); };
 for(const b of document.querySelectorAll('.pick')) b.onclick=()=>{ picking=parseInt(b.dataset.idx,10); log('Click a peak on the graph to assign pixel.'); };
 
+plot.addEventListener('mousemove',e=>{
+  const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
+  const px=Math.max(0, Math.min(roi.w-1, Math.round(x/plot.width*roi.w)));
+  const lam=pxToNm(px);
+  $('#cursor').textContent = calibrated ? `px:${px} , λ:${isFinite(lam)?lam.toFixed(1):'–'} nm` : `px:${px} (uncalibrated)`;
+});
 plot.addEventListener('click', e=>{
   if(picking===null && !HQ.active) return;
   const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
@@ -504,7 +509,6 @@ plot.addEventListener('click', e=>{
     else finishHydrogenQuickCal();
   }
 });
-
 $('#apply2').onclick=()=>{
   const [x1,x2]=[picksPx[0],picksPx[1]], [y1,y2]=[picksNm[0],picksNm[1]];
   if(x1==null||x2==null) return log('Pick two pixels first.');
@@ -581,7 +585,7 @@ function finishHydrogenQuickCal(){
 $('#quickH').onclick = startHydrogenQuickCal;
 $('#wizCancel').onclick = cancelHydrogenQuickCal;
 
-// ---------- AUTO-SCALE Y ----------
+// ---------- AUTO-SCALE / UTIL ----------
 function percentile(arr, q){
   if (!arr.length) return 1;
   const step = Math.ceil(arr.length / 2000);
@@ -592,7 +596,6 @@ function percentile(arr, q){
   return samp[idx] || 1;
 }
 
-// ---------- PEAKS UI ----------
 let peaks=[];
 $('#findPeaks').onclick=()=>{
   const Y=getProfile().L;
@@ -614,6 +617,7 @@ $('#findPeaks').onclick=()=>{
 };
 
 // ---------- DRAW LOOP ----------
+let bgProfile=null;
 function drawPlot(){
   // preview + ROI
   if(vid.readyState>=2){
@@ -625,10 +629,10 @@ function drawPlot(){
   const P=getProfile();
   if($('#bg').checked && !bgProfile) bgProfile=P;
   const m=$('#mode').value;
-  const Y = m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
+  const Yraw = m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
   const Yb = ($('#bg').checked && bgProfile)
-    ? Y.map((v,i)=>Math.max(0, v - bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'][i]))
-    : Y;
+    ? Yraw.map((v,i)=>Math.max(0, v - bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'][i]))
+    : Yraw;
 
   plot.width = plot.clientWidth; plot.height = plot.clientHeight;
   const Wp=plot.width, Hp=plot.height;
@@ -664,11 +668,27 @@ function drawPlot(){
   ctxP.fillText('Relative intensity (a.u.)', -Hp+10, 16);
   ctxP.restore();
 
-  // robust auto-scale
+  // --- sensor clip detection using raw preview ROI ---
+  let clip = false;
+  {
+    const sx = mirrorX ? (draw.width - roi.x - roi.w) : roi.x;
+    const data = ctxD.getImageData(Math.round(sx), Math.round(roi.y), Math.round(roi.w), Math.max(1,Math.round(roi.h))).data;
+    let sat = 0, total = data.length/4;
+    for (let i=0;i<data.length;i+=4){
+      if (data[i] >= 254 || data[i+1] >= 254 || data[i+2] >= 254) sat++;
+    }
+    clip = (sat/Math.max(1,total)) > 0.015; // >1.5% pixels saturated
+    $('#clipWarn').style.display = clip ? 'inline' : 'none';
+  }
+
+  // --- robust auto-scale (p99.9) + optional log scale ---
+  const useAuto = $('#autoY')?.checked;
+  const useLog  = $('#logY')?.checked;
+
   let scaleMax;
-  if ($('#autoY')?.checked) {
-    const p98 = percentile(Yb, 0.98);
-    scaleMax = Math.max(p98, 1e-6);
+  if (useAuto) {
+    const p999 = percentile(Yb, 0.999);
+    scaleMax = clip ? Math.max(p999 * 0.75, 1e-6) : Math.max(p999, 1e-6);
   } else {
     scaleMax = Math.max(...Yb) || 1;
   }
@@ -676,8 +696,9 @@ function drawPlot(){
   // plot curve
   ctxP.strokeStyle='#58a6ff'; ctxP.lineWidth=2; ctxP.beginPath();
   for(let i=0;i<Yb.length;i++){
+    const val = useLog ? Math.log10(1 + 9*(Yb[i]/(scaleMax||1))) : (Yb[i]/(scaleMax||1));
     const x = (i/roi.w)*Wp;
-    const y = Hp - (Yb[i]/scaleMax)*(Hp-70) - 20;
+    const y = Hp - Math.min(1,val) * (Hp - 70) - 20;
     if(i===0) ctxP.moveTo(x,y); else ctxP.lineTo(x,y);
   }
   ctxP.stroke();
@@ -695,7 +716,8 @@ function drawPlot(){
       ctxP.strokeStyle='#2a2f35'; ctxP.lineWidth=1; ctxP.strokeRect(x+4,6,w,20);
       ctxP.fillStyle=pk.color; ctxP.fillText(txt,x+4+pad,21);
 
-      const y = Hp - ( (pk.amp||scaleMax)/scaleMax )*(Hp-70) - 20;
+      const val = useLog ? Math.log10(1 + 9*((pk.amp||scaleMax)/(scaleMax||1))) : ((pk.amp||scaleMax)/(scaleMax||1));
+      const y = Hp - Math.min(1,val) * (Hp - 70) - 20;
       ctxP.beginPath(); ctxP.arc(x,y,3,0,Math.PI*2); ctxP.fill();
     }
   }
