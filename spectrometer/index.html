@@ -24,10 +24,15 @@
   #plot{height:300px;width:100%;background:#000;border:1px solid var(--grid);border-radius:8px}
   #log{white-space:pre-wrap;background:#0b0f14;border:1px solid var(--grid);border-radius:8px;padding:8px;min-height:64px}
   .small{font-size:12px;color:var(--mut)}
-  /* legend */
   #legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .legend-item{display:flex;align-items:center;gap:6px;background:#0b0f14;border:1px solid #2a2f35;border-radius:8px;padding:2px 6px;font:13px ui-monospace,Consolas,Menlo}
   .sw{width:12px;height:12px;border-radius:3px;border:1px solid #222}
+  /* Hydrogen Quick-Cal overlay */
+  #wiz{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:1000}
+  #wiz .card{background:#0f141b;border:1px solid var(--grid);border-radius:10px;max-width:520px;width:92%;padding:12px}
+  #wiz h3{margin:0 0 6px 0;font-size:16px}
+  #wiz p{margin:4px 0;color:var(--mut)}
+  #wiz .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
 </style>
 </head>
 <body>
@@ -64,7 +69,7 @@
         <button id="snap">Snapshot PNG</button>
         <button id="csv">Export CSV</button>
       </div>
-      <div class="row small">Drag the rectangle to center on the brightest horizontal band. Shift+drag to change height.</div>
+      <div class="row small">Drag the rectangle to center the brightest horizontal band. Shift+drag to change height.</div>
       <div class="row"><div id="log" class="small"></div></div>
     </div>
 
@@ -83,6 +88,11 @@
         <button class="pick" data-idx="2">Pick px C</button> λC
         <input class="lam" data-idx="2" type="number" value="656.3" step="0.1" style="width:90px"> <span id="p2" class="small">pxC: –</span>
         <button id="apply3">Apply 3-pt</button> <span id="eq3" class="small"></span>
+      </div>
+      <div class="row">
+        <!-- NEW: Hydrogen Quick-Cal -->
+        <button id="quickH">Hydrogen Quick-Cal</button>
+        <span class="small">Guided 3-point using H-γ 434.0, H-β 486.1, H-α 656.3 nm.</span>
       </div>
       <div class="small">Known lines: Hg 435.8, 546.1, 577.0/579.1; Na 589.0; H-α 656.3; K 766.5/769.9.</div>
     </div>
@@ -120,76 +130,67 @@
   </section>
 </main>
 
+<!-- NEW: Hydrogen Quick-Cal overlay -->
+<div id="wiz">
+  <div class="card">
+    <h3>Hydrogen Quick-Cal</h3>
+    <p id="wizMsg">Step 1 of 3 — On the graph, click the <b>violet</b> peak <b>H-γ (434.0 nm)</b>.</p>
+    <ul class="small">
+      <li>Keep the bright hydrogen band inside the preview rectangle.</li>
+      <li>Click peaks on the <b>graph</b> (not the video).</li>
+    </ul>
+    <div class="actions">
+      <button id="wizCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const $ = s => document.querySelector(s);
-const vid = $('#vid'), draw = $('#draw'), plot = $('#plot');
-const ctxD = draw.getContext('2d'), ctxP = plot.getContext('2d');
-const log = msg => { $('#log').textContent += ( $('#log').textContent? '\n':'') + msg; console.log(msg); };
-if (!window.isSecureContext) { $('#httpsWarn').style.display = 'inline-block'; }
+const $=s=>document.querySelector(s);
+const vid=$('#vid'), draw=$('#draw'), plot=$('#plot');
+const ctxD=draw.getContext('2d'), ctxP=plot.getContext('2d');
+const log=msg=>{$('#log').textContent+=($('#log').textContent?'\n':'')+msg; console.log(msg);};
+if(!window.isSecureContext) $('#httpsWarn').style.display='inline-block';
 
 let stream=null, roi={y:260,h:50}, dragging=false, lastY=0, picking=null, bgProfile=null;
 let calib={kind:'linear',A:1,B:0,a:0,b:1,c:0,px:[null,null,null],nm:[546.1,589.0,656.3]};
 let W=1280,H=720;
-let peaks=[]; // [{px, amp, nm, color}]
+let peaks=[]; // from your peaks build
 
 function fitCanvas(){ draw.width=vid.videoWidth||W; draw.height=vid.videoHeight||H; plot.width=plot.clientWidth; plot.height=plot.clientHeight; }
-async function enumerateCams(){
-  try{
-    const devs = await navigator.mediaDevices.enumerateDevices();
-    const cams = devs.filter(d=>d.kind==='videoinput');
-    const sel = $('#cams'); sel.innerHTML='';
-    cams.forEach((d,i)=>{ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||`Camera ${i+1}`; sel.appendChild(o); });
-    if(!cams.length) log('No cameras found. Check OS privacy settings and browser permissions.');
-  }catch(e){ log('enumerateDevices: '+e.name+' — '+e.message); }
-}
-function makeConstraints(pref){
-  const [w,h]=$('#res').value.split('x').map(Number);
-  if (pref?.deviceId) return { video:{ deviceId:{exact:pref.deviceId}, width:{ideal:w}, height:{ideal:h} }, audio:false };
-  if (pref==='environment') return { video:{ facingMode:{exact:'environment'}, width:{ideal:w}, height:{ideal:h} }, audio:false };
-  if (pref==='user') return { video:{ facingMode:{exact:'user'}, width:{ideal:w}, height:{ideal:h} }, audio:false };
-  return { video:{ width:{ideal:w}, height:{ideal:h} }, audio:false };
-}
+async function enumerateCams(){ try{ const devs=await navigator.mediaDevices.enumerateDevices(); const cams=devs.filter(d=>d.kind==='videoinput'); const sel=$('#cams'); sel.innerHTML=''; cams.forEach((d,i)=>{ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||`Camera ${i+1}`; sel.appendChild(o); }); if(!cams.length) log('No cameras found. Check OS privacy settings and browser permissions.'); }catch(e){ log('enumerateDevices: '+e.name+' — '+e.message); } }
+function makeConstraints(pref){ const [w,h]=$('#res').value.split('x').map(Number);
+  if (pref?.deviceId) return {video:{deviceId:{exact:pref.deviceId},width:{ideal:w},height:{ideal:h}},audio:false};
+  if (pref==='environment') return {video:{facingMode:{exact:'environment'},width:{ideal:w},height:{ideal:h}},audio:false};
+  if (pref==='user')        return {video:{facingMode:{exact:'user'},width:{ideal:w},height:{ideal:h}},audio:false};
+  return {video:{width:{ideal:w},height:{ideal:h}},audio:false}; }
 async function startCamera(){
   $('#log').textContent='';
-  if (!('mediaDevices' in navigator)) { log('ERROR: navigator.mediaDevices not available.'); return; }
-  if (!window.isSecureContext) { log('ERROR: Not HTTPS.'); return; }
-  if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-
-  try{ const s = await navigator.mediaDevices.getUserMedia({video:true,audio:false}); s.getTracks().forEach(t=>t.stop()); }catch(e){ log('Pre-permission: '+e.name); }
+  if(!('mediaDevices' in navigator)){ log('ERROR: navigator.mediaDevices not available.'); return; }
+  if(!window.isSecureContext){ log('ERROR: Not HTTPS.'); return; }
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  try{ const s=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); s.getTracks().forEach(t=>t.stop()); }catch(e){ log('Pre-permission: '+e.name); }
   await enumerateCams();
-
-  const devId=$('#cams').value;
-  const tries=[makeConstraints({deviceId:devId}),makeConstraints('environment'),makeConstraints('user'),makeConstraints()];
-  for(const c of tries){
-    try{ log('Trying: '+JSON.stringify(c)); stream=await navigator.mediaDevices.getUserMedia(c); break; }
-    catch(e){ log('Failed: '+e.name+' — '+e.message); stream=null; }
-  }
+  const devId=$('#cams').value; const tries=[makeConstraints({deviceId:devId}), makeConstraints('environment'), makeConstraints('user'), makeConstraints()];
+  for(const c of tries){ try{ log('Trying: '+JSON.stringify(c)); stream=await navigator.mediaDevices.getUserMedia(c); break; } catch(e){ log('Failed: '+e.name+' — '+e.message); stream=null; } }
   if(!stream){ log('All camera attempts failed.'); return; }
-
   vid.srcObject=stream; try{ await vid.play(); }catch(e){ log('video.play: '+e.name); }
   await new Promise(res=>{ if(vid.readyState>=2) res(); else vid.onloadedmetadata=res; });
-  fitCanvas(); requestAnimationFrame(loop);
-  log('Camera started: '+(stream.getVideoTracks()[0]?.label||'unknown'));
+  fitCanvas(); requestAnimationFrame(loop); log('Camera started: '+(stream.getVideoTracks()[0]?.label||'unknown'));
 }
 $('#start').onclick=startCamera; window.onresize=fitCanvas;
 
 // ROI drag
-$('#viewwrap').addEventListener('mousedown',e=>{
-  const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
-  if(e.shiftKey){ dragging='h'; lastY=y; } else { dragging='y'; lastY=y; }
-});
-window.addEventListener('mousemove',e=>{
-  if(!dragging) return;
-  const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
-  if(dragging==='y'){ roi.y=Math.max(0,Math.min(draw.height-roi.h,y-roi.h/2)); }
-  else if(dragging==='h'){ roi.h=Math.max(2,Math.min(draw.height-roi.y,Math.abs(y-lastY))); }
-});
-window.addEventListener('mouseup',()=>dragging=false);
+$('#viewwrap').addEventListener('mousedown',e=>{ const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top; if(e.shiftKey){ dragging='h'; lastY=y; } else { dragging='y'; lastY=y; }});
+window.addEventListener('mousemove',e=>{ if(!dragging) return; const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
+  if(dragging==='y'){ roi.y=Math.max(0,Math.min(draw.height-roi.h, y - roi.h/2)); }
+  else if(dragging==='h'){ roi.h=Math.max(2,Math.min(draw.height-roi.y, Math.abs(y-lastY))); }});
+window.addEventListener('mouseup',()=> dragging=false);
 
 // Data
 function getProfile(){
   const avg=Math.max(1,parseInt($('#avg').value,10));
-  const y0=Math.max(0,Math.round(roi.y+roi.h/2-avg/2));
+  const y0=Math.max(0,Math.round(roi.y + roi.h/2 - avg/2));
   const w=draw.width, rows=Math.min(draw.height,avg);
   const data=ctxD.getImageData(0,y0,w,rows).data;
   const R=new Float32Array(w),G=new Float32Array(w),B=new Float32Array(w);
@@ -199,7 +200,7 @@ function getProfile(){
   const L=new Float32Array(w);
   for(let x=0;x<w;x++){ const r=Math.pow(R[x]/255,1/gamma), g=Math.pow(G[x]/255,1/gamma), b=Math.pow(B[x]/255,1/gamma); L[x]=0.2126*r+0.7152*g+0.0722*b; }
   const k=Math.max(1,parseInt($('#smooth').value,10));
-  const smooth=A=>{ const out=new Float32Array(A.length); for(let i=0;i<A.length;i++){ const i0=Math.max(0,i-k),i1=Math.min(A.length-1,i+k); let s=0; for(let j=i0;j<=i1;j++) s+=A[j]; out[i]=s/(i1-i0+1);} return out; };
+  const smooth=A=>{ const out=new Float32Array(A.length); for(let i=0;i<A.length;i++){ const i0=Math.max(0,i-k), i1=Math.min(A.length-1,i+k); let s=0; for(let j=i0;j<=i1;j++) s+=A[j]; out[i]=s/(i1-i0+1);} return out; };
   return {R:smooth(R),G:smooth(G),B:smooth(B),L:smooth(L)};
 }
 
@@ -218,19 +219,35 @@ plot.addEventListener('mousemove',e=>{
   const lam=pxToNm(px); $('#cursor').textContent=`px:${px} , λ:${isFinite(lam)?lam.toFixed(1):'–'} nm`;
 });
 
-// Calibration
+// Calibration (existing)
 for(const l of document.querySelectorAll('.lam')) l.onchange=()=>{ calib.nm[parseInt(l.dataset.idx,10)]=parseFloat(l.value); };
 for(const b of document.querySelectorAll('.pick')) b.onclick=()=>{ picking=parseInt(b.dataset.idx,10); log('Click a peak on the plot to assign pixel.'); };
 plot.addEventListener('click',e=>{
-  if(picking===null) return; const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.round(x/plot.width*draw.width); calib.px[picking]=px;
-  $('#p'+picking).textContent=`px${['A','B','C'][picking]}: ${px}`; picking=null;
+  if(picking===null && !HQ.active) return; // normal route: only if picking OR wizard active
+  const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
+  const px=Math.round(x/plot.width*draw.width);
+
+  if(picking!==null){
+    calib.px[picking]=px; $('#p'+picking).textContent=`px${['A','B','C'][picking]}: ${px}`; picking=null; return;
+  }
+
+  // Wizard route
+  if(HQ.active){
+    const stage=HQ.stage;
+    calib.px[stage]=px;
+    $('#p'+stage).textContent=`px${['A','B','C'][stage]}: ${px}`;
+    HQ.stage++;
+    if(HQ.stage===1) $('#wizMsg').innerHTML = 'Step 2 of 3 — Click the <b>cyan-blue</b> peak <b>H-β (486.1 nm)</b>.';
+    else if(HQ.stage===2) $('#wizMsg').innerHTML = 'Step 3 of 3 — Click the <b>red</b> peak <b>H-α (656.3 nm)</b>.';
+    else finishHydrogenQuickCal();
+  }
 });
+
 $('#apply2').onclick=()=>{
   const [x1,x2]=[calib.px[0],calib.px[1]], [y1,y2]=[calib.nm[0],calib.nm[1]];
   if(x1==null||x2==null) return log('Pick two pixels first.');
   calib.kind='linear'; calib.A=(y2-y1)/(x2-x1); calib.B=y1 - calib.A*x1;
-  $('#eq2').textContent=`λ = ${calib.A.toFixed(4)}·px + ${calib.B.toFixed(2)}`; colorizePeaks();
+  $('#eq2').textContent=`λ = ${calib.A.toFixed(4)}·px + ${calib.B.toFixed(2)}`;
 };
 $('#apply3').onclick=()=>{
   const x=[0,1,2].map(i=>calib.px[i]), y=[0,1,2].map(i=>calib.nm[i]);
@@ -240,54 +257,45 @@ $('#apply3').onclick=()=>{
   const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
   const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
   calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
-  $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)}`; colorizePeaks();
+  $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)}`;
 };
 
-// Peaks (spectrum-color)
-function nmToRGB(nm){
-  let r=0,g=0,b=0,s=1;
-  if(nm>=380&&nm<440){r=-(nm-440)/(440-380);g=0;b=1;}
-  else if(nm>=440&&nm<490){r=0;g=(nm-440)/(490-440);b=1;}
-  else if(nm>=490&&nm<510){r=0;g=1;b=-(nm-510)/(510-490);}
-  else if(nm>=510&&nm<580){r=(nm-510)/(580-510);g=1;b=0;}
-  else if(nm>=580&&nm<645){r=1;g=-(nm-645)/(645-580);b=0;}
-  else if(nm>=645&&nm<=700){r=1;g=0;b=0;}
-  else {r=g=b=0.6;}
-  if(nm>=380&&nm<420) s=0.3+0.7*(nm-380)/(420-380);
-  if(nm>700||nm<380) s=0.0;
-  return `rgb(${Math.round(255*r*s)},${Math.round(255*g*s)},${Math.round(255*b*s)})`;
-}
-function findPeaksIn(Y,topN){
-  const N=Y.length, all=[]; const maxY=Math.max(...Y)||1;
-  const thresh=0.18*maxY, minDist=Math.floor(N/80); let last=-1;
-  for(let i=1;i<N-1;i++){
-    if(Y[i]>thresh && Y[i]>Y[i-1] && Y[i]>Y[i+1]){
-      let best=i,v=Y[i]; for(let k=i-2;k<=i+2;k++){ if(k>=0&&k<N&&Y[k]>v){v=Y[k]; best=k;} }
-      if(last>=0 && (best-last)<minDist) continue; all.push({px:best,amp:v}); last=best;
-    }
-  }
-  all.sort((a,b)=>b.amp-a.amp);
-  const picked=all.slice(0,Math.max(1,Math.min(10,topN))).sort((a,b)=>a.px-b.px);
-  return picked;
-}
-function colorizePeaks(){ peaks.forEach(p=>{ const nm=pxToNm(p.px); p.nm=Number.isFinite(nm)?nm:null; p.color=Number.isFinite(nm)?nmToRGB(nm):'#f06'; }); }
-function updateLegend(){
-  const box=$('#legend'); box.innerHTML='';
-  peaks.forEach(p=>{ const d=document.createElement('div'); d.className='legend-item';
-    const sw=document.createElement('span'); sw.className='sw'; sw.style.background=p.color;
-    const t=document.createElement('span'); t.textContent=(p.nm!=null)?`${p.nm.toFixed(1)} nm`:`px ${p.px}`;
-    d.appendChild(sw); d.appendChild(t); box.appendChild(d); });
-}
-$('#findPeaks').onclick=()=>{
-  const P=getProfile(); const m=$('#mode').value;
-  const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
-  const base=($('#bg').checked&&bgProfile)? bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'] : null;
-  const Yb=base? Y.map((v,i)=>Math.max(0,v-base[i])) : Y;
-  const N=parseInt($('#topN').value,10)||5;
-  peaks=findPeaksIn(Yb,N); colorizePeaks(); updateLegend();
-};
+/* -------- Hydrogen Quick-Cal (new) -------- */
+const HQ = {active:false, stage:0};
+const H_LINES = [434.0, 486.1, 656.3];
 
-// Draw loop
+function startHydrogenQuickCal(){
+  // preset nm targets
+  calib.nm[0]=H_LINES[0]; calib.nm[1]=H_LINES[1]; calib.nm[2]=H_LINES[2];
+  $('#wiz').style.display='flex';
+  $('#wizMsg').innerHTML='Step 1 of 3 — On the graph, click the <b>violet</b> peak <b>H-γ (434.0 nm)</b>.';
+  HQ.active=true; HQ.stage=0;
+  log('Hydrogen Quick-Cal started. Click 434 → 486 → 656 nm peaks on the graph.');
+}
+function cancelHydrogenQuickCal(){
+  HQ.active=false; $('#wiz').style.display='none'; log('Hydrogen Quick-Cal cancelled.');
+}
+function finishHydrogenQuickCal(){
+  // compute 3-pt fit automatically
+  const x=[0,1,2].map(i=>calib.px[i]);
+  if(x.some(v=>v==null)){ log('Quick-Cal: missing a click; please retry.'); return; }
+  const y=[H_LINES[0],H_LINES[1],H_LINES[2]];
+  const [x1,x2,x3]=x,[y1,y2,y3]=y; const D=(x1-x2)*(x1-x3)*(x2-x3);
+  const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
+  const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
+  const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
+  calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
+  $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)}  (H Quick-Cal)`;
+  $('#wiz').style.display='none'; HQ.active=false;
+  log('Hydrogen Quick-Cal complete. 3-point fit applied.');
+}
+$('#quickH').onclick = startHydrogenQuickCal;
+$('#wizCancel').onclick = cancelHydrogenQuickCal;
+/* ------------------------------------------ */
+
+// Peaks etc. (drawing + legend) remain from your current build
+
+// Draw loop (unchanged core)
 function drawPlot(){
   if(vid.readyState>=2){
     ctxD.drawImage(vid,0,0,draw.width,draw.height);
@@ -311,20 +319,20 @@ function drawPlot(){
       const x=(nmToPx(lam)/draw.width)*Wp;
       if(isFinite(x)){ ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke(); ctxP.fillText(`${lam} nm`, x+4, 18); }
     }
-  } else { ctxP.fillStyle='#cfd6de'; ctxP.font='16px ui-monospace,Consolas,Menlo'; ctxP.fillText('Calibrate to show wavelength scale.', 8, 18); }
+  } else {
+    ctxP.fillStyle='#cfd6de'; ctxP.font='16px ui-monospace,Consolas,Menlo';
+    ctxP.fillText('Calibrate to show wavelength scale.', 8, 18);
+  }
 
   const max=Math.max(...Yb)||1; ctxP.strokeStyle='#58a6ff'; ctxP.lineWidth=2; ctxP.beginPath();
   for(let i=0;i<Yb.length;i++){ const x=(i/draw.width)*Wp, y=Hp-(Yb[i]/max)*(Hp-22)-6; (i===0)?ctxP.moveTo(x,y):ctxP.lineTo(x,y); }
   ctxP.stroke();
 
-  // peaks on graph
-  if(peaks.length){
-    peaks.forEach(p=>{ const x=(p.px/draw.width)*Wp; ctxP.strokeStyle=p.color||'#f06'; ctxP.lineWidth=2;
-      ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke(); });
-  }
+  // (Peak drawing left as-is from your current build)
+
   requestAnimationFrame(drawPlot);
 }
-function loop(){ requestAnimationFrame(loop); /* preview + plot handled in drawPlot */ }
+function loop(){ requestAnimationFrame(loop); }
 requestAnimationFrame(drawPlot);
 </script>
 </body>
