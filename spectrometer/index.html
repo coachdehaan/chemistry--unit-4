@@ -11,14 +11,12 @@
   h1{font-size:16px;margin:0 8px 0 0}
   .warn{background:#331;color:#f6d7d7;padding:4px 8px;border-radius:8px;border:1px solid #633}
 
-  /* grid; keep panels aligned at the top */
   main{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;padding:12px;align-items:start}
   .panel{border:1px solid var(--grid);border-radius:10px;overflow:hidden;background:#0f141b;min-width:0}
   .p-h{padding:8px 10px;background:#0b0f14;border-bottom:1px solid var(--grid);font-weight:600}
   .p-b{padding:10px}
 
   #viewwrap{position:relative;background:#000}
-  /* mirror the whole preview block when using a front camera */
   #viewwrap.mirror{ transform: scaleX(-1); transform-origin:center; }
   video,canvas{max-width:100%;display:block}
   #draw{position:absolute;inset:0;pointer-events:none}
@@ -28,7 +26,6 @@
   input,select,button{background:#0b0f14;color:var(--ink);border:1px solid var(--grid);border-radius:8px;padding:6px 8px}
   button{cursor:pointer}
 
-  /* PLOT fills its wrapper; wrapper is synced to video size */
   #plot{width:100%;height:100%;min-height:480px;background:#000;border:1px solid var(--grid);border-radius:8px;display:block}
 
   #log{white-space:pre-wrap;background:#0b0f14;border:1px solid var(--grid);border-radius:8px;padding:8px;min-height:64px}
@@ -100,7 +97,6 @@
         <button id="apply3">Apply 3-pt</button> <span id="eq3" class="small"></span>
       </div>
       <div class="row">
-        <!-- NEW: Hydrogen Quick-Cal -->
         <button id="quickH">Hydrogen Quick-Cal</button>
         <span class="small">Guided 3-point using H-γ 434.0, H-β 486.1, H-α 656.3 nm.</span>
       </div>
@@ -112,7 +108,6 @@
   <section class="panel">
     <div class="p-h">Intensity vs Wavelength</div>
 
-    <!-- Plot block fills available height; wrapper (#plotWrap) is synced to video size -->
     <div class="p-b" style="display:flex;flex-direction:column;gap:10px;">
       <div id="plotWrap" style="flex:1;display:flex;">
         <canvas id="plot" style="flex:1;"></canvas>
@@ -129,23 +124,17 @@
         </label>
         <label>Gamma <input id="gamma" type="number" value="1.0" step="0.1" min="0.3" max="3" style="width:70px"></label>
         <label>Subtract BG <input id="bg" type="checkbox"></label>
+        <button id="findPeaks">Find Peaks</button>
+        <label>Top N <input id="topN" type="number" value="5" min="1" max="10" style="width:56px"></label>
         <span class="small">Cursor: <span id="cursor">px: –, λ: – nm</span></span>
       </div>
 
-      <div class="p-h">Peaks</div>
-      <div class="p-b" style="padding:0">
-        <div class="row" style="padding-top:8px">
-          <button id="findPeaks">Find Peaks</button>
-          <label>Top N <input id="topN" type="number" value="5" min="1" max="10" style="width:56px"></label>
-          <span class="small">Peaks are color-coded by approximate spectrum color.</span>
-        </div>
-        <div id="legend" style="padding-bottom:6px"></div>
-      </div>
+      <div id="legend" style="padding-bottom:6px"></div>
     </div>
   </section>
 </main>
 
-<!-- NEW: Hydrogen Quick-Cal overlay -->
+<!-- Hydrogen Quick-Cal overlay -->
 <div id="wiz">
   <div class="card">
     <h3>Hydrogen Quick-Cal</h3>
@@ -168,11 +157,19 @@ const log=msg=>{$('#log').textContent+=($('#log').textContent?'\n':'')+msg; cons
 if(!window.isSecureContext) $('#httpsWarn').style.display='inline-block';
 
 let stream=null, roi={y:260,h:50}, dragging=false, lastY=0, picking=null, bgProfile=null;
-let calib={kind:'linear',A:1,B:0,a:0,b:1,c:0,px:[null,null,null],nm:[546.1,589.0,656.3]};
 let W=1280,H=720;
-let peaks=[]; // from your peaks build
 
-/* ---- size sync: match plot size to video preview size (height + width) ---- */
+/* calibration state */
+let calibrated=false;
+let calib={kind:'linear',A:NaN,B:NaN,a:NaN,b:NaN,c:NaN,px:[null,null,null],nm:[546.1,589.0,656.3]} ;
+
+/* peak store */
+let peaks=[];
+
+/* mirror flag for math (so plot matches mirrored preview) */
+let mirrorX=false;
+
+/* sync plot size to preview size */
 function syncPlotSize(){
   const vw = $('#viewwrap');
   const wrap = $('#plotWrap');
@@ -180,13 +177,11 @@ function syncPlotSize(){
   const r = vw.getBoundingClientRect();
   wrap.style.height = (r.height || 480) + 'px';
   wrap.style.width  = (r.width  || 640) + 'px';
-  // ensure canvas uses current CSS size
   plot.width  = plot.clientWidth;
   plot.height = plot.clientHeight;
 }
 new ResizeObserver(syncPlotSize).observe($('#viewwrap'));
 window.addEventListener('resize', syncPlotSize);
-/* -------------------------------------------------------------------------- */
 
 function fitCanvas(){
   draw.width = vid.videoWidth || W;
@@ -205,7 +200,6 @@ async function enumerateCams(){
     if(!cams.length) log('No cameras found. Check OS privacy settings and browser permissions.');
   }catch(e){ log('enumerateDevices: '+e.name+' — '+e.message); }
 }
-
 function makeConstraints(pref){
   const [w,h]=$('#res').value.split('x').map(Number);
   if (pref?.deviceId) return {video:{deviceId:{exact:pref.deviceId},width:{ideal:w},height:{ideal:h}},audio:false};
@@ -213,16 +207,14 @@ function makeConstraints(pref){
   if (pref==='user')        return {video:{facingMode:{exact:'user'},width:{ideal:w},height:{ideal:h}},audio:false};
   return {video:{width:{ideal:w},height:{ideal:h}},audio:false};
 }
-
 function applyMirrorForFacingMode(){
   try{
     const facing = stream?.getVideoTracks?.()[0]?.getSettings?.().facingMode || '';
     const vw = $('#viewwrap');
-    if (facing === 'user') { vw.classList.add('mirror'); }
-    else { vw.classList.remove('mirror'); }
+    if (facing === 'user') { vw.classList.add('mirror'); mirrorX=true; }
+    else { vw.classList.remove('mirror'); mirrorX=false; }
   }catch{}
 }
-
 async function startCamera(){
   $('#log').textContent='';
   if(!('mediaDevices' in navigator)){ log('ERROR: navigator.mediaDevices not available.'); return; }
@@ -251,7 +243,7 @@ async function startCamera(){
 $('#start').onclick=startCamera;
 window.onresize=fitCanvas;
 
-// ROI drag
+/* ROI drag */
 $('#viewwrap').addEventListener('mousedown',e=>{
   const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
   if(e.shiftKey){ dragging='h'; lastY=y; } else { dragging='y'; lastY=y; }
@@ -265,65 +257,85 @@ window.addEventListener('mousemove',e=>{
 });
 window.addEventListener('mouseup',()=> dragging=false);
 
-// Data
+/* data slice */
 function getProfile(){
   const avg=Math.max(1,parseInt($('#avg').value,10));
   const y0=Math.max(0,Math.round(roi.y + roi.h/2 - avg/2));
   const w=draw.width, rows=Math.min(draw.height,avg);
   const data=ctxD.getImageData(0,y0,w,rows).data;
   const R=new Float32Array(w),G=new Float32Array(w),B=new Float32Array(w);
-  for(let row=0;row<rows;row++){ for(let x=0;x<w;x++){ const i=(row*w+x)*4; R[x]+=data[i]; G[x]+=data[i+1]; B[x]+=data[i+2]; } }
+  for(let row=0;row<rows;row++){
+    for(let x=0;x<w;x++){
+      const i=(row*w+x)*4; R[x]+=data[i]; G[x]+=data[i+1]; B[x]+=data[i+2];
+    }
+  }
   for(let x=0;x<w;x++){ R[x]/=rows; G[x]/=rows; B[x]/=rows; }
   const gamma=Math.max(0.3,parseFloat($('#gamma').value));
   const L=new Float32Array(w);
-  for(let x=0;x<w;x++){ const r=Math.pow(R[x]/255,1/gamma), g=Math.pow(G[x]/255,1/gamma), b=Math.pow(B[x]/255,1/gamma); L[x]=0.2126*r+0.7152*g+0.0722*b; }
+  for(let x=0;x<w;x++){
+    const r=Math.pow(R[x]/255,1/gamma), g=Math.pow(G[x]/255,1/gamma), b=Math.pow(B[x]/255,1/gamma);
+    L[x]=0.2126*r+0.7152*g+0.0722*b;
+  }
   const k=Math.max(1,parseInt($('#smooth').value,10));
-  const smooth=A=>{ const out=new Float32Array(A.length); for(let i=0;i<A.length;i++){ const i0=Math.max(0,i-k), i1=Math.min(A.length-1,i+k); let s=0; for(let j=i0;j<=i1;j++) s+=A[j]; out[i]=s/(i1-i0+1);} return out; };
-  return {R:smooth(R),G:smooth(G),B:smooth(B),L:smooth(L)};
+  const smooth=A=>{
+    const out=new Float32Array(A.length);
+    for(let i=0;i<A.length;i++){
+      const i0=Math.max(0,i-k), i1=Math.min(A.length-1,i+k);
+      let s=0; for(let j=i0;j<=i1;j++) s+=A[j];
+      out[i]=s/(i1-i0+1);
+    } return out;
+  };
+  const out={R:smooth(R),G:smooth(G),B:smooth(B),L:smooth(L)};
+  if(mirrorX){
+    // reverse so math matches mirrored preview
+    for(const key of ['R','G','B','L']) out[key] = Float32Array.from(out[key]).reverse();
+  }
+  return out;
 }
 
-// λ mapping
-function pxToNm(px){ return calib.kind==='linear' ? calib.A*px + calib.B : (calib.a*px*px + calib.b*px + calib.c); }
+/* wavelength mapping */
+function pxToNm(px){
+  if(!calibrated) return NaN;
+  return calib.kind==='linear' ? calib.A*px + calib.B : (calib.a*px*px + calib.b*px + calib.c);
+}
 function nmToPx(nm){
+  if(!calibrated) return NaN;
   if(calib.kind==='linear') return (nm - calib.B)/calib.A;
   const {a,b,c}=calib; const A=a,B=b,C=c-nm,D=B*B-4*A*C; if(D<=0) return NaN;
-  const r1=(-B+Math.sqrt(D))/(2*A), r2=(-B-Math.sqrt(D))/(2*A); return (r1>=0&&r1<=draw.width)?r1:r2;
+  const r1=(-B+Math.sqrt(D))/(2*A), r2=(-B-Math.sqrt(D))/(2*A);
+  return (r1>=0&&r1<=draw.width)?r1:r2;
 }
 
-// Cursor
+/* cursor readout */
 plot.addEventListener('mousemove',e=>{
   const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
   const px=Math.max(0,Math.min(draw.width-1,Math.round(x/plot.width*draw.width)));
-  const lam=pxToNm(px); $('#cursor').textContent=`px:${px} , λ:${isFinite(lam)?lam.toFixed(1):'–'} nm`;
+  const lam=pxToNm(px);
+  $('#cursor').textContent = calibrated ? `px:${px} , λ:${isFinite(lam)?lam.toFixed(1):'–'} nm`
+                                       : `px:${px} (uncalibrated)`;
 });
 
-// Calibration (existing + wizard)
+/* calibration UI */
 for(const l of document.querySelectorAll('.lam')) l.onchange=()=>{ calib.nm[parseInt(l.dataset.idx,10)]=parseFloat(l.value); };
 for(const b of document.querySelectorAll('.pick')) b.onclick=()=>{ picking=parseInt(b.dataset.idx,10); log('Click a peak on the plot to assign pixel.'); };
 plot.addEventListener('click',e=>{
-  if(picking===null && !HQ.active) return;
   const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
   const px=Math.round(x/plot.width*draw.width);
-
   if(picking!==null){
     calib.px[picking]=px; $('#p'+picking).textContent=`px${['A','B','C'][picking]}: ${px}`; picking=null; return;
   }
   if(HQ.active){
-    const stage=HQ.stage;
-    calib.px[stage]=px;
-    $('#p'+stage).textContent=`px${['A','B','C'][stage]}: ${px}`;
-    HQ.stage++;
-    if(HQ.stage===1) $('#wizMsg').innerHTML = 'Step 2 of 3 — Click the <b>cyan-blue</b> peak <b>H-β (486.1 nm)</b>.';
-    else if(HQ.stage===2) $('#wizMsg').innerHTML = 'Step 3 of 3 — Click the <b>red</b> peak <b>H-α (656.3 nm)</b>.';
+    const stage=HQ.stage; calib.px[stage]=px; $('#p'+stage).textContent=`px${['A','B','C'][stage]}: ${px}`;
+    HQ.stage++; if(HQ.stage===1) $('#wizMsg').innerHTML='Step 2 of 3 — Click the <b>cyan-blue</b> peak <b>H-β (486.1 nm)</b>.';
+    else if(HQ.stage===2) $('#wizMsg').innerHTML='Step 3 of 3 — Click the <b>red</b> peak <b>H-α (656.3 nm)</b>.';
     else finishHydrogenQuickCal();
   }
 });
-
 $('#apply2').onclick=()=>{
   const [x1,x2]=[calib.px[0],calib.px[1]], [y1,y2]=[calib.nm[0],calib.nm[1]];
   if(x1==null||x2==null) return log('Pick two pixels first.');
-  calib.kind='linear'; calib.A=(y2-y1)/(x2-x1); calib.B=y1 - calib.A*x1;
-  $('#eq2').textContent=`λ = ${calib.A.toFixed(4)}·px + ${calib.B.toFixed(2)}`;
+  calibrated=true; calib.kind='linear'; calib.A=(y2-y1)/(x2-x1); calib.B=y1 - calib.A*x1;
+  $('#eq2').textContent=`λ = ${calib.A.toFixed(4)}·px + ${calib.B.toFixed(2)} (linear)`;
 };
 $('#apply3').onclick=()=>{
   const x=[0,1,2].map(i=>calib.px[i]), y=[0,1,2].map(i=>calib.nm[i]);
@@ -332,41 +344,110 @@ $('#apply3').onclick=()=>{
   const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
   const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
   const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
-  calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
-  $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)}`;
+  calibrated=true; calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
+  $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)} (quadratic)`;
 };
 
-/* -------- Hydrogen Quick-Cal (new) -------- */
+/* Hydrogen Quick-Cal */
 const HQ = {active:false, stage:0};
 const H_LINES = [434.0, 486.1, 656.3];
-
 function startHydrogenQuickCal(){
-  calib.nm[0]=H_LINES[0]; calib.nm[1]=H_LINES[1]; calib.nm[2]=H_LINES[2];
+  calib.nm=[H_LINES[0],H_LINES[1],H_LINES[2]];
   $('#wiz').style.display='flex';
   $('#wizMsg').innerHTML='Step 1 of 3 — On the graph, click the <b>violet</b> peak <b>H-γ (434.0 nm)</b>.';
-  HQ.active=true; HQ.stage=0;
-  log('Hydrogen Quick-Cal started. Click 434 → 486 → 656 nm peaks on the graph.');
+  HQ.active=true; HQ.stage=0; log('Hydrogen Quick-Cal started.');
 }
-function cancelHydrogenQuickCal(){
-  HQ.active=false; $('#wiz').style.display='none'; log('Hydrogen Quick-Cal cancelled.');
-}
+function cancelHydrogenQuickCal(){ HQ.active=false; $('#wiz').style.display='none'; log('Hydrogen Quick-Cal cancelled.'); }
 function finishHydrogenQuickCal(){
-  const x=[0,1,2].map(i=>calib.px[i]);
-  if(x.some(v=>v==null)){ log('Quick-Cal: missing a click; please retry.'); return; }
+  const x=[0,1,2].map(i=>calib.px[i]); if(x.some(v=>v==null)){ log('Quick-Cal: missing a click; retry.'); return; }
   const y=[H_LINES[0],H_LINES[1],H_LINES[2]];
   const [x1,x2,x3]=x,[y1,y2,y3]=y; const D=(x1-x2)*(x1-x3)*(x2-x3);
   const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
   const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
   const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
-  calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
+  calibrated=true; calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
   $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)}  (H Quick-Cal)`;
-  $('#wiz').style.display='none'; HQ.active=false;
-  log('Hydrogen Quick-Cal complete. 3-point fit applied.');
+  $('#wiz').style.display='none'; HQ.active=false; log('Hydrogen Quick-Cal complete.');
 }
 $('#quickH').onclick = startHydrogenQuickCal;
 $('#wizCancel').onclick = cancelHydrogenQuickCal;
-/* ------------------------------------------ */
 
+/* spectrum color helper */
+function spectrumColor(lam){
+  if(!isFinite(lam)) return '#9aa0a6';
+  if(lam<450) return '#7b6cff';
+  if(lam<495) return '#3ea0ff';
+  if(lam<510) return '#00cfd8';
+  if(lam<560) return '#10d27a';
+  if(lam<590) return '#f2c84b';
+  if(lam<620) return '#ff8a3c';
+  return '#ff5866';
+}
+
+/* compute displayed spectrum */
+function currentSpectrum(){
+  const P=getProfile();
+  const m=$('#mode').value;
+  const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
+  const Yb=($('#bg').checked && bgProfile)
+    ? Y.map((v,i)=>Math.max(0, v - bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'][i]))
+    : Y;
+  return Yb;
+}
+
+/* simple peak finder */
+function findLocalPeaks(Y, opts={}){
+  const minDist = opts.minDist ?? 12;
+  const relProm = opts.relProm ?? 0.08;
+  const absMax = Math.max(...Y) || 1;
+  const minProm = absMax * relProm;
+  const cand=[];
+  for(let i=1;i<Y.length-1;i++){
+    if(Y[i]>Y[i-1] && Y[i]>=Y[i+1]){
+      const w=8;
+      const i0=Math.max(0,i-w), i1=Math.min(Y.length-1,i+w);
+      let base=Infinity;
+      for(let j=i0;j<=i1;j++){
+        if(j<i-w/2 || j>i+w/2) base=Math.min(base,Y[j]);
+      }
+      const prom=Y[i] - (isFinite(base)?base:0);
+      if(prom>=minProm) cand.push({idx:i, amp:Y[i], prom});
+    }
+  }
+  cand.sort((a,b)=>b.amp-a.amp);
+  const kept=[];
+  for(const c of cand){
+    if(kept.every(k=>Math.abs(k.idx-c.idx)>=minDist)) kept.push(c);
+  }
+  return kept;
+}
+
+/* Find Peaks button */
+$('#findPeaks').onclick = ()=>{
+  const Y = currentSpectrum();
+  const N = Math.max(1, Math.min(10, parseInt($('#topN').value,10) || 5));
+  const found = findLocalPeaks(Y, {minDist: Math.round(draw.width/120) || 10, relProm: 0.07});
+  found.sort((a,b)=>b.amp-a.amp);
+  const top = found.slice(0,N);
+
+  peaks = top.map(p=>{
+    const px = p.idx;
+    const lam = pxToNm(px);
+    return {px, lam, amp:p.amp, color:spectrumColor(lam)};
+  });
+
+  const leg = $('#legend'); leg.innerHTML='';
+  for(const pk of peaks){
+    const item=document.createElement('div'); item.className='legend-item';
+    const sw=document.createElement('span'); sw.className='sw'; sw.style.background=pk.color;
+    const label=document.createElement('span');
+    label.textContent = isFinite(pk.lam) ? `${pk.lam.toFixed(1)} nm  (px ${pk.px})` : `px ${pk.px} (uncalibrated)`;
+    item.appendChild(sw); item.appendChild(label); leg.appendChild(item);
+  }
+  log(`Find Peaks: ${peaks.length} peaks.`);
+};
+
+/* draw loop */
 function drawPlot() {
   if (vid.readyState >= 2) {
     ctxD.drawImage(vid, 0, 0, draw.width, draw.height);
@@ -375,14 +456,7 @@ function drawPlot() {
     ctxD.strokeRect(0, roi.y, draw.width, roi.h);
   }
 
-  const P = getProfile();
-  if ($('#bg').checked && !bgProfile) bgProfile = P;
-
-  const m = $('#mode').value;
-  const Y = m === 'r' ? P.R : m === 'g' ? P.G : m === 'b' ? P.B : P.L;
-  const Yb = ($('#bg').checked && bgProfile)
-    ? Y.map((v, i) => Math.max(0, v - bgProfile[m === 'r' ? 'R' : m === 'g' ? 'G' : m === 'b' ? 'B' : 'L'][i]))
-    : Y;
+  const Yb = currentSpectrum();
 
   // canvas sizing respects CSS + sync
   plot.width = plot.clientWidth;
@@ -392,42 +466,72 @@ function drawPlot() {
   ctxP.fillStyle = '#000';
   ctxP.fillRect(0, 0, Wp, Hp);
 
-  const nm0 = pxToNm(0), nm1 = pxToNm(draw.width);
+  /* axes + ticks */
   ctxP.font = '18px ui-monospace,Consolas,Menlo';
   ctxP.fillStyle = '#cfd6de';
   ctxP.strokeStyle = '#333';
   ctxP.lineWidth = 1;
 
-  if (isFinite(nm0) && isFinite(nm1)) {
-    const span = Math.abs(nm1 - nm0);
-    const step = span > 500 ? 100 : 50;
-    const lo = Math.round(Math.min(nm0, nm1) / step) * step;
-    const hi = Math.max(nm0, nm1);
-    for (let lam = lo; lam <= hi; lam += step) {
-      const x = (nmToPx(lam) / draw.width) * Wp;
-      if (isFinite(x)) {
-        ctxP.beginPath();
-        ctxP.moveTo(x, 0);
-        ctxP.lineTo(x, Hp);
-        ctxP.stroke();
-        ctxP.fillText(`${lam}`, x + 4, 22);
-      }
+  // X ticks
+  if (calibrated){
+    const VIS_MIN=380, VIS_MAX=780;
+    const step = 50;
+    for(let lam=VIS_MIN; lam<=VIS_MAX; lam+=step){
+      const px = nmToPx(lam);
+      if(!isFinite(px)) continue;
+      const x = (px / draw.width) * Wp;
+      ctxP.beginPath(); ctxP.moveTo(x, 0); ctxP.lineTo(x, Hp); ctxP.stroke();
+      ctxP.fillText(`${lam} nm`, x+4, 22);
     }
+    // x-axis label
+    ctxP.fillText('Wavelength (nm)', 10, Hp-10);
   } else {
-    ctxP.fillText('Calibrate to show wavelength scale.', 10, 24);
+    const stepPx = 200;
+    for(let p=0; p<=draw.width; p+=stepPx){
+      const x=(p/draw.width)*Wp;
+      ctxP.beginPath(); ctxP.moveTo(x, 0); ctxP.lineTo(x, Hp); ctxP.stroke();
+      ctxP.fillText(`${p} px`, x+4, 22);
+    }
+    ctxP.fillText('Pixel', 10, Hp-10);
   }
 
+  // Y label
+  ctxP.save();
+  ctxP.rotate(-Math.PI/2);
+  ctxP.fillText('Relative intensity (a.u.)', -Hp+10, 16);
+  ctxP.restore();
+
+  // plot curve with headroom
   const max = Math.max(...Yb) || 1;
   ctxP.strokeStyle = '#58a6ff';
   ctxP.lineWidth = 2;
   ctxP.beginPath();
   for (let i = 0; i < Yb.length; i++) {
     const x = (i / draw.width) * Wp;
-    const y = Hp - (Yb[i] / max) * (Hp - 50) - 10; // headroom
-    if (i === 0) ctxP.moveTo(x, y);
-    else ctxP.lineTo(x, y);
+    const y = Hp - (Yb[i] / max) * (Hp - 50) - 10;
+    if (i === 0) ctxP.moveTo(x, y); else ctxP.lineTo(x, y);
   }
   ctxP.stroke();
+
+  // draw peaks
+  if (peaks.length){
+    for(const pk of peaks){
+      const x = (pk.px / draw.width) * Wp;
+      ctxP.strokeStyle = pk.color; ctxP.lineWidth = 2;
+      ctxP.beginPath(); ctxP.moveTo(x, 0); ctxP.lineTo(x, Hp); ctxP.stroke();
+
+      const txt = isFinite(pk.lam) ? `${pk.lam.toFixed(1)} nm` : `px ${pk.px}`;
+      const pad = 4; ctxP.font='16px ui-monospace,Consolas,Menlo';
+      const w = ctxP.measureText(txt).width + pad*2;
+      ctxP.fillStyle = 'rgba(15,20,27,0.9)';
+      ctxP.fillRect(x+4, 6, w, 20);
+      ctxP.strokeStyle='#2a2f35'; ctxP.lineWidth=1; ctxP.strokeRect(x+4, 6, w, 20);
+      ctxP.fillStyle = pk.color; ctxP.fillText(txt, x+4+pad, 21);
+
+      const y = Hp - (pk.amp / max) * (Hp - 50) - 10;
+      ctxP.fillStyle = pk.color; ctxP.beginPath(); ctxP.arc(x, y, 3, 0, Math.PI*2); ctxP.fill();
+    }
+  }
 
   requestAnimationFrame(drawPlot);
 }
