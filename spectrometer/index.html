@@ -312,19 +312,17 @@ let W=1280,H=720;
 /* calibration state */
 let calibrated=false;
 let calib={kind:'linear',A:NaN,B:NaN,a:NaN,b:NaN,c:NaN,px:[null,null,null],nm:[546.1,589.0,656.3]} ;
-/* expose for diagram */
-window.calib = calib;
+window.calib = calib; // for diagram
 
-/* peak store */
-let peaks=[];
+/* peaks + mirror */
+let peaks=[]; let mirrorX=false;
 
-/* mirror flag for math (so plot matches mirrored preview) */
-let mirrorX=false;
+/* selection memory */
+let selectedDeviceId = null;
 
-/* sync plot size to preview size */
+/* sync plot to preview size */
 function syncPlotSize(){
-  const vw = $('#viewwrap');
-  const wrap = $('#plotWrap');
+  const vw = $('#viewwrap'); const wrap = $('#plotWrap');
   if (!vw || !wrap) return;
   const r = vw.getBoundingClientRect();
   wrap.style.height = (r.height || 480) + 'px';
@@ -345,13 +343,24 @@ function fitCanvas(){
 
 async function enumerateCams(){
   try{
-    const devs=await navigator.mediaDevices.enumerateDevices();
-    const cams=devs.filter(d=>d.kind==='videoinput');
-    const sel=$('#cams'); sel.innerHTML='';
-    cams.forEach((d,i)=>{ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||`Camera ${i+1}`; sel.appendChild(o); });
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const cams = devs.filter(d=>d.kind==='videoinput');
+    const sel = $('#cams');
+    const prev = selectedDeviceId || sel.value || '';
+    sel.innerHTML='';
+    cams.forEach((d,i)=>{
+      const o=document.createElement('option');
+      o.value=d.deviceId;
+      o.textContent=d.label || `Camera ${i+1}`;
+      sel.appendChild(o);
+    });
+    if (cams.some(c=>c.deviceId===prev)) { sel.value = prev; }
+    else if (cams[0]) { sel.value = cams[0].deviceId; }
+    selectedDeviceId = sel.value || null;
     if(!cams.length) log('No cameras found. Check OS privacy settings and browser permissions.');
   }catch(e){ log('enumerateDevices: '+e.name+' — '+e.message); }
 }
+
 function makeConstraints(pref){
   const [w,h]=$('#res').value.split('x').map(Number);
   if (pref?.deviceId) return {video:{deviceId:{exact:pref.deviceId},width:{ideal:w},height:{ideal:h}},audio:false};
@@ -359,6 +368,7 @@ function makeConstraints(pref){
   if (pref==='user')        return {video:{facingMode:{exact:'user'},width:{ideal:w},height:{ideal:h}},audio:false};
   return {video:{width:{ideal:w},height:{ideal:h}},audio:false};
 }
+
 function applyMirrorForFacingMode(){
   try{
     const facing = stream?.getVideoTracks?.()[0]?.getSettings?.().facingMode || '';
@@ -367,33 +377,76 @@ function applyMirrorForFacingMode(){
     else { vw.classList.remove('mirror'); mirrorX=false; }
   }catch{}
 }
-async function startCamera(){
-  $('#log').textContent='';
-  if(!('mediaDevices' in navigator)){ log('ERROR: navigator.mediaDevices not available.'); return; }
-  if(!window.isSecureContext){ log('ERROR: Not HTTPS.'); return; }
-  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-  try{ const s=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); s.getTracks().forEach(t=>t.stop()); }catch(e){ log('Pre-permission: '+e.name); }
-  await enumerateCams();
 
-  const devId=$('#cams').value;
-  const tries=[makeConstraints({deviceId:devId}), makeConstraints('environment'), makeConstraints('user'), makeConstraints()];
-  for(const c of tries){
-    try{ log('Trying: '+JSON.stringify(c)); stream=await navigator.mediaDevices.getUserMedia(c); break; }
-    catch(e){ log('Failed: '+e.name+' — '+e.message); stream=null; }
+/* unified starter that honors device + resolution */
+async function startWith(deviceId){
+  selectedDeviceId = deviceId || $('#cams').value || selectedDeviceId || null;
+
+  // stop previous
+  if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+
+  const tries = [
+    makeConstraints(selectedDeviceId ? {deviceId:selectedDeviceId} : null),
+    makeConstraints('environment'),
+    makeConstraints('user'),
+    makeConstraints()
+  ];
+  let lastErr=null;
+  for (const c of tries){
+    try{
+      log('Trying: '+JSON.stringify(c));
+      stream = await navigator.mediaDevices.getUserMedia(c);
+      break;
+    }catch(e){ lastErr=e; log('Failed: '+e.name+' — '+e.message); }
   }
   if(!stream){ log('All camera attempts failed.'); return; }
 
-  vid.srcObject=stream;
-  try{ await vid.play(); }catch(e){ log('video.play: '+e.name); }
+  vid.srcObject = stream;
+  try{ await vid.play(); }catch(e){ log('video.play: '+e.name+' — '+e.message); }
 
   await new Promise(res=>{ if(vid.readyState>=2) res(); else vid.onloadedmetadata=res; });
   applyMirrorForFacingMode();
   fitCanvas();
   requestAnimationFrame(loop);
   log('Camera started: '+(stream.getVideoTracks()[0]?.label||'unknown'));
+
+  // refresh labels (Firefox) after permission
+  setTimeout(()=>{ enumerateCams().catch(()=>{}); }, 800);
 }
-$('#start').onclick=startCamera;
-window.onresize=fitCanvas;
+
+/* Start button boot */
+$('#start').onclick = async ()=>{
+  $('#log').textContent='';
+  if(!('mediaDevices' in navigator)){ log('ERROR: navigator.mediaDevices not available.'); return; }
+  if(!window.isSecureContext){ log('ERROR: Not HTTPS.'); return; }
+
+  // primer to get device labels
+  try{ const s=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); s.getTracks().forEach(t=>t.stop()); }catch(e){ log('Pre-permission: '+e.name); }
+
+  await enumerateCams();
+  await startWith($('#cams').value);
+};
+
+/* React to dropdown changes */
+$('#cams').addEventListener('change', async (e)=>{
+  selectedDeviceId = e.target.value;
+  await startWith(selectedDeviceId);
+});
+$('#res').addEventListener('change', async ()=>{
+  await startWith(selectedDeviceId);
+});
+
+/* Hot-plug handling */
+if (navigator.mediaDevices && 'addEventListener' in navigator.mediaDevices){
+  navigator.mediaDevices.addEventListener('devicechange', async ()=>{
+    const prev = selectedDeviceId;
+    await enumerateCams();
+    if (selectedDeviceId !== prev){
+      log('Devices changed; switching to '+($('#cams').selectedOptions[0]?.textContent||'camera'));
+      await startWith(selectedDeviceId);
+    }
+  });
+}
 
 /* ROI drag */
 $('#viewwrap').addEventListener('mousedown',e=>{
@@ -456,8 +509,7 @@ function nmToPx(nm){
   const r1=(-B+Math.sqrt(D))/(2*A), r2=(-B-Math.sqrt(D))/(2*A);
   return (r1>=0&&r1<=draw.width)?r1:r2;
 }
-/* expose for concept diagram */
-window.pxToNm = pxToNm;
+window.pxToNm = pxToNm; // for diagram
 
 /* cursor readout */
 plot.addEventListener('mousemove',e=>{
@@ -575,7 +627,7 @@ function findLocalPeaks(Y, opts={}){
   return kept;
 }
 
-/* Find Peaks button */
+/* Find Peaks */
 $('#findPeaks').onclick = ()=>{
   const Y = currentSpectrum();
   const N = Math.max(1, Math.min(10, parseInt($('#topN').value,10) || 5));
@@ -611,7 +663,6 @@ function drawPlot() {
 
   const Yb = currentSpectrum();
 
-  // canvas sizing respects CSS + sync
   plot.width = plot.clientWidth;
   plot.height = plot.clientHeight;
   const Wp = plot.width, Hp = plot.height;
@@ -665,7 +716,7 @@ function drawPlot() {
   }
   ctxP.stroke();
 
-  // draw peaks
+  // peaks
   if (peaks.length){
     for(const pk of peaks){
       const x = (pk.px / draw.width) * Wp;
