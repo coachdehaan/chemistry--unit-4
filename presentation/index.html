@@ -1,611 +1,361 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Webcam Spectrometer – Mr. D</title>
-<style>
-  :root{--bg:#0d1117;--ink:#e6edf3;--mut:#8b949e;--acc:#58a6ff;--grid:#30363d}
-  html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,Segoe UI,Roboto,Helvetica,Arial}
-  header{padding:8px 12px;border-bottom:1px solid var(--grid);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  h1{font-size:16px;margin:0 8px 0 0}
-  .warn{background:#331;color:#f6d7d7;padding:4px 8px;border-radius:8px;border:1px solid #633}
-
-  main{display:grid;grid-template-columns:1.15fr 1fr;gap:12px;padding:12px;align-items:start}
-  .panel{border:1px solid var(--grid);border-radius:10px;overflow:hidden;background:#0f141b;min-width:0}
-  .p-h{padding:8px 10px;background:#0b0f14;border-bottom:1px solid var(--grid);font-weight:600}
-  .p-b{padding:10px}
-
-  #viewwrap{position:relative;background:#000}
-  #viewwrap.mirror{transform:scaleX(-1);transform-origin:center}
-  video,canvas{max-width:100%;display:block}
-  #draw{position:absolute;inset:0;pointer-events:none}
-
-  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
-  label{color:#9aa0a6}
-  input,select,button{background:#0b0f14;color:var(--ink);border:1px solid var(--grid);border-radius:8px;padding:6px 8px}
-  button{cursor:pointer}
-
-  #plot{width:100%;height:100%;min-height:520px;background:#000;border:1px solid var(--grid);border-radius:8px;display:block}
-  #legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-  .legend-item{display:flex;align-items:center;gap:6px;background:#0b0f14;border:1px solid #2a2f35;border-radius:8px;padding:2px 6px;font:13px ui-monospace,Consolas,Menlo}
-  .sw{width:12px;height:12px;border-radius:3px;border:1px solid #222}
-
-  #log{white-space:pre-wrap;background:#0b0f14;border:1px solid var(--grid);border-radius:8px;padding:8px;min-height:64px}
-  .small{font-size:12px;color:var(--mut)}
-
-  #clipWarn{color:#ff8a3c;display:none}
-
-  /* Quick-Cal overlay */
-  #wiz{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:1000}
-  #wiz .card{background:#0f141b;border:1px solid var(--grid);border-radius:10px;max-width:520px;width:92%;padding:12px}
-  #wiz h3{margin:0 0 6px 0;font-size:16px}
-  #wiz p{margin:4px 0;color:var(--mut)}
-  #wiz .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
-
-  /* Student Quick Sheet */
-  details.quick{border:1px solid var(--grid); border-radius:10px; background:#0f141b; margin:12px 12px 0; overflow:hidden}
-  details.quick > summary{cursor:pointer; padding:10px; font-weight:600; background:#0b0f14; list-style:none; border-bottom:1px solid var(--grid)}
-  .quick-body{padding:12px}
-  .steps{counter-reset: step; display:grid; gap:8px}
-  .steps .step{border:1px dashed #2a2f35; border-radius:10px; padding:10px}
-  .steps .step h4{margin:0 0 6px 0; font-size:14px}
-  .steps .step h4::before{counter-increment: step; content: counter(step) ". "; color:var(--acc)}
-  .kbd{font:12px ui-monospace,Consolas,Menlo; background:#11161d; border:1px solid #2a2f35; border-radius:6px; padding:2px 6px}
-  .callout{background:#10161f;border:1px solid #2a2f35;border-radius:8px;padding:8px;margin-top:8px;color:#cfd6de}
-
-  section.diagram{margin:12px}
-  @media print{
-    header,#legend,#log{display:none!important}
-    main{grid-template-columns:1fr!important;padding:0}
-    .panel{border:none}
-    details.quick{border:none}
-    details.quick > summary{background:none;border:none;padding:0}
-    .quick-body{padding:0}
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiveGauge</title>
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;margin:24px;line-height:1.35;background:#f7f7f7}
+    .wrap{max-width:1000px;margin:0 auto}
+    .row{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+    .card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:14px 16px}
+    .btn{padding:.5rem 1rem;border-radius:.75rem;border:1px solid #111;background:#111;color:#fff;font-weight:600}
+    .btn-ghost{padding:.35rem .65rem;border-radius:.65rem;border:1px solid #ddd;background:#fff}
+    .badge{font-size:.7rem;padding:.2rem .5rem;border-radius:9999px;background:#eef}
+    input[type="range"]{width:100%}
+    .mut{color:#666;font-size:12px}
+    .tiny{font-size:11px;line-height:1.2}
+  </style>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 </head>
 <body>
-<header>
-  <h1>Webcam Spectrometer</h1>
-  <span id="httpsWarn" class="warn" style="display:none">Not HTTPS. Use GitHub Pages (https://).</span>
-</header>
-
-<main>
-  <!-- LEFT: PREVIEW + CONTROLS + CALIBRATION -->
-  <section class="panel">
-    <div class="p-h">Live Preview</div>
-    <div class="p-b" id="viewwrap">
-      <video id="vid" playsinline muted autoplay></video>
-      <canvas id="draw"></canvas>
-    </div>
-
-    <div class="p-h">Capture / Controls</div>
-    <div class="p-b">
-      <div class="row">
-        <button id="start">Start Camera</button>
-        <label>Camera <select id="cams"></select></label>
-        <label>Resolution
-          <select id="res">
-            <option>640x480</option>
-            <option selected>1280x720</option>
-            <option>1920x1080</option>
-          </select>
-        </label>
+  <div class="wrap">
+    <header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h1 style="margin:0">LiveGauge</h1>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="connectionBadge" class="badge">offline (local)</span>
+        <button id="loginBtn" class="btn-ghost" title="Teacher login">Login</button>
       </div>
-      <div class="row">
-        <label>ROI size <input id="roiSize" type="number" value="220" min="120" max="500" style="width:80px"></label>
-        <label>Avg rows <input id="avg" type="number" value="12" min="1" max="200" style="width:70px"></label>
-        <label>Smooth <input id="smooth" type="number" value="3" min="1" max="25" style="width:60px"></label>
-        <label>Log scale <input id="logY" type="checkbox"></label>
-        <button id="snap">Snapshot PNG</button>
-        <button id="csv">Export CSV</button>
-      </div>
-      <div class="row small">Drag the blue square to cover a bright 1st-order band. Shift+drag to resize. Front camera is mirrored; dragging obeys mirror.</div>
-      <div class="row"><div id="log" class="small"></div></div>
-    </div>
+    </header>
 
-    <div class="p-h">Calibration</div>
-    <div class="p-b">
-      <div class="row">
-        <b>2-point:</b>
-        <button class="pick" data-idx="0">Pick px A</button> λA
-        <input class="lam" data-idx="0" type="number" value="546.1" step="0.1" style="width:90px"> <span id="p0" class="small">pxA: –</span>
-        <button class="pick" data-idx="1">Pick px B</button> λB
-        <input class="lam" data-idx="1" type="number" value="589.0" step="0.1" style="width:90px"> <span id="p1" class="small">pxB: –</span>
-        <button id="apply2">Apply 2-pt</button> <span id="eq2" class="small"></span>
-      </div>
-      <div class="row">
-        <b>3-point:</b>
-        <button class="pick" data-idx="2">Pick px C</button> λC
-        <input class="lam" data-idx="2" type="number" value="656.3" step="0.1" style="width:90px"> <span id="p2" class="small">pxC: –</span>
-        <button id="apply3">Apply 3-pt</button> <span id="eq3" class="small"></span>
-      </div>
-      <div class="row">
-        <button id="autoH">Auto-Cal (H₂)</button>
-        <button id="autoRough">Auto-Cal (Rough)</button>
-        <button id="quickH">Hydrogen Quick-Cal (guided)</button>
-        <span class="small">H-γ 434.0, H-β 486.1, H-α 656.3 nm.</span>
-      </div>
-      <div class="small">Other lines: Hg 435.8, 546.1, 577.0/579.1; Na 589.0; K 766.5/769.9.</div>
-    </div>
-  </section>
+    <div class="row">
+      <!-- LEFT: Student join + sliders -->
+      <section style="display:flex;flex-direction:column;gap:12px">
+        <div id="joinCard" class="card">
+          <h3 style="margin:0 0 8px 0">Join</h3>
+          <label class="mut">Your name</label>
+          <input id="nameInput" style="width:100%;padding:.6rem;border:1px solid #ccc;border-radius:10px" placeholder="e.g., Jane S." />
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <button id="joinBtn" class="btn">Join & Rate</button>
+            <span id="joinStatus" class="mut"></span>
+          </div>
+        </div>
 
-  <!-- RIGHT: PLOT + PEAKS -->
-  <section class="panel">
-    <div class="p-h">Intensity vs Wavelength</div>
-    <div class="p-b" style="display:flex;flex-direction:column;gap:10px;">
-      <div id="plotWrap" style="flex:1;display:flex;">
-        <canvas id="plot" style="flex:1;"></canvas>
-      </div>
+        <div id="rateCard" class="card" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h3 style="margin:0">Rate (0–10)</h3>
+            <div class="mut">You: <span id="whoami" style="font-weight:600">—</span></div>
+          </div>
+          <div id="criteriaList" style="margin-top:10px;display:flex;flex-direction:column;gap:12px"></div>
+          <div style="margin-top:10px;display:flex;justify-content:flex-end;align-items:center">
+            <div class="mut">Totals update as you slide.</div>
+          </div>
+        </div>
+      </section>
 
-      <div class="row">
-        <label>Channel
-          <select id="mode">
-            <option value="lum" selected>Luminance</option>
-            <option value="r">Red</option>
-            <option value="g">Green</option>
-            <option value="b">Blue</option>
-          </select>
-        </label>
-        <label>Subtract BG <input id="bg" type="checkbox"></label>
-        <button id="findPeaks">Find Peaks</button>
-        <label>Top N <input id="topN" type="number" value="5" min="1" max="10" style="width:56px"></label>
-        <span class="small">Cursor: <span id="cursor">px: –, λ: – nm</span></span>
-        <span id="clipWarn" class="small">SENSOR CLIP: dim/close slit</span>
-      </div>
+      <!-- RIGHT: Results (teacher PIN) -->
+      <aside id="resultsCard" class="card" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <h3 style="margin:0">Results (Live)</h3>
+          <span id="participantsBadge" class="badge">0 participants</span>
+        </div>
 
-      <div id="legend" style="padding-bottom:6px"></div>
-    </div>
-  </section>
-</main>
+        <div id="resultsSummary" style="display:flex;flex-direction:column;gap:6px"></div>
 
-<!-- Hydrogen Quick-Cal overlay -->
-<div id="wiz">
-  <div class="card">
-    <h3>Hydrogen Quick-Cal</h3>
-    <p id="wizMsg">Step 1 of 3 — On the graph, click the <b>violet</b> peak <b>H-γ (434.0 nm)</b>.</p>
-    <ul class="small">
-      <li>Keep the bright hydrogen band inside the ROI square.</li>
-      <li>Click peaks on the <b>graph</b> (not the video).</li>
-    </ul>
-    <div class="actions">
-      <button id="wizCancel">Cancel</button>
+        <div style="border-top:1px solid #eee;margin-top:10px;padding-top:8px" class="tiny">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Final average</strong> (by category)</div>
+            <div style="font-weight:700;font-size:18px" id="finalAverage">0.00</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+            <div>Class total average</div>
+            <div id="classTotalAvg" style="font-weight:600">0.00</div>
+          </div>
+          <div class="mut tiny">Max total = <span id="maxTotal"></span></div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="tiny" style="font-weight:700;margin-bottom:4px">Participants</div>
+          <div id="participantsList" class="tiny" style="color:#333"></div>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button id="resetScores" class="btn-ghost" title="Zero all scores; keep participants">Reset Scores</button>
+          <button id="endSession" class="btn-ghost" title="Kick everyone off and clear">End Session</button>
+        </div>
+      </aside>
     </div>
   </div>
-</div>
 
-<script>
-const $=s=>document.querySelector(s);
-const vid=$('#vid'), draw=$('#draw'), plot=$('#plot');
-const ctxD=draw.getContext('2d'), ctxP=plot.getContext('2d');
-const log=msg=>{$('#log').textContent+=($('#log').textContent?'\n':'')+msg; console.log(msg);};
-if(!window.isSecureContext) $('#httpsWarn').style.display='inline-block';
+  <!-- Teacher login modal -->
+  <dialog id="loginDlg" style="border:none;border-radius:12px;max-width:380px;width:92%">
+    <form method="dialog" style="padding:16px">
+      <h3 style="margin:0 0 8px 0">Teacher Login</h3>
+      <p class="mut tiny" style="margin-top:0">Enter PIN to unlock the Results panel.</p>
+      <input id="pinInput" type="password" style="width:100%;padding:.6rem;border:1px solid #ccc;border-radius:10px" placeholder="PIN" />
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button id="unlockBtn" class="btn" value="unlock">Unlock</button>
+        <button class="btn-ghost" value="cancel">Close</button>
+      </div>
+    </form>
+  </dialog>
 
-let stream=null, mirrorX=false;
-let dragging=false, last={x:0,y:0};
-let selectedDeviceId=null;
+  <script>
+    // ===== CONFIG =====
+    const CONFIG = {
+      classKey: "chem_presentation",
+      teacherPin: "2468",
+      useFirebase: true,
+      firebaseConfig: {
+        apiKey: "AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
+        authDomain: "presentation-83d1f.firebaseapp.com",
+        databaseURL: "https://presentation-83d1f-default-rtdb.firebaseio.com",
+        projectId: "presentation-83d1f",
+        storageBucket: "presentation-83d1f.firebasestorage.app",
+        messagingSenderId: "132406143951",
+        appId: "1:132406143951:web:9695690023bd3f2aedc0ba"
+      }
+    };
+    const MAX_SCORE = 10;
 
-// ROI square
-let roi={x:200,y:200,w:220,h:220};
-function clampROI(){
-  roi.w=Math.max(120,Math.min(draw.width,roi.w)); roi.h=roi.w;
-  roi.x=Math.max(0,Math.min(draw.width-roi.w,roi.x));
-  roi.y=Math.max(0,Math.min(draw.height-roi.h,roi.y));
-}
-$('#roiSize').oninput=()=>{roi.w=roi.h=parseInt($('#roiSize').value,10)||220;clampROI();};
+    // ===== STABLE, SHARED CRITERIA =====
+    const DEFAULT_CRITERIA = [
+      { id: "content",    label: "Content Accuracy" },
+      { id: "clarity",    label: "Clarity" },
+      { id: "visuals",    label: "Visuals" },
+      { id: "engagement", label: "Engagement" },
+      { id: "delivery",   label: "Delivery" }
+    ];
+    let CRITERIA = DEFAULT_CRITERIA.slice();
 
-// Dragging (mirror-aware)
-$('#viewwrap').addEventListener('mousedown',e=>{
-  const r=$('#viewwrap').getBoundingClientRect();
-  last.x=e.clientX-r.left; last.y=e.clientY-r.top;
-  dragging = e.shiftKey ? 'resize' : 'move';
-});
-window.onmousemove = e => {
-  if (!dragging) return;
-  const r = $('#viewwrap').getBoundingClientRect();
-  const x = e.clientX - r.left;
-  const y = e.clientY - r.top;
-  let dx = x - last.x;
-  let dy = y - last.y;
-  if (mirrorX && dragging === 'move') dx = -dx;
-  if (dragging === 'move') { roi.x += dx; roi.y += dy; }
-  else { roi.w += dy; roi.h = roi.w; $('#roiSize').value = Math.round(roi.w); }
-  last.x = x; last.y = y; clampROI();
-};
-window.onmouseup = ()=> dragging=false;
+    // ===== STATE =====
+    const state = { db:null, me:{id:null,name:null}, online:false, studentRef:null, joined:false };
+    let cacheStudents = {};
+    const basePath = () => `/classes/${CONFIG.classKey}`;
 
-// Fit canvases
-function fitCanvas(){
-  draw.width = vid.videoWidth || 1280;
-  draw.height = vid.videoHeight || 720;
-  clampROI();
-  plot.width = plot.clientWidth;
-  plot.height = plot.clientHeight;
-}
-window.addEventListener('resize', fitCanvas);
+    // ===== UTIL =====
+    const $ = s => document.querySelector(s);
+    const $$ = s => Array.from(document.querySelectorAll(s));
+    function mean(a){ return a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0; }
+    function show(el,on){ el.style.display = on ? '' : 'none'; }
+    function badge(txt){ $('#connectionBadge').textContent = txt; }
+    function uid(){ return Math.random().toString(36).slice(2,9); }
 
-// ---------- CAMERA ----------
-function makeConstraints(deviceId){
-  const [w,h] = ($('#res').value||'1280x720').split('x').map(Number);
-  return deviceId
-    ? {video:{deviceId:{exact:deviceId}, width:{ideal:w}, height:{ideal:h}}, audio:false}
-    : {video:{width:{ideal:w}, height:{ideal:h}}, audio:false};
-}
-async function enumerateCams(){
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const cams = devices.filter(d=>d.kind==='videoinput');
-  const sel = $('#cams');
-  const keep = selectedDeviceId || sel.value;
-  sel.innerHTML='';
-  cams.forEach((d,i)=>{
-    const opt=document.createElement('option');
-    opt.value=d.deviceId; opt.textContent=d.label||`Camera ${i+1}`;
-    sel.appendChild(opt);
-  });
-  if (keep && cams.some(c=>c.deviceId===keep)) sel.value = keep;
-  else if (cams[0]) sel.value = cams[0].deviceId;
-  selectedDeviceId = sel.value || null;
-  if(!cams.length) log('No cameras found.');
-}
-async function startWith(deviceId){
-  if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-  try{
-    stream=await navigator.mediaDevices.getUserMedia(makeConstraints(deviceId));
-  }catch(e1){
-    log(`getUserMedia failed: ${e1.name} — ${e1.message}`); stream=null;
-    try{ stream=await navigator.mediaDevices.getUserMedia(makeConstraints(null)); }
-    catch(e2){ log(`Fallback failed: ${e2.name} — ${e2.message}`); return; }
-  }
-  vid.srcObject=stream; try{ await vid.play(); }catch(e){ log('video.play: '+e.name); }
-  const facing = stream.getVideoTracks()[0]?.getSettings()?.facingMode || '';
-  mirrorX = (facing==='user');
-  if (mirrorX) $('#viewwrap').classList.add('mirror'); else $('#viewwrap').classList.remove('mirror');
-  await new Promise(res=>{ if(vid.readyState>=2) res(); else vid.onloadedmetadata=res; });
-  fitCanvas(); requestAnimationFrame(loop);
-  log('Camera started: '+(stream.getVideoTracks()[0]?.label||'unknown'));
-  setTimeout(()=>{ enumerateCams().catch(()=>{}); }, 400);
-}
-$('#start').onclick = async ()=>{
-  $('#log').textContent='';
-  if(!('mediaDevices' in navigator)){ log('ERROR: mediaDevices not available.'); return; }
-  if(!window.isSecureContext){ log('ERROR: Not HTTPS.'); return; }
-  try{ const s=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); s.getTracks().forEach(t=>t.stop()); }catch{}
-  await enumerateCams(); await startWith($('#cams').value);
-};
-$('#cams').addEventListener('change', async e=>{ selectedDeviceId=e.target.value; await startWith(selectedDeviceId); });
-$('#res').addEventListener('change', async ()=>{ await startWith(selectedDeviceId || $('#cams').value); });
-if (navigator.mediaDevices?.addEventListener){
-  navigator.mediaDevices.addEventListener('devicechange', async ()=>{
-    const prev = selectedDeviceId; await enumerateCams();
-    if ($('#cams').value !== prev){ await startWith($('#cams').value); }
-  });
-}
+    // ===== RESET TOKEN GUARD (persist without reload) =====
+    function seenKey(k){ return `present_seen_${CONFIG.classKey}_${k}`; }
+    function getSeen(k){ return Number(localStorage.getItem(seenKey(k)) || 0); }
+    function setSeen(k, v){ localStorage.setItem(seenKey(k), String(v)); }
 
-// ---------- DATA PIPE ----------
-function getProfile(){
-  const rows = Math.max(1, Math.round(roi.h));
-  const y0 = Math.max(0, Math.round(roi.y));
-  const sx = mirrorX ? (draw.width - roi.x - roi.w) : roi.x;
-
-  const data = ctxD.getImageData(Math.round(sx), Math.round(y0), Math.round(roi.w), rows).data;
-  const R=new Float32Array(roi.w),G=new Float32Array(roi.w),B=new Float32Array(roi.w);
-  for(let r=0;r<rows;r++){
-    for(let x=0;x<roi.w;x++){
-      const i=(r*roi.w + x)*4; R[x]+=data[i]; G[x]+=data[i+1]; B[x]+=data[i+2];
+    // ===== FIREBASE INIT (no double init) =====
+    function dbInit(){
+      if(!CONFIG.useFirebase){ badge('offline (local)'); return; }
+      try{
+        if (firebase.apps && firebase.apps.length === 0) {
+          firebase.initializeApp(CONFIG.firebaseConfig);
+        }
+        state.db = firebase.database();
+        firebase.auth().signInAnonymously().then(()=>{
+          state.online = true; badge('online (firebase)');
+          initCriteriaThenAttach();
+        }).catch(()=>{ state.online=false; badge('offline (local)'); });
+      }catch(e){ state.online=false; badge('offline (local)'); }
     }
-  }
-  for(let x=0;x<roi.w;x++){ R[x]/=rows; G[x]/=rows; B[x]/=rows; }
 
-  const gamma=Math.max(0.3, parseFloat($('#gamma')?.value||'1.0'));
-  const L=new Float32Array(roi.w);
-  for(let x=0;x<roi.w;x++){
-    const r=Math.pow(R[x]/255,1/gamma), g=Math.pow(G[x]/255,1/gamma), b=Math.pow(B[x]/255,1/gamma);
-    L[x]=0.2126*r+0.7152*g+0.0722*b;
-  }
-  // horizontal smoothing
-  const k=Math.max(1,parseInt($('#smooth').value,10)||1);
-  const smooth=A=>{
-    const out=new Float32Array(A.length);
-    for(let i=0;i<A.length;i++){
-      const i0=Math.max(0,i-k), i1=Math.min(A.length-1,i+k);
-      let s=0; for(let j=i0;j<=i1;j++) s+=A[j]; out[i]=s/(i1-i0+1);
-    } return out;
-  };
-  return {R:smooth(R),G:smooth(G),B:smooth(B),L:smooth(L)};
-}
+    async function initCriteriaThenAttach(){
+      const cRef = state.db.ref(`${basePath()}/criteria`);
+      const snap = await cRef.get();
+      if(!snap.exists()){ await cRef.set(DEFAULT_CRITERIA); CRITERIA = DEFAULT_CRITERIA.slice(); }
+      else { const val = snap.val() || []; CRITERIA = Array.isArray(val) ? val : Object.values(val); }
 
-// ---------- PEAKS ----------
-function findLocalPeaks(Y,{relProm=0.06}={}){
-  const minDist=Math.max(8,Math.round(Y.length/40));
-  const cand=[]; const N=Y.length;
-  // min/max normalization for detection
-  let ymin=Infinity,ymax=-Infinity;
-  for(let i=0;i<N;i++){ if(Y[i]<ymin)ymin=Y[i]; if(Y[i]>ymax)ymax=Y[i]; }
-  const eps = 1e-9; const span = Math.max(eps, ymax - ymin);
-  const Yn = Y.map(v=>(v - ymin)/span);
-  const minProm = relProm;
+      // Listen for teacher soft/hard resets (guarded, no reloads)
+      state.db.ref(`${basePath()}/control/softResetAt`).on('value', s=>{
+        const t = Number(s.val() || 0);
+        if(t && t > getSeen('soft')){
+          setSeen('soft', t);
+          // Zero sliders visually & write zeros if joined
+          if(state.joined){
+            $$('#criteriaList input[type=range]').forEach(r=>{
+              r.value = 0;
+              r.dispatchEvent(new Event('input'));
+            });
+          }
+        }
+      });
 
-  for(let i=1;i<N-1;i++){
-    if(Yn[i]>Yn[i-1] && Yn[i]>=Yn[i+1]){
-      const left = Yn[Math.max(0,i-8)], right = Yn[Math.min(N-1,i+8)];
-      const base = Math.min(left??Yn[i], right??Yn[i]);
-      const prom = Yn[i]-base;
-      if (prom>=minProm) cand.push({idx:i, amp:Yn[i]});
+      state.db.ref(`${basePath()}/control/resetAt`).on('value', s=>{
+        const t = Number(s.val() || 0);
+        if(!t || t <= getSeen('hard')) return;
+        setSeen('hard', t);
+        // Hard reset: return to Join view WITHOUT reloading
+        goToJoinView();
+      });
+
+      attachListeners();
     }
-  }
-  cand.sort((a,b)=>b.amp-a.amp);
-  const kept=[];
-  for(const c of cand){ if(kept.every(k=>Math.abs(k.idx-c.idx)>=minDist)) kept.push(c); }
-  return kept;
-}
-function spectrumColor(lam){
-  if(!isFinite(lam)) return '#9aa0a6';
-  if(lam<450) return '#7b6cff';
-  if(lam<495) return '#3ea0ff';
-  if(lam<510) return '#00cfd8';
-  if(lam<560) return '#10d27a';
-  if(lam<590) return '#f2c84b';
-  if(lam<620) return '#ff8a3c';
-  return '#ff5866';
-}
 
-// ---------- CALIBRATION ----------
-let calibrated=false;
-let calib={kind:'linear',A:NaN,B:NaN,a:NaN,b:NaN,c:NaN}; // domain is 0..roi.w-1
-function pxToNm(px){
-  if(!calibrated){
-    const t = px / Math.max(1,(roi.w-1));
-    return 380 + t*(780-380);
-  }
-  return (calib.kind==='linear') ? (calib.A*px + calib.B) : (calib.a*px*px + calib.b*px + calib.c);
-}
-function nmToPx(nm){
-  if(!calibrated){
-    const t = (nm - 380) / (780 - 380);
-    return t * (roi.w-1);
-  }
-  if(calib.kind==='linear') return (nm - calib.B)/calib.A;
-  const {a,b,c}=calib; const A=a,B=b,C=c-nm,D=B*B-4*A*C;
-  if(D<=0) return NaN;
-  const r1=(-B+Math.sqrt(D))/(2*A), r2=(-B-Math.sqrt(D))/(2*A);
-  if (r1>=0 && r1<=roi.w) return r1;
-  if (r2>=0 && r2<=roi.w) return r2;
-  return NaN;
-}
+    function attachListeners(){
+      state.db.ref(`${basePath()}/students`).on('value', snap=>{
+        cacheStudents = snap.val() || {};
+        renderResults(cacheStudents);
+      });
 
-// Manual pick UI
-let picking=null; const picksPx=[null,null,null]; const picksNm=[546.1,589.0,656.3];
-for(const l of document.querySelectorAll('.lam')) l.onchange=()=>{ picksNm[parseInt(l.dataset.idx,10)]=parseFloat(l.value); };
-for(const b of document.querySelectorAll('.pick')) b.onclick=()=>{ picking=parseInt(b.dataset.idx,10); log('Click a peak on the graph to assign pixel.'); };
-
-plot.addEventListener('mousemove',e=>{
-  const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.max(0, Math.min(roi.w-1, Math.round(x/plot.width*roi.w)));
-  const lam=pxToNm(px);
-  $('#cursor').textContent = `px:${px} , λ:${isFinite(lam)?lam.toFixed(1):'–'} nm`;
-});
-plot.addEventListener('click', e=>{
-  if(picking===null && !HQ.active) return;
-  const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.max(0, Math.min(roi.w-1, Math.round(x/plot.width*roi.w)));
-  if (picking!==null){
-    picksPx[picking]=px; $('#p'+picking).textContent=`px${['A','B','C'][picking]}: ${px}`; picking=null; return;
-  }
-  if(HQ.active){
-    const stage=HQ.stage; picksPx[stage]=px; $('#p'+stage).textContent=`px${['A','B','C'][stage]}: ${px}`;
-    HQ.stage++; if(HQ.stage===1) $('#wizMsg').innerHTML='Step 2 of 3 — Click the <b>H-β (486.1 nm)</b> peak (cyan/blue).';
-    else if(HQ.stage===2) $('#wizMsg').innerHTML='Step 3 of 3 — Click the <b>H-α (656.3 nm)</b> peak (red).';
-    else finishHydrogenQuickCal();
-  }
-});
-$('#apply2').onclick=()=>{
-  const [x1,x2]=[picksPx[0],picksPx[1]], [y1,y2]=[picksNm[0],picksNm[1]];
-  if(x1==null||x2==null) return log('Pick two pixels first.');
-  calibrated=true; calib.kind='linear';
-  calib.A=(y2-y1)/(x2-x1); calib.B=y1 - calib.A*x1;
-  $('#eq2').textContent=`λ = ${calib.A.toFixed(4)}·px + ${calib.B.toFixed(2)} (linear)`;
-};
-$('#apply3').onclick=()=>{
-  const x=[0,1,2].map(i=>picksPx[i]), y=[0,1,2].map(i=>picksNm[i]);
-  if(x.some(v=>v==null)) return log('Pick three pixels first.');
-  const [x1,x2,x3]=x,[y1,y2,y3]=y; const D=(x1-x2)*(x1-x3)*(x2-x3);
-  const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
-  const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
-  const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
-  calibrated=true; calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
-  $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)} (quadratic)`;
-};
-
-// Auto-Cal (H₂)
-$('#autoH').onclick=()=>{
-  const Y=getProfile().L;
-  const found=findLocalPeaks(Y,{relProm:0.05});
-  if(found.length<3){ log('Auto-Cal (H₂): need ≥3 bright H lines in ROI.'); return; }
-  found.sort((a,b)=>a.idx-b.idx);
-  const left=found[0], right=found[found.length-1];
-  let mid=found[Math.floor(found.length/2)];
-  if (right.idx-left.idx < Math.max(60, roi.w*0.35)) { log('Auto-Cal (H₂): peaks too close.'); return; }
-  const x1=left.idx, x2=mid.idx, x3=right.idx;
-  const y1=434.0,   y2=486.1,   y3=656.3;
-  const D=(x1-x2)*(x1-x3)*(x2-x3);
-  const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
-  const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
-  const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
-  calib={kind:'quad',a,b,c}; calibrated=true;
-  $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)} (H₂ auto)`;
-  log(`Auto-Cal (H₂): px [${x1}, ${x2}, ${x3}] → λ [434, 486.1, 656.3] nm`);
-};
-
-// Auto-Cal (Rough)
-$('#autoRough').onclick=()=>{
-  const Y=getProfile().L;
-  const found=findLocalPeaks(Y,{relProm:0.04});
-  if(found.length<1){ log('Auto-Cal (Rough): no peaks — enlarge ROI / brighten.'); return; }
-  found.sort((a,b)=>a.idx-b.idx);
-  const left=found[0], right=found[found.length-1];
-  let x1=0, x2=roi.w-1, y1=380, y2=780;
-  if (right.idx - left.idx >= Math.max(40, roi.w*0.25)){ x1=left.idx; x2=right.idx; }
-  const A=(y2-y1)/(x2-x1), B=y1 - A*x1;
-  calib={kind:'linear',A,B}; calibrated=true;
-  $('#eq2').textContent=`λ = ${A.toFixed(4)}·px + ${B.toFixed(2)} (rough)`;
-  log(`Auto-Cal (Rough): px [${x1}, ${x2}] → λ ~[380,780] nm`);
-};
-
-// Hydrogen Quick-Cal wizard
-const HQ = {active:false, stage:0};
-const H_LINES = [434.0, 486.1, 656.3];
-function startHydrogenQuickCal(){
-  $('#wiz').style.display='flex';
-  $('#wizMsg').innerHTML='Step 1 of 3 — On the graph, click <b>H-γ (434.0 nm)</b> (violet).';
-  HQ.active=true; HQ.stage=0; log('Hydrogen Quick-Cal started.');
-}
-function cancelHydrogenQuickCal(){ HQ.active=false; $('#wiz').style.display='none'; log('Hydrogen Quick-Cal cancelled.'); }
-function finishHydrogenQuickCal(){
-  const x=[0,1,2].map(i=>picksPx[i]); if(x.some(v=>v==null)){ log('Quick-Cal: missing a click; retry.'); return; }
-  const y=[H_LINES[0],H_LINES[1],H_LINES[2]];
-  const [x1,x2,x3]=x,[y1,y2,y3]=y; const D=(x1-x2)*(x1-x3)*(x2-x3);
-  const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
-  const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
-  const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
-  calibrated=true; calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
-  $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)}  (H Quick-Cal)`;
-  $('#wiz').style.display='none'; HQ.active=false; log('Hydrogen Quick-Cal complete.');
-}
-$('#quickH').onclick = startHydrogenQuickCal;
-$('#wizCancel').onclick = cancelHydrogenQuickCal;
-
-// ---------- DRAW LOOP + NORMALIZATION ----------
-let bgProfile=null;
-function drawPlot(){
-  // preview + ROI
-  if(vid.readyState>=2){
-    ctxD.drawImage(vid,0,0,draw.width,draw.height);
-    ctxD.strokeStyle='rgba(88,166,255,.9)'; ctxD.lineWidth=2;
-    ctxD.strokeRect(roi.x,roi.y,roi.w,roi.h);
-  }
-
-  const P=getProfile();
-  if($('#bg').checked && !bgProfile) bgProfile=P;
-  const m=$('#mode').value;
-  const Yraw = m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
-  const Yb = ($('#bg').checked && bgProfile)
-    ? Yraw.map((v,i)=>Math.max(0, v - bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'][i]))
-    : Yraw;
-
-  // --- per-frame true min-max normalization (0 -> bottom, 1 -> top) ---
-  let ymin=Infinity,ymax=-Infinity;
-  for(let i=0;i<Yb.length;i++){ if (Yb[i]<ymin) ymin=Yb[i]; if (Yb[i]>ymax) ymax=Yb[i]; }
-  const eps = 1e-9, span = Math.max(eps, ymax - ymin);
-  const useLog = $('#logY')?.checked;
-  const Yn = new Float32Array(Yb.length);
-  for (let i=0;i<Yb.length;i++){
-    const z = (Yb[i]-ymin)/span;              // 0..1 baseline pinned to bottom
-    Yn[i] = useLog ? Math.log10(1 + 9*z) : z; // optional log response
-  }
-
-  // sensor clip detection (raw ROI)
-  let clip=false;
-  {
-    const sx = mirrorX ? (draw.width - roi.x - roi.w) : roi.x;
-    const data = ctxD.getImageData(Math.round(sx), Math.round(roi.y), Math.round(roi.w), Math.max(1,Math.round(roi.h))).data;
-    let sat=0, total=data.length/4;
-    for(let i=0;i<data.length;i+=4){ if(data[i]>=254||data[i+1]>=254||data[i+2]>=254) sat++; }
-    clip = (sat/Math.max(1,total)) > 0.015; $('#clipWarn').style.display = clip ? 'inline' : 'none';
-  }
-
-  // size plot
-  plot.width = plot.clientWidth; plot.height = plot.clientHeight;
-  const Wp=plot.width, Hp=plot.height;
-  ctxP.fillStyle='#000'; ctxP.fillRect(0,0,Wp,Hp);
-  ctxP.font='18px ui-monospace,Consolas,Menlo'; ctxP.fillStyle='#cfd6de'; ctxP.strokeStyle='#333'; ctxP.lineWidth=1;
-
-  // X axis — always 380–780 nm
-  const VIS_MIN=380, VIS_MAX=780, step=50;
-  for(let lam=VIS_MIN; lam<=VIS_MAX; lam+=step){
-    const px = nmToPx(lam);
-    if(!isFinite(px)) continue;
-    const x = (px/roi.w)*Wp;
-    if (x<0 || x>Wp) continue;
-    ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
-    ctxP.fillText(`${lam} nm`, x+4, 22);
-  }
-  ctxP.fillText('Wavelength (nm)', 10, Hp-10);
-  // Y label
-  ctxP.save(); ctxP.rotate(-Math.PI/2); ctxP.fillText('Relative intensity (normalized)', -Hp+10, 16); ctxP.restore();
-
-  // plot curve with explicit margins (0->bottom, 1->top)
-  const topMargin = 24, bottomMargin = 28;
-  ctxP.strokeStyle='#58a6ff'; ctxP.lineWidth=2; ctxP.beginPath();
-  for (let i=0;i<Yn.length;i++){
-    const x = (i/roi.w)*Wp;
-    const y = (Hp - bottomMargin) - Math.min(1,Yn[i]) * (Hp - topMargin - bottomMargin);
-    if (i===0) ctxP.moveTo(x,y); else ctxP.lineTo(x,y);
-  }
-  ctxP.stroke();
-
-  // peaks overlay
-  if (peaks.length){
-    for(const pk of peaks){
-      const lam = pxToNm(pk.idx);
-      const color = spectrumColor(lam);
-      const x = (pk.idx/roi.w)*Wp;
-      ctxP.strokeStyle = color; ctxP.lineWidth = 2;
-      ctxP.beginPath(); ctxP.moveTo(x,0); ctxP.lineTo(x,Hp); ctxP.stroke();
-
-      const txt = `${isFinite(lam)?lam.toFixed(1):'–'} nm`;
-      const pad=4; const w=ctxP.measureText(txt).width+pad*2;
-      ctxP.fillStyle='rgba(15,20,27,0.9)'; ctxP.fillRect(x+4,6,w,20);
-      ctxP.strokeStyle='#2a2f35'; ctxP.lineWidth=1; ctxP.strokeRect(x+4,6,w,20);
-      ctxP.fillStyle=color; ctxP.fillText(txt,x+4+pad,21);
+      // connectivity indicator using RTDB .info/connected
+      state.db.ref('.info/connected').on('value', s=>{
+        const ok = !!s.val();
+        badge(ok ? 'online (firebase)' : 'offline (local)');
+      });
     }
-  }
 
-  requestAnimationFrame(drawPlot);
-}
-function loop(){ requestAnimationFrame(loop); }
-requestAnimationFrame(drawPlot);
+    // ===== JOIN / PRESENCE =====
+    function ensureClientId(){
+      let id = localStorage.getItem('present_uid');
+      if(!id){ id = uid(); localStorage.setItem('present_uid', id); }
+      state.me.id = id; return id;
+    }
 
-// ---------- PEAKS BUTTON ----------
-let peaks=[];
-$('#findPeaks').onclick=()=>{
-  const Y = getProfile().L;
-  // normalize to 0..1 for robust detection
-  let ymin=Infinity,ymax=-Infinity; for(let i=0;i<Y.length;i++){ if(Y[i]<ymin)ymin=Y[i]; if(Y[i]>ymax)ymax=Y[i]; }
-  const span=Math.max(1e-9,ymax-ymin);
-  const Yn = Y.map(v=>(v-ymin)/span);
+    async function joinClass(name){
+      ensureClientId(); state.me.name = name; state.joined = true;
+      $('#whoami').textContent = name; show($('#rateCard'), true); show($('#joinCard'), false);
 
-  const found=findLocalPeaks(Yn,{relProm:0.06});
-  const N=Math.max(1, Math.min(10, parseInt($('#topN').value,10)||5));
-  peaks = found.slice(0,N).map(p=>({idx:p.idx, amp:p.amp}));
+      const id = state.me.id;
+      state.studentRef = state.db.ref(`${basePath()}/students/${id}`);
 
-  const leg=$('#legend'); leg.innerHTML='';
-  for(const p of peaks){
-    const lam = pxToNm(p.idx);
-    const item=document.createElement('div'); item.className='legend-item';
-    const sw=document.createElement('span'); sw.className='sw'; sw.style.background=spectrumColor(lam);
-    const lbl=document.createElement('span'); lbl.textContent = isFinite(lam) ? `${lam.toFixed(1)} nm (px ${p.idx})` : `px ${p.idx}`;
-    item.append(sw,lbl); leg.appendChild(item);
-  }
-  log('Find Peaks: '+peaks.length);
-};
+      await state.studentRef.set({ name }); // no seeded scores
 
-// SNAPSHOT / CSV
-$('#snap').onclick=()=>{
-  const c=document.createElement('canvas'); c.width=draw.width; c.height=draw.height;
-  c.getContext('2d').drawImage(draw,0,0);
-  const a=document.createElement('a'); a.download='spectrum.png'; a.href=c.toDataURL('image/png'); a.click();
-};
-$('#csv').onclick=()=>{
-  const P=getProfile(); const Y=P.L;
-  let rows = 'px_roi,lambda_nm,intensity\n';
-  for(let i=0;i<Y.length;i++){
-    const lam = pxToNm(i);
-    rows += `${i},${isFinite(lam)?lam.toFixed(3):''},${Y[i].toFixed(6)}\n`;
-  }
-  const blob=new Blob([rows],{type:'text/csv'}); const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download='spectrum.csv'; a.click();
-};
-</script>
+      // Presence cleanup only if joined
+      try { state.studentRef.onDisconnect().remove(); } catch (e) {}
+      window.addEventListener('beforeunload', () => {
+        if(state.studentRef){ try { state.studentRef.remove(); } catch(e) {} }
+      });
+
+      renderSliders();
+    }
+
+    // Return to Join WITHOUT reload (used by hard reset)
+    function goToJoinView(){
+      // Remove my presence node if exists
+      if(state.studentRef){ try { state.studentRef.remove(); } catch(e) {} }
+      state.studentRef = null;
+      state.joined = false;
+      // Clear my local id so next join is fresh
+      localStorage.removeItem('present_uid');
+      // Reset UI
+      $('#nameInput').value = '';
+      $('#whoami').textContent = '—';
+      $('#criteriaList').innerHTML = '';
+      show($('#rateCard'), false);
+      show($('#joinCard'), true);
+    }
+
+    // ===== SLIDERS (0–10) =====
+    function renderSliders(){
+      const wrap = $('#criteriaList'); wrap.innerHTML = '';
+      CRITERIA.forEach((c, idx)=>{
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div style="font-weight:600">${idx+1}. ${c.label}</div>
+            <div class="mut">0–${MAX_SCORE}</div>
+          </div>
+          <input type="range" min="0" max="${MAX_SCORE}" step="1" value="0" data-crit="${c.id}">
+          <div class="mut" style="text-align:right;margin-top:4px">Score: <strong data-val="${c.id}">0</strong></div>`;
+        wrap.appendChild(div);
+      });
+
+      wrap.querySelectorAll('input[type=range]').forEach(r=>{
+        r.oninput = ()=>{
+          const critId = r.dataset.crit;
+          const v = Number(r.value);
+          wrap.querySelector(`[data-val="${critId}"]`).textContent = v;
+          if(state.studentRef) state.studentRef.child(`scores/${critId}`).set(v);
+        };
+      });
+    }
+
+    // ===== RESULTS (live) =====
+    function renderResults(students){
+      const pool = Object.values(students || {});
+      $('#participantsBadge').textContent = `${pool.length} participants`;
+      $('#participantsList').textContent = pool.map(s=> s && s.name ? s.name : '—').join(', ');
+
+      const res = CRITERIA.map(c=>{
+        const vals = pool
+          .map(s => (s && s.scores && typeof s.scores[c.id] === 'number') ? Number(s.scores[c.id]) : null)
+          .filter(v => v !== null); // include 0; exclude unset
+        return { label:c.label, avg: mean(vals) };
+      });
+
+      const box = $('#resultsSummary'); box.innerHTML = '';
+      res.forEach(a=>{
+        const row = document.createElement('div');
+        row.style.display = 'flex'; row.style.justifyContent = 'space-between'; row.style.alignItems = 'center';
+        row.innerHTML = `<div>${a.label}</div><div style="font-weight:600">${(a.avg||0).toFixed(2)} / ${MAX_SCORE}</div>`;
+        box.appendChild(row);
+      });
+
+      const finalAvg = mean(res.map(a=> a.avg || 0));
+      $('#finalAverage').textContent = (finalAvg||0).toFixed(2);
+
+      const totals = pool.map(s => {
+        if(!s || !s.scores) return null;
+        const nums = CRITERIA
+          .map(c => (typeof (s.scores||{})[c.id] === 'number') ? Number(s.scores[c.id]) : null)
+          .filter(v => v !== null);
+        if(!nums.length) return null;
+        return nums.reduce((a,b)=>a+b,0);
+      }).filter(v => v !== null);
+
+      const maxTot = CRITERIA.length * MAX_SCORE;
+      $('#classTotalAvg').textContent = `${(mean(totals)||0).toFixed(2)} / ${maxTot}`;
+      $('#maxTotal').textContent = maxTot;
+    }
+
+    // ===== TEACHER CONTROLS =====
+    async function resetScoresKeepParticipants(){
+      if(!state.db) return;
+      const root = state.db.ref(basePath());
+      const studentsSnap = await root.child('students').get();
+      const students = studentsSnap.val() || {};
+
+      const updates = {};
+      Object.keys(students).forEach(id=>{
+        CRITERIA.forEach(c=>{
+          updates[`students/${id}/scores/${c.id}`] = 0;
+        });
+      });
+      await root.update(updates);
+      await root.child('control/softResetAt').set(firebase.database.ServerValue.TIMESTAMP);
+    }
+
+    async function endSessionKickAll(){
+      if(!state.db) return;
+      const root = state.db.ref(basePath());
+      await root.child('students').set({});
+      await root.child('control/resetAt').set(firebase.database.ServerValue.TIMESTAMP);
+      // Note: clients return to Join view; no reloads
+    }
+
+    // ===== UI WIRES =====
+    window.addEventListener('load', ()=> { dbInit(); });
+
+    $('#joinBtn').onclick = ()=>{
+      const name = $('#nameInput').value.trim();
+      if(!name){ $('#joinStatus').textContent='Enter a name.'; return; }
+      $('#joinStatus').textContent='';
+      joinClass(name);
+    };
+
+    $('#loginBtn').onclick = ()=> $('#loginDlg').showModal();
+    $('#unlockBtn').onclick = (e)=>{
+      e.preventDefault();
+      if($('#pinInput').value === CONFIG.teacherPin){ show($('#resultsCard'), true); $('#loginDlg').close(); }
+      else alert('Wrong PIN');
+    };
+
+    $('#resetScores').onclick = resetScoresKeepParticipants;
+    $('#endSession').onclick = endSessionKickAll;
+  </script>
 </body>
 </html>
