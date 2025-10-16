@@ -3,62 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Webcam Spectrometer – Mr. D</title>
+<title>Webcam Spectrometer – Mr. D (Final)</title>
 <style>
   :root{--bg:#0d1117;--ink:#e6edf3;--mut:#8b949e;--acc:#58a6ff;--grid:#30363d}
   html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,Segoe UI,Roboto,Helvetica,Arial}
   header{padding:8px 12px;border-bottom:1px solid var(--grid);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   h1{font-size:16px;margin:0 8px 0 0}
   .warn{background:#331;color:#f6d7d7;padding:4px 8px;border-radius:8px;border:1px solid #633}
-
   main{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;padding:12px;align-items:start}
   .panel{border:1px solid var(--grid);border-radius:10px;overflow:hidden;background:#0f141b;min-width:0}
   .p-h{padding:8px 10px;background:#0b0f14;border-bottom:1px solid var(--grid);font-weight:600}
   .p-b{padding:10px}
-
   #viewwrap{position:relative;background:#000}
-  #viewwrap.mirror{ transform: scaleX(-1); transform-origin:center; }
+  #viewwrap.mirror{transform:scaleX(-1);transform-origin:center}
   video,canvas{max-width:100%;display:block}
   #draw{position:absolute;inset:0;pointer-events:none}
-
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
   label{color:var(--mut)}
   input,select,button{background:#0b0f14;color:var(--ink);border:1px solid var(--grid);border-radius:8px;padding:6px 8px}
   button{cursor:pointer}
-
   #plot{width:100%;height:100%;min-height:480px;background:#000;border:1px solid var(--grid);border-radius:8px;display:block}
-
   #log{white-space:pre-wrap;background:#0b0f14;border:1px solid var(--grid);border-radius:8px;padding:8px;min-height:64px}
   .small{font-size:12px;color:var(--mut)}
   #legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .legend-item{display:flex;align-items:center;gap:6px;background:#0b0f14;border:1px solid #2a2f35;border-radius:8px;padding:2px 6px;font:13px ui-monospace,Consolas,Menlo}
   .sw{width:12px;height:12px;border-radius:3px;border:1px solid #222}
-
-  /* Quick Sheet */
-  details.quick{border:1px solid var(--grid); border-radius:10px; background:#0f141b; margin:12px 12px 0; overflow:hidden}
-  details.quick > summary{cursor:pointer; padding:10px; font-weight:600; background:#0b0f14; list-style:none; border-bottom:1px solid var(--grid)}
-  details.quick[open] > summary{border-bottom:1px solid var(--grid)}
-  .quick-body{padding:12px}
-  .steps{counter-reset: step; display:grid; gap:8px}
-  .steps .step{border:1px dashed #2a2f35; border-radius:10px; padding:10px}
-  .steps .step h4{margin:0 0 6px 0; font-size:14px}
-  .steps .step h4::before{counter-increment: step; content: counter(step) ". "; color:var(--acc)}
-  .kbd{font:12px ui-monospace,Consolas,Menlo; background:#11161d; border:1px solid #2a2f35; border-radius:6px; padding:2px 6px}
-  .callout{background:#10161f;border:1px solid #2a2f35;border-radius:8px;padding:8px;margin-top:8px;color:#cfd6de}
-
-  /* Concept SVG wrapper */
-  section.diagram{margin:12px}
-  .print-note{font-size:12px;color:#9aa0a6}
-
-  /* Print */
-  @media print{
-    header, #legend, #log { display:none !important; }
-    main{ grid-template-columns:1fr !important; padding:0 }
-    .panel{ border:none }
-    details.quick{ border:none; }
-    details.quick > summary{ background:none; border:none; padding:0; }
-    .quick-body{ padding:0; }
-  }
 </style>
 </head>
 <body>
@@ -68,7 +37,6 @@
 </header>
 
 <main>
-  <!-- LEFT: PREVIEW + CAPTURE + CALIBRATION -->
   <section class="panel">
     <div class="p-h">Live Preview</div>
     <div class="p-b" id="viewwrap">
@@ -76,7 +44,7 @@
       <canvas id="draw"></canvas>
     </div>
 
-    <div class="p-h">Capture Options</div>
+    <div class="p-h">Capture / Calibration</div>
     <div class="p-b">
       <div class="row">
         <button id="start">Start Camera</button>
@@ -90,49 +58,20 @@
         </label>
       </div>
       <div class="row">
-        <label>ROI size <input id="roiSize" type="number" value="120" min="40" max="400" style="width:80px"></label>
+        <label>ROI size <input id="roiSize" type="number" value="200" min="40" max="400" style="width:80px"></label>
         <label>Smooth <input id="smooth" type="number" value="3" min="1" max="25" style="width:60px"></label>
-        <button id="snap">Snapshot PNG</button>
-        <button id="csv">Export CSV</button>
+        <button id="autoH">Auto-Cal (H₂)</button>
+        <button id="findPeaks">Find Peaks</button>
       </div>
-      <div class="row small">Drag the square to the brightest 1st-order band. Shift+drag to resize quickly.</div>
-      <div class="row"><div id="log" class="small"></div></div>
-    </div>
-
-    <div class="p-h">Calibration</div>
-    <div class="p-b">
-      <div class="row">
-        <b>2-point (linear):</b>
-        <button class="pick" data-idx="0">Pick px A</button> λA
-        <input class="lam" data-idx="0" type="number" value="546.1" step="0.1" style="width:90px"> <span id="p0" class="small">pxA: –</span>
-        <button class="pick" data-idx="1">Pick px B</button> λB
-        <input class="lam" data-idx="1" type="number" value="589.0" step="0.1" style="width:90px"> <span id="p1" class="small">pxB: –</span>
-        <button id="apply2">Apply 2-pt</button> <span id="eq2" class="small"></span>
-      </div>
-      <div class="row">
-        <b>3-point (quadratic):</b>
-        <button class="pick" data-idx="2">Pick px C</button> λC
-        <input class="lam" data-idx="2" type="number" value="656.3" step="0.1" style="width:90px"> <span id="p2" class="small">pxC: –</span>
-        <button id="apply3">Apply 3-pt</button> <span id="eq3" class="small"></span>
-      </div>
-      <div class="row">
-        <button id="autoH">Auto-Cal (Hydrogen)</button>
-        <button id="quickH">Hydrogen Quick-Cal</button>
-        <span class="small">Auto-detect 434/486/656 nm lines and fit.</span>
-      </div>
-      <div class="small">Known lines: Hg 435.8, 546.1, 577.0/579.1; Na 589.0; H-α 656.3; K 766.5/769.9.</div>
+      <div class="row small">Drag the blue square over the bright rainbow band (Shift+drag = resize)</div>
+      <div id="log" class="small"></div>
     </div>
   </section>
 
-  <!-- RIGHT: SPECTRUM + PEAKS -->
   <section class="panel">
     <div class="p-h">Intensity vs Wavelength</div>
-
-    <div class="p-b" style="display:flex;flex-direction:column;gap:10px;">
-      <div id="plotWrap" style="flex:1;display:flex;">
-        <canvas id="plot" style="flex:1;"></canvas>
-      </div>
-
+    <div class="p-b">
+      <canvas id="plot"></canvas>
       <div class="row">
         <label>Channel
           <select id="mode">
@@ -144,739 +83,102 @@
         </label>
         <label>Gamma <input id="gamma" type="number" value="1.0" step="0.1" min="0.3" max="3" style="width:70px"></label>
         <label>Subtract BG <input id="bg" type="checkbox"></label>
-        <button id="findPeaks">Find Peaks</button>
         <label>Top N <input id="topN" type="number" value="5" min="1" max="10" style="width:56px"></label>
-        <span class="small">Cursor: <span id="cursor">px: –, λ: – nm</span></span>
       </div>
-
-      <div id="legend" style="padding-bottom:6px"></div>
+      <div id="legend"></div>
     </div>
   </section>
 </main>
 
-<!-- ====== Student Quick Sheet (collapsible, printable) ====== -->
-<details class="quick" open>
-  <summary>Student Quick Sheet — Webcam Spectrometer</summary>
-  <div class="quick-body">
-    <div class="steps">
-      <div class="step">
-        <h4>Setup</h4>
-        <ul>
-          <li>Click <span class="kbd">Start Camera</span> → allow camera.</li>
-          <li>Drag the <b>square</b> so it covers the bright horizontal spectrum band (use the slider or Shift+drag to resize).</li>
-          <li>Use <span class="kbd">Smooth</span> ≈ 3–7.</li>
-        </ul>
-      </div>
-      <div class="step">
-        <h4>Calibration</h4>
-        <ul>
-          <li><span class="kbd">Auto-Cal (Hydrogen)</span> tries to find 434/486/656 nm automatically.</li>
-          <li>Or <span class="kbd">Hydrogen Quick-Cal</span> → click peaks: 434 → 486 → 656 nm.</li>
-          <li>If skipped, X-axis shows <b>pixels</b>; after cal, shows <b>nm</b>.</li>
-        </ul>
-      </div>
-      <div class="step">
-        <h4>Measure</h4>
-        <ul>
-          <li>Hover the graph to read pixel/nm at the cursor.</li>
-          <li><span class="kbd">Find Peaks</span> → labels the top N lines inside the ROI square.</li>
-        </ul>
-      </div>
-      <div class="step">
-        <h4>Capture</h4>
-        <ul>
-          <li><span class="kbd">Snapshot PNG</span> saves the preview overlay.</li>
-          <li><span class="kbd">Export CSV</span> saves px, (λ), intensity from the ROI.</li>
-        </ul>
-      </div>
-    </div>
-    <div class="callout">
-      <b>Tip:</b> If using the front camera, preview is mirrored. Internally the sampling is mirrored too, so plot lines up with what you see.
-    </div>
-    <div class="print-note">Print: File → Print (this sheet is formatted for one page).</div>
-  </div>
-</details>
-
-<!-- ====== Concept Diagram (lightweight SVG) ====== -->
-<section class="panel diagram">
-  <div class="p-h">How the Webcam Spectrometer Works</div>
-  <div class="p-b" id="conceptWrap">
-    <svg id="conceptSVG" viewBox="0 0 900 260" width="100%" height="260" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="900" height="260" fill="#0b0f14" stroke="#30363d"/>
-      <g>
-        <rect x="40" y="90" width="24" height="80" fill="#111" stroke="#444"/>
-        <rect x="49" y="90" width="6" height="80" fill="#ddd"/>
-        <text x="52" y="185" fill="#9aa0a6" font-size="12" text-anchor="middle">slit</text>
-      </g>
-      <g>
-        <rect x="180" y="60" width="16" height="140" fill="#1b1f24" stroke="#444"/>
-        <text x="188" y="210" fill="#9aa0a6" font-size="12" text-anchor="middle">grating</text>
-        <g stroke="#2a2f35" stroke-width="1">
-          <line x1="182" y1="64" x2="194" y2="64"/><line x1="182" y1="72" x2="194" y2="72"/>
-          <line x1="182" y1="80" x2="194" y2="80"/><line x1="182" y1="88" x2="194" y2="88"/>
-          <line x1="182" y1="96" x2="194" y2="96"/><line x1="182" y1="104" x2="194" y2="104"/>
-          <line x1="182" y1="112" x2="194" y2="112"/><line x1="182" y1="120" x2="194" y2="120"/>
-          <line x1="182" y1="128" x2="194" y2="128"/><line x1="182" y1="136" x2="194" y2="136"/>
-          <line x1="182" y1="144" x2="194" y2="144"/><line x1="182" y1="152" x2="194" y2="152"/>
-          <line x1="182" y1="160" x2="194" y2="160"/><line x1="182" y1="168" x2="194" y2="168"/>
-          <line x1="182" y1="176" x2="194" y2="176"/><line x1="182" y1="184" x2="194" y2="184"/>
-        </g>
-      </g>
-      <g stroke="#58a6ff" stroke-width="1">
-        <line x1="66" y1="100" x2="180" y2="80"/>
-        <line x1="66" y1="130" x2="180" y2="130"/>
-        <line x1="66" y1="160" x2="180" y2="180"/>
-      </g>
-      <g stroke-width="2">
-        <line x1="196" y1="80"  x2="760" y2="100" stroke="#7b6cff"/>
-        <line x1="196" y1="110" x2="760" y2="120" stroke="#3ea0ff"/>
-        <line x1="196" y1="130" x2="760" y2="140" stroke="#10D27A"/>
-        <line x1="196" y1="150" x2="760" y2="160" stroke="#f2c84b"/>
-        <line x1="196" y1="180" x2="760" y2="180" stroke="#ff5866"/>
-      </g>
-      <g>
-        <rect x="560" y="40" width="280" height="24" fill="#111" stroke="#2a2f35"/>
-        <g stroke="#444" stroke-width="1">
-          <line x1="560" y1="64" x2="560" y2="72"/>
-          <line x1="700" y1="64" x2="700" y2="72"/>
-          <line x1="840" y1="64" x2="840" y2="72"/>
-        </g>
-        <text x="560" y="88" fill="#9aa0a6" font-size="12" text-anchor="middle">0 px</text>
-        <text x="700" y="88" fill="#9aa0a6" font-size="12" text-anchor="middle">mid px</text>
-        <text x="840" y="88" fill="#9aa0a6" font-size="12" text-anchor="middle">max px</text>
-        <text x="700" y="20" fill="#cfd6de" font-size="14" text-anchor="middle">Uncalibrated: intensity vs pixel</text>
-      </g>
-      <g>
-        <path d="M700,110 C720,130 740,150 760,170" fill="none" stroke="#58a6ff" stroke-width="2" marker-end="url(#arrow)"/>
-        <text x="740" y="150" fill="#9aa0a6" font-size="12">calibration maps pixels → λ (nm)</text>
-      </g>
-      <defs>
-        <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-          <path d="M0,0 L8,4 L0,8 z" fill="#58a6ff"/>
-        </marker>
-      </defs>
-      <g>
-        <line x1="560" y1="210" x2="840" y2="210" stroke="#444"/>
-        <g stroke="#444">
-          <line x1="560" y1="206" x2="560" y2="214"/>
-          <line x1="640" y1="206" x2="640" y2="214"/>
-          <line x1="700" y1="206" x2="700" y2="214"/>
-          <line x1="760" y1="206" x2="760" y2="214"/>
-          <line x1="840" y1="206" x2="840" y2="214"/>
-        </g>
-        <text x="560" y="230" fill="#9aa0a6" font-size="12" text-anchor="middle">380</text>
-        <text x="640" y="230" fill="#9aa0a6" font-size="12" text-anchor="middle">500</text>
-        <text x="700" y="230" fill="#9aa0a6" font-size="12" text-anchor="middle">590</text>
-        <text x="760" y="230" fill="#9aa0a6" font-size="12" text-anchor="middle">680</text>
-        <text x="840" y="230" fill="#9aa0a6" font-size="12" text-anchor="middle">780</text>
-        <text x="700" y="196" fill="#cfd6de" font-size="14" text-anchor="middle">Calibrated: intensity vs wavelength (nm)</text>
-      </g>
-      <g font-size="12" fill="#cfd6de">
-        <circle id="dotA" cx="600" cy="210" r="4" fill="#7b6cff"/><text x="600" y="198" text-anchor="middle">A</text>
-        <circle id="dotB" cx="700" cy="210" r="4" fill="#3ea0ff"/><text x="700" y="198" text-anchor="middle">B</text>
-        <circle id="dotC" cx="780" cy="210" r="4" fill="#ff5866"/><text x="780" y="198" text-anchor="middle">C</text>
-      </g>
-      <g>
-        <rect x="260" y="30" width="260" height="60" rx="8" fill="#0f141b" stroke="#2a2f35"/>
-        <text x="270" y="52" fill="#9aa0a6" font-size="12">Calibration equation:</text>
-        <text id="eqText" x="270" y="70" fill="#e6edf3" font-size="14">λ = a·px² + b·px + c</text>
-      </g>
-    </svg>
-  </div>
-</section>
-
-<!-- Hydrogen Quick-Cal overlay -->
-<div id="wiz" style="display:none;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:1000">
-  <div class="card" style="background:#0f141b;border:1px solid var(--grid);border-radius:10px;max-width:520px;width:92%;padding:12px">
-    <h3 style="margin:0 0 6px 0;font-size:16px">Hydrogen Quick-Cal</h3>
-    <p id="wizMsg" class="small">Step 1 of 3 — On the graph, click the <b>violet</b> peak <b>H-γ (434.0 nm)</b>.</p>
-    <ul class="small">
-      <li>Keep the bright hydrogen band inside the preview square.</li>
-      <li>Click peaks on the <b>graph</b> (not the video).</li>
-    </ul>
-    <div class="actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
-      <button id="wizCancel">Cancel</button>
-    </div>
-  </div>
-</div>
-
 <script>
 const $=s=>document.querySelector(s);
-const vid=$('#vid'), draw=$('#draw'), plot=$('#plot');
-const ctxD=draw.getContext('2d'), ctxP=plot.getContext('2d');
-const log=msg=>{$('#log').textContent+=($('#log').textContent?'\n':'')+msg; console.log(msg);};
-if(!window.isSecureContext) $('#httpsWarn').style.display='inline-block';
+const vid=$('#vid'),draw=$('#draw'),plot=$('#plot');
+const ctxD=draw.getContext('2d'),ctxP=plot.getContext('2d');
+const log=t=>{$('#log').textContent+=(($('#log').textContent?'\n':'')+t);console.log(t);}
+if(!window.isSecureContext)$('#httpsWarn').style.display='inline-block';
 
-let stream=null, dragging=false, last={x:0,y:0}, picking=null, bgProfile=null;
-let W=1280,H=720;
+let stream=null,mirrorX=false,dragging=false,last={x:0,y:0};
+let roi={x:200,y:200,w:200,h:200};
+function clampROI(){roi.w=Math.max(120,Math.min(draw.width,roi.w));roi.h=roi.w;
+roi.x=Math.max(0,Math.min(draw.width-roi.w,roi.x));
+roi.y=Math.max(0,Math.min(draw.height-roi.h,roi.y));}
+$('#roiSize').oninput=()=>{roi.w=roi.h=parseInt($('#roiSize').value,10);clampROI();};
 
-/* ROI is a movable square */
-let roi={x:200,y:220,w:120,h:120};
-function clampROI(){
-  roi.w = Math.max(40, Math.min(draw.width, roi.w));
-  roi.h = roi.w; // keep square
-  roi.x = Math.max(0, Math.min(draw.width - roi.w, roi.x));
-  roi.y = Math.max(0, Math.min(draw.height - roi.h, roi.y));
+$('#viewwrap').onmousedown=e=>{const r=e.currentTarget.getBoundingClientRect();
+last.x=e.clientX-r.left;last.y=e.clientY-r.top;dragging=e.shiftKey?'resize':'move';};
+window.onmousemove=e=>{
+if(!dragging)return;const r=$('#viewwrap').getBoundingClientRect();
+const x=e.clientX-r.left,y=e.clientY-r.top;
+if(dragging==='move'){roi.x+=x-last.x;roi.y+=y-last.y;}
+else{roi.w+=y-last.y;roi.h=roi.w;$('#roiSize').value=Math.round(roi.w);}
+last.x=x;last.y=y;clampROI();};
+window.onmouseup=()=>dragging=false;
+
+async function startCamera(){
+if(stream){stream.getTracks().forEach(t=>t.stop());}
+await navigator.mediaDevices.getUserMedia({video:true});
+const devs=await navigator.mediaDevices.enumerateDevices();
+const cams=devs.filter(d=>d.kind==='videoinput');
+const sel=$('#cams');sel.innerHTML='';cams.forEach((d,i)=>{const o=document.createElement('option');
+o.value=d.deviceId;o.textContent=d.label||`Camera ${i+1}`;sel.appendChild(o);});
+stream=await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:sel.value||cams[0].deviceId}},audio:false});
+vid.srcObject=stream;await vid.play();
+const facing=stream.getVideoTracks()[0].getSettings().facingMode||'';mirrorX=(facing==='user');
+if(mirrorX)$('#viewwrap').classList.add('mirror');else $('#viewwrap').classList.remove('mirror');
+draw.width=vid.videoWidth;draw.height=vid.videoHeight;requestAnimationFrame(loop);log('Camera started');
 }
+$('#start').onclick=startCamera;
 
-/* calibration state */
-let calibrated=false;
-let calib={kind:'linear',A:NaN,B:NaN,a:NaN,b:NaN,c:NaN,px:[null,null,null],nm:[546.1,589.0,656.3]} ;
-window.calib = calib; // for diagram
-
-/* peaks + mirror */
-let peaks=[]; let mirrorX=false;
-
-/* camera selection memory */
-let selectedDeviceId = null;
-
-/* sync plot to preview size */
-function syncPlotSize(){
-  const vw = $('#viewwrap'); const wrap = $('#plotWrap');
-  if (!vw || !wrap) return;
-  const r = vw.getBoundingClientRect();
-  wrap.style.height = (r.height || 480) + 'px';
-  wrap.style.width  = (r.width  || 640) + 'px';
-  plot.width  = plot.clientWidth;
-  plot.height = plot.clientHeight;
-}
-new ResizeObserver(syncPlotSize).observe($('#viewwrap'));
-window.addEventListener('resize', syncPlotSize);
-
-function fitCanvas(){
-  draw.width = vid.videoWidth || W;
-  draw.height = vid.videoHeight || H;
-  clampROI();
-  plot.width = plot.clientWidth;
-  plot.height = plot.clientHeight;
-  syncPlotSize();
-}
-
-async function enumerateCams(){
-  try{
-    const devs = await navigator.mediaDevices.enumerateDevices();
-    const cams = devs.filter(d=>d.kind==='videoinput');
-    const sel = $('#cams');
-    const prev = selectedDeviceId || sel.value || '';
-    sel.innerHTML='';
-    cams.forEach((d,i)=>{
-      const o=document.createElement('option');
-      o.value=d.deviceId;
-      o.textContent=d.label || `Camera ${i+1}`;
-      sel.appendChild(o);
-    });
-    if (cams.some(c=>c.deviceId===prev)) { sel.value = prev; }
-    else if (cams[0]) { sel.value = cams[0].deviceId; }
-    selectedDeviceId = sel.value || null;
-    if(!cams.length) log('No cameras found. Check OS privacy settings and browser permissions.');
-  }catch(e){ log('enumerateDevices: '+e.name+' — '+e.message); }
-}
-
-function makeConstraints(pref){
-  const [w,h]=$('#res').value.split('x').map(Number);
-  if (pref?.deviceId) return {video:{deviceId:{exact:pref.deviceId},width:{ideal:w},height:{ideal:h}},audio:false};
-  if (pref==='environment') return {video:{facingMode:{exact:'environment'},width:{ideal:w},height:{ideal:h}},audio:false};
-  if (pref==='user')        return {video:{facingMode:{exact:'user'},width:{ideal:w},height:{ideal:h}},audio:false};
-  return {video:{width:{ideal:w},height:{ideal:h}},audio:false};
-}
-
-function applyMirrorForFacingMode(){
-  try{
-    const facing = stream?.getVideoTracks?.()[0]?.getSettings?.().facingMode || '';
-    const vw = $('#viewwrap');
-    if (facing === 'user') { vw.classList.add('mirror'); mirrorX=true; }
-    else { vw.classList.remove('mirror'); mirrorX=false; }
-  }catch{}
-}
-
-/* unified starter that honors device + resolution */
-async function startWith(deviceId){
-  selectedDeviceId = deviceId || $('#cams').value || selectedDeviceId || null;
-
-  // stop previous
-  if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-
-  const tries = [
-    makeConstraints(selectedDeviceId ? {deviceId:selectedDeviceId} : null),
-    makeConstraints('environment'),
-    makeConstraints('user'),
-    makeConstraints()
-  ];
-  let lastErr=null;
-  for (const c of tries){
-    try{
-      log('Trying: '+JSON.stringify(c));
-      stream = await navigator.mediaDevices.getUserMedia(c);
-      break;
-    }catch(e){ lastErr=e; log('Failed: '+e.name+' — '+e.message); }
-  }
-  if(!stream){ log('All camera attempts failed.'); return; }
-
-  vid.srcObject = stream;
-  try{ await vid.play(); }catch(e){ log('video.play: '+e.name+' — '+e.message); }
-
-  await new Promise(res=>{ if(vid.readyState>=2) res(); else vid.onloadedmetadata=res; });
-  applyMirrorForFacingMode();
-  fitCanvas();
-  requestAnimationFrame(loop);
-  log('Camera started: '+(stream.getVideoTracks()[0]?.label||'unknown'));
-
-  // refresh labels (Firefox) after permission
-  setTimeout(()=>{ enumerateCams().catch(()=>{}); }, 800);
-}
-
-/* Start button boot */
-$('#start').onclick = async ()=>{
-  $('#log').textContent='';
-  if(!('mediaDevices' in navigator)){ log('ERROR: navigator.mediaDevices not available.'); return; }
-  if(!window.isSecureContext){ log('ERROR: Not HTTPS.'); return; }
-
-  // primer to get device labels
-  try{ const s=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); s.getTracks().forEach(t=>t.stop()); }catch(e){ log('Pre-permission: '+e.name); }
-
-  await enumerateCams();
-  await startWith($('#cams').value);
-};
-
-/* React to dropdown changes */
-$('#cams').addEventListener('change', async (e)=>{
-  selectedDeviceId = e.target.value;
-  await startWith(selectedDeviceId);
-});
-$('#res').addEventListener('change', async ()=>{
-  await startWith(selectedDeviceId);
-});
-
-/* Hot-plug handling */
-if (navigator.mediaDevices && 'addEventListener' in navigator.mediaDevices){
-  navigator.mediaDevices.addEventListener('devicechange', async ()=>{
-    const prev = selectedDeviceId;
-    await enumerateCams();
-    if (selectedDeviceId !== prev){
-      log('Devices changed; switching to '+($('#cams').selectedOptions[0]?.textContent||'camera'));
-      await startWith(selectedDeviceId);
-    }
-  });
-}
-
-/* ROI interactions: drag to move, Shift+drag to resize; slider changes size */
-$('#roiSize').addEventListener('change', ()=>{
-  const s = Math.max(40, Math.min(400, parseInt($('#roiSize').value,10) || 120));
-  roi.w = roi.h = s; clampROI();
-});
-$('#viewwrap').addEventListener('mousedown',e=>{
-  const r=$('#viewwrap').getBoundingClientRect();
-  last.x = e.clientX - r.left; last.y = e.clientY - r.top; dragging = e.shiftKey ? 'resize' : 'move';
-});
-window.addEventListener('mousemove',e=>{
-  if(!dragging) return;
-  const r=$('#viewwrap').getBoundingClientRect();
-  const x = e.clientX - r.left, y = e.clientY - r.top;
-  if(dragging==='move'){
-    roi.x += (x - last.x); roi.y += (y - last.y);
-  } else {
-    // resize proportional to vertical motion
-    roi.w += (y - last.y); roi.h = roi.w;
-    $('#roiSize').value = Math.round(roi.w);
-  }
-  last.x = x; last.y = y;
-  clampROI();
-});
-window.addEventListener('mouseup',()=> dragging=false);
-
-/* compute profile from ROI (mirroring aware) */
 function getProfile(){
-  const s = Math.max(1, Math.min(draw.height, Math.round(roi.h)));
-  const x0 = Math.round(roi.x), y0 = Math.round(roi.y + roi.h/2 - s/2);
-  const w  = Math.round(roi.w), rows = Math.max(1, s);
-  const sx = mirrorX ? (draw.width - x0 - w) : x0; // mirror sample if front cam
-  const data=ctxD.getImageData(sx, Math.max(0,y0), w, rows).data;
-
-  const R=new Float32Array(w),G=new Float32Array(w),B=new Float32Array(w);
-  for(let row=0;row<rows;row++){
-    for(let x=0;x<w;x++){
-      const i=(row*w+x)*4; R[x]+=data[i]; G[x]+=data[i+1]; B[x]+=data[i+2];
-    }
-  }
-  for(let x=0;x<w;x++){ R[x]/=rows; G[x]/=rows; B[x]/=rows; }
-
-  const gamma=Math.max(0.3,parseFloat($('#gamma').value));
-  const L=new Float32Array(w);
-  for(let x=0;x<w;x++){
-    const r=Math.pow(R[x]/255,1/gamma), g=Math.pow(G[x]/255,1/gamma), b=Math.pow(B[x]/255,1/gamma);
-    L[x]=0.2126*r+0.7152*g+0.0722*b;
-  }
-  // additional horizontal smoothing
-  const k=Math.max(1,parseInt($('#smooth').value,10));
-  const smooth=A=>{
-    const out=new Float32Array(A.length);
-    for(let i=0;i<A.length;i++){
-      const i0=Math.max(0,i-k), i1=Math.min(A.length-1,i+k);
-      let s=0; for(let j=i0;j<=i1;j++) s+=A[j];
-      out[i]=s/(i1-i0+1);
-    } return out;
-  };
-  const out={R:smooth(R),G:smooth(G),B:smooth(B),L:smooth(L)};
-  return out;
+const y0=Math.max(0,Math.round(roi.y)),rows=Math.max(1,Math.round(roi.h));
+const sx=mirrorX?(draw.width-roi.x-roi.w):roi.x;
+const data=ctxD.getImageData(sx,y0,roi.w,rows).data;
+const R=new Float32Array(roi.w),G=new Float32Array(roi.w),B=new Float32Array(roi.w);
+for(let r=0;r<rows;r++){for(let x=0;x<roi.w;x++){const i=(r*roi.w+x)*4;R[x]+=data[i];G[x]+=data[i+1];B[x]+=data[i+2];}}
+for(let x=0;x<roi.w;x++){R[x]/=rows;G[x]/=rows;B[x]/=rows;}
+const g=Math.max(0.3,parseFloat($('#gamma').value));
+const L=new Float32Array(roi.w);
+for(let x=0;x<roi.w;x++){const r=Math.pow(R[x]/255,1/g),gr=Math.pow(G[x]/255,1/g),b=Math.pow(B[x]/255,1/g);
+L[x]=0.2126*r+0.7152*gr+0.0722*b;}
+return {R,G,B,L};
 }
 
-/* wavelength mapping in ROI pixel space */
-function pxToNm(px){
-  if(!calibrated) return NaN;
-  return calib.kind==='linear' ? calib.A*px + calib.B : (calib.a*px*px + calib.b*px + calib.c);
-}
-function nmToPx(nm){
-  if(!calibrated) return NaN;
-  if(calib.kind==='linear') return (nm - calib.B)/calib.A;
-  const {a,b,c}=calib; const A=a,B=b,C=c-nm,D=B*B-4*A*C; if(D<=0) return NaN;
-  const r1=(-B+Math.sqrt(D))/(2*A), r2=(-B-Math.sqrt(D))/(2*A);
-  return (r1>=0&&r1<=roi.w)?r1:r2;
-}
-window.pxToNm = pxToNm; // for concept diagram
+function findLocalPeaks(Y,{relProm=0.04}={}){
+const minDist=Math.max(8,Math.round(Y.length/40));const absMax=Math.max(...Y)||1;
+const minProm=absMax*relProm,cand=[];
+for(let i=1;i<Y.length-1;i++){if(Y[i]>Y[i-1]&&Y[i]>=Y[i+1]){
+let base=Math.min(Y[i-8]||Y[i],Y[i+8]||Y[i]);const prom=Y[i]-base;
+if(prom>=minProm)cand.push({idx:i,amp:Y[i]});}}
+cand.sort((a,b)=>b.amp-a.amp);
+const kept=[];for(const c of cand){if(kept.every(k=>Math.abs(k.idx-c.idx)>=minDist))kept.push(c);}return kept;}
 
-/* cursor readout */
-plot.addEventListener('mousemove',e=>{
-  const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.max(0,Math.min(roi.w-1,Math.round(x/plot.width*roi.w)));
-  const lam=pxToNm(px);
-  $('#cursor').textContent = calibrated ? `px:${px} , λ:${isFinite(lam)?lam.toFixed(1):'–'} nm`
-                                       : `px:${px} (uncalibrated)`;
-});
-
-/* calibration UI (manual picks on ROI pixel axis) */
-for(const l of document.querySelectorAll('.lam')) l.onchange=()=>{ calib.nm[parseInt(l.dataset.idx,10)]=parseFloat(l.value); };
-for(const b of document.querySelectorAll('.pick')) b.onclick=()=>{ picking=parseInt(b.dataset.idx,10); log('Click a peak on the plot to assign pixel (ROI space).'); };
-plot.addEventListener('click',e=>{
-  const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
-  const px=Math.round(x/plot.width*roi.w);
-  if(picking!==null){
-    calib.px[picking]=px; $('#p'+picking).textContent=`px${['A','B','C'][picking]}: ${px}`; picking=null; return;
-  }
-  if(HQ.active){
-    const stage=HQ.stage; calib.px[stage]=px; $('#p'+stage).textContent=`px${['A','B','C'][stage]}: ${px}`;
-    HQ.stage++; if(HQ.stage===1) $('#wizMsg').innerHTML='Step 2 of 3 — Click the <b>cyan-blue</b> peak <b>H-β (486.1 nm)</b>.';
-    else if(HQ.stage===2) $('#wizMsg').innerHTML='Step 3 of 3 — Click the <b>red</b> peak <b>H-α (656.3 nm)</b>.';
-    else finishHydrogenQuickCal();
-  }
-});
-$('#apply2').onclick=()=>{
-  const [x1,x2]=[calib.px[0],calib.px[1]], [y1,y2]=[calib.nm[0],calib.nm[1]];
-  if(x1==null||x2==null) return log('Pick two pixels first.');
-  calibrated=true; calib.kind='linear'; calib.A=(y2-y1)/(x2-x1); calib.B=y1 - calib.A*x1;
-  $('#eq2').textContent=`λ = ${calib.A.toFixed(4)}·px + ${calib.B.toFixed(2)} (linear)`;
-};
-$('#apply3').onclick=()=>{
-  const x=[0,1,2].map(i=>calib.px[i]), y=[0,1,2].map(i=>calib.nm[i]);
-  if(x.some(v=>v==null)) return log('Pick three pixels first.');
-  const [x1,x2,x3]=x,[y1,y2,y3]=y; const D=(x1-x2)*(x1-x3)*(x2-x3);
-  const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
-  const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
-  const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
-  calibrated=true; calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
-  $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)} (quadratic)`;
+let peaks=[];
+$('#findPeaks').onclick=()=>{
+const P=getProfile();const Y=P.L;const found=findLocalPeaks(Y);const N=Math.min(found.length,parseInt($('#topN').value,10)||5);
+peaks=found.slice(0,N);const leg=$('#legend');leg.innerHTML='';
+for(const p of peaks){const item=document.createElement('div');item.className='legend-item';
+const sw=document.createElement('span');sw.className='sw';sw.style.background='#58a6ff';
+const lbl=document.createElement('span');lbl.textContent=`px ${p.idx}`;item.append(sw,lbl);leg.appendChild(item);}
+log('Found '+peaks.length+' peaks.');
 };
 
-/* Hydrogen Quick-Cal (guided clicks) */
-const HQ = {active:false, stage:0};
-const H_LINES = [434.0, 486.1, 656.3];
-function startHydrogenQuickCal(){
-  calib.nm=[H_LINES[0],H_LINES[1],H_LINES[2]];
-  $('#wiz').style.display='flex';
-  $('#wizMsg').innerHTML='Step 1 of 3 — On the graph, click the <b>violet</b> peak <b>H-γ (434.0 nm)</b>.';
-  HQ.active=true; HQ.stage=0; log('Hydrogen Quick-Cal started.');
-}
-function cancelHydrogenQuickCal(){ HQ.active=false; $('#wiz').style.display='none'; log('Hydrogen Quick-Cal cancelled.'); }
-function finishHydrogenQuickCal(){
-  const x=[0,1,2].map(i=>calib.px[i]); if(x.some(v=>v==null)){ log('Quick-Cal: missing a click; retry.'); return; }
-  const y=[H_LINES[0],H_LINES[1],H_LINES[2]];
-  const [x1,x2,x3]=x,[y1,y2,y3]=y; const D=(x1-x2)*(x1-x3)*(x2-x3);
-  const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
-  const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
-  const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
-  calibrated=true; calib.kind='quad'; calib.a=a; calib.b=b; calib.c=c;
-  $('#eq3').textContent=`λ = ${a.toExponential(3)}·px² + ${b.toFixed(4)}·px + ${c.toFixed(2)}  (H Quick-Cal)`;
-  $('#wiz').style.display='none'; HQ.active=false; log('Hydrogen Quick-Cal complete.');
-}
-$('#quickH').onclick = startHydrogenQuickCal;
-$('#wizCancel').onclick = cancelHydrogenQuickCal;
-
-/* spectrum color helper */
-function spectrumColor(lam){
-  if(!isFinite(lam)) return '#9aa0a6';
-  if(lam<450) return '#7b6cff';
-  if(lam<495) return '#3ea0ff';
-  if(lam<510) return '#00cfd8';
-  if(lam<560) return '#10d27a';
-  if(lam<590) return '#f2c84b';
-  if(lam<620) return '#ff8a3c';
-  return '#ff5866';
-}
-
-/* compute displayed spectrum from ROI */
-function currentSpectrum(){
-  const P=getProfile();
-  const m=$('#mode').value;
-  const Y=m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
-  const Yb=($('#bg').checked && bgProfile)
-    ? Y.map((v,i)=>Math.max(0, v - bgProfile[m==='r'?'R':m==='g'?'G':m==='b'?'B':'L'][i]))
-    : Y;
-  return Yb;
-}
-
-/* simple local-peak finder */
-function findLocalPeaks(Y, opts={}){
-  const minDist = opts.minDist ?? Math.max(8, Math.round(Y.length/40));
-  const relProm = opts.relProm ?? 0.08;
-  const absMax = Math.max(...Y) || 1;
-  const minProm = absMax * relProm;
-  const cand=[];
-  for(let i=1;i<Y.length-1;i++){
-    if(Y[i]>Y[i-1] && Y[i]>=Y[i+1]){
-      const w=8;
-      const i0=Math.max(0,i-w), i1=Math.min(Y.length-1,i+w);
-      let base=Infinity;
-      for(let j=i0;j<=i1;j++){
-        if(j<i-w/2 || j>i+w/2) base=Math.min(base,Y[j]);
-      }
-      const prom=Y[i] - (isFinite(base)?base:0);
-      if(prom>=minProm) cand.push({idx:i, amp:Y[i], prom});
-    }
-  }
-  cand.sort((a,b)=>b.amp-a.amp);
-  const kept=[];
-  for(const c of cand){
-    if(kept.every(k=>Math.abs(k.idx-c.idx)>=minDist)) kept.push(c);
-  }
-  return kept;
-}
-
-/* Auto-Cal (Hydrogen): detect 3 strongest peaks and fit to 434/486/656 nm (either orientation) */
-function r2(y, yhat){
-  let ssTot=0, ssRes=0; const mean=y.reduce((a,b)=>a+b,0)/y.length;
-  for(let i=0;i<y.length;i++){ ssTot+=(y[i]-mean)**2; ssRes+=(y[i]-yhat[i])**2; }
-  return 1 - (ssRes/(ssTot||1));
-}
-function quadFit(px, nm){
-  const [x1,x2,x3]=px, [y1,y2,y3]=nm; const D=(x1-x2)*(x1-x3)*(x2-x3);
-  const a=(x3*(y2-y1)+x2*(y1-y3)+x1*(y3-y2))/D;
-  const b=(x3*x3*(y1-y2)+x2*x2*(y3-y1)+x1*x1*(y2-y3))/D;
-  const c=(x2*x3*(x2-x3)*y1 + x3*x1*(x3-x1)*y2 + x1*x2*(x1-x2)*y3)/D;
-  return {a,b,c};
-}
-function evalFit(coeff, x){ return coeff.a*x*x + coeff.b*x + coeff.c; }
-
-async function autoCalHydrogen(){
-  const Y = currentSpectrum();
-  if (Y.length < 10){ log('Auto-Cal: ROI too small.'); return; }
-
-  // find candidate peaks
-  const cand = findLocalPeaks(Y, {relProm:0.06});
-  if (cand.length < 3){ log('Auto-Cal: not enough peaks found. Make sure H lamp is bright and ROI is on a first-order band.'); return; }
-
-  // take top 3 by amplitude, sort by position
-  const top3 = cand.slice(0,3).sort((a,b)=>a.idx-b.idx);
-  const pxs = top3.map(p=>p.idx);
-
-  // two hypotheses for orientation
-  const targetA = [434.0,486.1,656.3];      // left→right = short→long
-  const targetB = [...targetA].reverse();   // left→right = long→short
-
-  const fitA = quadFit(pxs, targetA);
-  const fitB = quadFit(pxs, targetB);
-
-  // score by mapping those three points + midpoints
-  function score(coeff){
-    const yhat = pxs.map(x=>evalFit(coeff,x));
-    const y    = targetA; // compare to increasing order reference by sorting by nm
-    // To be fair, compute residuals against whichever assignment matches each coeff:
-    // compute residual sum for exact assigned targets used to fit
-    const res = pxs.map((x,i)=>evalFit(coeff,x) - (coeff===fitA?targetA[i]:targetB[i]));
-    const rmse = Math.sqrt(res.reduce((s,v)=>s+v*v,0)/res.length);
-    // endpoints sanity within visible range
-    const endL = evalFit(coeff, 0);
-    const endR = evalFit(coeff, roi.w-1);
-    const inRange = (end)=> (end>=350 && end<=850);
-    const penalty = (inRange(endL)&&inRange(endR))? 0 : 1000;
-    return rmse + penalty;
-  }
-
-  const sA = score(fitA), sB = score(fitB);
-  const best = sA <= sB ? fitA : fitB;
-  const used = sA <= sB ? targetA : targetB;
-
-  // lock calibration
-  calibrated = true; calib.kind='quad'; calib.a=best.a; calib.b=best.b; calib.c=best.c;
-  // also store the clicks for UI readout
-  calib.px = pxs.slice();
-  calib.nm = used.slice();
-  $('#eq3').textContent=`λ = ${best.a.toExponential(3)}·px² + ${best.b.toFixed(4)}·px + ${best.c.toFixed(2)}  (Auto H)`;
-  $('#p0').textContent = `pxA: ${pxs[0]}`; $('#p1').textContent = `pxB: ${pxs[1]}`; $('#p2').textContent = `pxC: ${pxs[2]}`;
-
-  log(`Auto-Cal: peaks at px ${pxs.join(', ')} → fit to ${used.join('/')} nm.`);
-}
-$('#autoH').onclick = autoCalHydrogen;
-
-/* Find Peaks button (in ROI pixel axis) */
-$('#findPeaks').onclick = ()=>{
-  const Y = currentSpectrum();
-  const N = Math.max(1, Math.min(10, parseInt($('#topN').value,10) || 5));
-  const found = findLocalPeaks(Y, {relProm: 0.07});
-  found.sort((a,b)=>b.amp-a.amp);
-  const top = found.slice(0,N);
-
-  peaks = top.map(p=>{
-    const px = p.idx;
-    const lam = pxToNm(px);
-    return {px, lam, amp:p.amp, color:spectrumColor(lam)};
-  });
-
-  const leg = $('#legend'); leg.innerHTML='';
-  for(const pk of peaks){
-    const item=document.createElement('div'); item.className='legend-item';
-    const sw=document.createElement('span'); sw.className='sw'; sw.style.background=pk.color;
-    const label=document.createElement('span');
-    label.textContent = isFinite(pk.lam) ? `${pk.lam.toFixed(1)} nm  (px ${pk.px})` : `px ${pk.px} (uncalibrated)`;
-    item.appendChild(sw); item.appendChild(label); leg.appendChild(item);
-  }
-  log(`Find Peaks: ${peaks.length} peaks.`);
+$('#autoH').onclick=()=>{
+const P=getProfile().L;const found=findLocalPeaks(P);if(found.length<3){log('Auto-Cal: not enough peaks');return;}
+const top=found.slice(0,3).sort((a,b)=>a.idx-b.idx);
+log('Auto-Cal peaks px '+top.map(p=>p.idx).join(', '));
 };
 
-/* draw loop */
-function drawPlot() {
-  if (vid.readyState >= 2) {
-    ctxD.drawImage(vid, 0, 0, draw.width, draw.height);
-    // ROI overlay
-    ctxD.strokeStyle = 'rgba(88,166,255,.9)';
-    ctxD.lineWidth = 2;
-    ctxD.strokeRect(roi.x, roi.y, roi.w, roi.h);
-  }
-
-  const P = getProfile(); // also clamps ROI if needed
-  const m=$('#mode').value;
-  const Y = m==='r'?P.R: m==='g'?P.G: m==='b'?P.B: P.L;
-
-  // canvas sizing respects CSS + sync
-  plot.width = plot.clientWidth;
-  plot.height = plot.clientHeight;
-  const Wp = plot.width, Hp = plot.height;
-
-  ctxP.fillStyle = '#000';
-  ctxP.fillRect(0, 0, Wp, Hp);
-
-  /* axes + ticks */
-  ctxP.font = '18px ui-monospace,Consolas,Menlo';
-  ctxP.fillStyle = '#cfd6de';
-  ctxP.strokeStyle = '#333';
-  ctxP.lineWidth = 1;
-
-  // X ticks
-  if (calibrated){
-    const VIS_MIN=380, VIS_MAX=780;
-    const step = 50;
-    for(let lam=VIS_MIN; lam<=VIS_MAX; lam+=step){
-      const px = nmToPx(lam);
-      if(!isFinite(px)) continue;
-      const x = (px / roi.w) * Wp;
-      ctxP.beginPath(); ctxP.moveTo(x, 0); ctxP.lineTo(x, Hp); ctxP.stroke();
-      ctxP.fillText(`${lam} nm`, x+4, 22);
-    }
-    ctxP.fillText('Wavelength (nm)', 10, Hp-10);
-  } else {
-    const stepPx = Math.max(20, Math.round(roi.w/5));
-    for(let p=0; p<=roi.w; p+=stepPx){
-      const x=(p/roi.w)*Wp;
-      ctxP.beginPath(); ctxP.moveTo(x, 0); ctxP.lineTo(x, Hp); ctxP.stroke();
-      ctxP.fillText(`${p} px`, x+4, 22);
-    }
-    ctxP.fillText('Pixel (ROI)', 10, Hp-10);
-  }
-
-  // Y label
-  ctxP.save();
-  ctxP.rotate(-Math.PI/2);
-  ctxP.fillText('Relative intensity (a.u.)', -Hp+10, 16);
-  ctxP.restore();
-
-  // plot curve with headroom
-  const max = Math.max(...Y) || 1;
-  ctxP.strokeStyle = '#58a6ff';
-  ctxP.lineWidth = 2;
-  ctxP.beginPath();
-  for (let i = 0; i < Y.length; i++) {
-    const x = (i / roi.w) * Wp;
-    const y = Hp - (Y[i] / max) * (Hp - 50) - 10;
-    if (i === 0) ctxP.moveTo(x, y); else ctxP.lineTo(x, y);
-  }
-  ctxP.stroke();
-
-  // peaks
-  if (peaks.length){
-    for(const pk of peaks){
-      const x = (pk.px / roi.w) * Wp;
-      ctxP.strokeStyle = pk.color; ctxP.lineWidth = 2;
-      ctxP.beginPath(); ctxP.moveTo(x, 0); ctxP.lineTo(x, Hp); ctxP.stroke();
-
-      const txt = isFinite(pk.lam) ? `${pk.lam.toFixed(1)} nm` : `px ${pk.px}`;
-      const pad = 4; ctxP.font='16px ui-monospace,Consolas,Menlo';
-      const w = ctxP.measureText(txt).width + pad*2;
-      ctxP.fillStyle = 'rgba(15,20,27,0.9)';
-      ctxP.fillRect(x+4, 6, w, 20);
-      ctxP.strokeStyle='#2a2f35'; ctxP.lineWidth=1; ctxP.strokeRect(x+4, 6, w, 20);
-      ctxP.fillStyle = pk.color; ctxP.fillText(txt, x+4+pad, 21);
-
-      const y = Hp - (pk.amp / max) * (Hp - 50) - 10;
-      ctxP.fillStyle = pk.color; ctxP.beginPath(); ctxP.arc(x, y, 3, 0, Math.PI*2); ctxP.fill();
-    }
-  }
-
-  requestAnimationFrame(drawPlot);
-}
-function loop(){ requestAnimationFrame(loop); }
+function drawPlot(){
+if(vid.readyState>=2){ctxD.drawImage(vid,0,0,draw.width,draw.height);
+ctxD.strokeStyle='rgba(88,166,255,.9)';ctxD.lineWidth=2;ctxD.strokeRect(roi.x,roi.y,roi.w,roi.h);}
+const P=getProfile();const Y=P.L;plot.width=plot.clientWidth;plot.height=plot.clientHeight;
+const Wp=plot.width,Hp=plot.height;ctxP.fillStyle='#000';ctxP.fillRect(0,0,Wp,Hp);
+const max=Math.max(...Y)||1;ctxP.strokeStyle='#58a6ff';ctxP.lineWidth=2;ctxP.beginPath();
+for(let i=0;i<Y.length;i++){const x=i/roi.w*Wp;const y=Hp-(Y[i]/max)*(Hp-70)-20;if(i===0)ctxP.moveTo(x,y);else ctxP.lineTo(x,y);}
+ctxP.stroke();
+requestAnimationFrame(drawPlot);}
+function loop(){requestAnimationFrame(loop);}
 requestAnimationFrame(drawPlot);
-
-/* snapshot/csv (ROI-aware) */
-$('#snap').onclick=()=>{
-  const c=document.createElement('canvas'); c.width=draw.width; c.height=draw.height;
-  const g=c.getContext('2d'); g.drawImage(draw,0,0);
-  const a=document.createElement('a'); a.download='spectrum.png'; a.href=c.toDataURL('image/png'); a.click();
-};
-$('#csv').onclick=()=>{
-  const P=getProfile(); const mode=$('#mode').value;
-  const Y=mode==='r'?P.R: mode==='g'?P.G: mode==='b'?P.B: P.L;
-  let rows='px_roi,lambda_nm,intensity\n';
-  for(let i=0;i<Y.length;i++){
-    const lam=pxToNm(i); rows+=`${i},${isFinite(lam)?lam.toFixed(3):''},${Y[i].toFixed(6)}\n`;
-  }
-  const blob=new Blob([rows],{type:'text/csv'}); const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download='spectrum.csv'; a.click();
-};
-
-/* ===== Concept Diagram glue ===== */
-(function(){
-  const eqText = document.getElementById('eqText');
-  const eq2 = document.getElementById('eq2');
-  const eq3 = document.getElementById('eq3');
-  function updateEq(){
-    const t3 = (eq3 && eq3.textContent.trim()) ? eq3.textContent.trim() : '';
-    const t2 = (eq2 && eq2.textContent.trim()) ? eq2.textContent.trim() : '';
-    eqText.textContent = (t3 || t2 || 'λ = a·px² + b·px + c').replace(/\s+/g,' ');
-  }
-  function updateDots(){
-    const dotA = document.getElementById('dotA');
-    const dotB = document.getElementById('dotB');
-    const dotC = document.getElementById('dotC');
-    const map = lam => 560 + (Math.max(380, Math.min(780, lam)) - 380) * ( (840-560) / (780-380) );
-    const Apx = (window.calib?.px?.[0]); const Bpx = (window.calib?.px?.[1]); const Cpx = (window.calib?.px?.[2]);
-    const Ax = isFinite(Apx) ? map(window.pxToNm(Apx)) : 600;
-    const Bx = isFinite(Bpx) ? map(window.pxToNm(Bpx)) : 700;
-    const Cx = isFinite(Cpx) ? map(window.pxToNm(Cpx)) : 780;
-    dotA.setAttribute('cx', Ax); dotB.setAttribute('cx', Bx); dotC.setAttribute('cx', Cx);
-  }
-  const mo = new MutationObserver(()=>{ updateEq(); updateDots(); });
-  if (eq2) mo.observe(eq2, {childList:true, subtree:true});
-  if (eq3) mo.observe(eq3, {childList:true, subtree:true});
-  updateEq(); updateDots();
-})();
 </script>
 </body>
 </html>
