@@ -10,23 +10,33 @@
   header{padding:8px 12px;border-bottom:1px solid var(--grid);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   h1{font-size:16px;margin:0 8px 0 0}
   .warn{background:#331;color:#f6d7d7;padding:4px 8px;border-radius:8px;border:1px solid #633}
-  main{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;padding:12px}
+
+  /* grid; keep panels aligned at the top */
+  main{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;padding:12px;align-items:start}
   .panel{border:1px solid var(--grid);border-radius:10px;overflow:hidden;background:#0f141b;min-width:0}
   .p-h{padding:8px 10px;background:#0b0f14;border-bottom:1px solid var(--grid);font-weight:600}
   .p-b{padding:10px}
+
   #viewwrap{position:relative;background:#000}
+  /* mirror the whole preview block when using a front camera */
+  #viewwrap.mirror{ transform: scaleX(-1); transform-origin:center; }
   video,canvas{max-width:100%;display:block}
   #draw{position:absolute;inset:0;pointer-events:none}
+
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
   label{color:var(--mut)}
   input,select,button{background:#0b0f14;color:var(--ink);border:1px solid var(--grid);border-radius:8px;padding:6px 8px}
   button{cursor:pointer}
-  #plot{height:300px;width:100%;background:#000;border:1px solid var(--grid);border-radius:8px}
+
+  /* PLOT fills its wrapper; wrapper is synced to video size */
+  #plot{width:100%;height:100%;min-height:480px;background:#000;border:1px solid var(--grid);border-radius:8px;display:block}
+
   #log{white-space:pre-wrap;background:#0b0f14;border:1px solid var(--grid);border-radius:8px;padding:8px;min-height:64px}
   .small{font-size:12px;color:var(--mut)}
   #legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .legend-item{display:flex;align-items:center;gap:6px;background:#0b0f14;border:1px solid #2a2f35;border-radius:8px;padding:2px 6px;font:13px ui-monospace,Consolas,Menlo}
   .sw{width:12px;height:12px;border-radius:3px;border:1px solid #222}
+
   /* Hydrogen Quick-Cal overlay */
   #wiz{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:1000}
   #wiz .card{background:#0f141b;border:1px solid var(--grid);border-radius:10px;max-width:520px;width:92%;padding:12px}
@@ -101,8 +111,13 @@
   <!-- RIGHT: SPECTRUM + PEAKS -->
   <section class="panel">
     <div class="p-h">Intensity vs Wavelength</div>
-    <div class="p-b">
-      <canvas id="plot"></canvas>
+
+    <!-- Plot block fills available height; wrapper (#plotWrap) is synced to video size -->
+    <div class="p-b" style="display:flex;flex-direction:column;gap:10px;">
+      <div id="plotWrap" style="flex:1;display:flex;">
+        <canvas id="plot" style="flex:1;"></canvas>
+      </div>
+
       <div class="row">
         <label>Channel
           <select id="mode">
@@ -118,13 +133,13 @@
       </div>
 
       <div class="p-h">Peaks</div>
-      <div class="p-b">
-        <div class="row">
+      <div class="p-b" style="padding:0">
+        <div class="row" style="padding-top:8px">
           <button id="findPeaks">Find Peaks</button>
           <label>Top N <input id="topN" type="number" value="5" min="1" max="10" style="width:56px"></label>
           <span class="small">Peaks are color-coded by approximate spectrum color.</span>
         </div>
-        <div id="legend"></div>
+        <div id="legend" style="padding-bottom:6px"></div>
       </div>
     </div>
   </section>
@@ -157,13 +172,57 @@ let calib={kind:'linear',A:1,B:0,a:0,b:1,c:0,px:[null,null,null],nm:[546.1,589.0
 let W=1280,H=720;
 let peaks=[]; // from your peaks build
 
-function fitCanvas(){ draw.width=vid.videoWidth||W; draw.height=vid.videoHeight||H; plot.width=plot.clientWidth; plot.height=plot.clientHeight; }
-async function enumerateCams(){ try{ const devs=await navigator.mediaDevices.enumerateDevices(); const cams=devs.filter(d=>d.kind==='videoinput'); const sel=$('#cams'); sel.innerHTML=''; cams.forEach((d,i)=>{ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||`Camera ${i+1}`; sel.appendChild(o); }); if(!cams.length) log('No cameras found. Check OS privacy settings and browser permissions.'); }catch(e){ log('enumerateDevices: '+e.name+' — '+e.message); } }
-function makeConstraints(pref){ const [w,h]=$('#res').value.split('x').map(Number);
+/* ---- size sync: match plot size to video preview size (height + width) ---- */
+function syncPlotSize(){
+  const vw = $('#viewwrap');
+  const wrap = $('#plotWrap');
+  if (!vw || !wrap) return;
+  const r = vw.getBoundingClientRect();
+  wrap.style.height = (r.height || 480) + 'px';
+  wrap.style.width  = (r.width  || 640) + 'px';
+  // ensure canvas uses current CSS size
+  plot.width  = plot.clientWidth;
+  plot.height = plot.clientHeight;
+}
+new ResizeObserver(syncPlotSize).observe($('#viewwrap'));
+window.addEventListener('resize', syncPlotSize);
+/* -------------------------------------------------------------------------- */
+
+function fitCanvas(){
+  draw.width = vid.videoWidth || W;
+  draw.height = vid.videoHeight || H;
+  plot.width = plot.clientWidth;
+  plot.height = plot.clientHeight;
+  syncPlotSize();
+}
+
+async function enumerateCams(){
+  try{
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const cams=devs.filter(d=>d.kind==='videoinput');
+    const sel=$('#cams'); sel.innerHTML='';
+    cams.forEach((d,i)=>{ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||`Camera ${i+1}`; sel.appendChild(o); });
+    if(!cams.length) log('No cameras found. Check OS privacy settings and browser permissions.');
+  }catch(e){ log('enumerateDevices: '+e.name+' — '+e.message); }
+}
+
+function makeConstraints(pref){
+  const [w,h]=$('#res').value.split('x').map(Number);
   if (pref?.deviceId) return {video:{deviceId:{exact:pref.deviceId},width:{ideal:w},height:{ideal:h}},audio:false};
   if (pref==='environment') return {video:{facingMode:{exact:'environment'},width:{ideal:w},height:{ideal:h}},audio:false};
   if (pref==='user')        return {video:{facingMode:{exact:'user'},width:{ideal:w},height:{ideal:h}},audio:false};
-  return {video:{width:{ideal:w},height:{ideal:h}},audio:false}; }
+  return {video:{width:{ideal:w},height:{ideal:h}},audio:false};
+}
+
+function applyMirrorForFacingMode(){
+  try{
+    const facing = stream?.getVideoTracks?.()[0]?.getSettings?.().facingMode || '';
+    const vw = $('#viewwrap');
+    if (facing === 'user') { vw.classList.add('mirror'); }
+    else { vw.classList.remove('mirror'); }
+  }catch{}
+}
+
 async function startCamera(){
   $('#log').textContent='';
   if(!('mediaDevices' in navigator)){ log('ERROR: navigator.mediaDevices not available.'); return; }
@@ -171,20 +230,39 @@ async function startCamera(){
   if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
   try{ const s=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); s.getTracks().forEach(t=>t.stop()); }catch(e){ log('Pre-permission: '+e.name); }
   await enumerateCams();
-  const devId=$('#cams').value; const tries=[makeConstraints({deviceId:devId}), makeConstraints('environment'), makeConstraints('user'), makeConstraints()];
-  for(const c of tries){ try{ log('Trying: '+JSON.stringify(c)); stream=await navigator.mediaDevices.getUserMedia(c); break; } catch(e){ log('Failed: '+e.name+' — '+e.message); stream=null; } }
+
+  const devId=$('#cams').value;
+  const tries=[makeConstraints({deviceId:devId}), makeConstraints('environment'), makeConstraints('user'), makeConstraints()];
+  for(const c of tries){
+    try{ log('Trying: '+JSON.stringify(c)); stream=await navigator.mediaDevices.getUserMedia(c); break; }
+    catch(e){ log('Failed: '+e.name+' — '+e.message); stream=null; }
+  }
   if(!stream){ log('All camera attempts failed.'); return; }
-  vid.srcObject=stream; try{ await vid.play(); }catch(e){ log('video.play: '+e.name); }
+
+  vid.srcObject=stream;
+  try{ await vid.play(); }catch(e){ log('video.play: '+e.name); }
+
   await new Promise(res=>{ if(vid.readyState>=2) res(); else vid.onloadedmetadata=res; });
-  fitCanvas(); requestAnimationFrame(loop); log('Camera started: '+(stream.getVideoTracks()[0]?.label||'unknown'));
+  applyMirrorForFacingMode();
+  fitCanvas();
+  requestAnimationFrame(loop);
+  log('Camera started: '+(stream.getVideoTracks()[0]?.label||'unknown'));
 }
-$('#start').onclick=startCamera; window.onresize=fitCanvas;
+$('#start').onclick=startCamera;
+window.onresize=fitCanvas;
 
 // ROI drag
-$('#viewwrap').addEventListener('mousedown',e=>{ const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top; if(e.shiftKey){ dragging='h'; lastY=y; } else { dragging='y'; lastY=y; }});
-window.addEventListener('mousemove',e=>{ if(!dragging) return; const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
+$('#viewwrap').addEventListener('mousedown',e=>{
+  const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
+  if(e.shiftKey){ dragging='h'; lastY=y; } else { dragging='y'; lastY=y; }
+});
+window.addEventListener('mousemove',e=>{
+  if(!dragging) return;
+  const r=$('#viewwrap').getBoundingClientRect(); const y=e.clientY-r.top;
   if(dragging==='y'){ roi.y=Math.max(0,Math.min(draw.height-roi.h, y - roi.h/2)); }
-  else if(dragging==='h'){ roi.h=Math.max(2,Math.min(draw.height-roi.y, Math.abs(y-lastY))); }});
+  else if(dragging==='h'){ roi.h=Math.max(2,Math.min(draw.height-roi.y, Math.abs(y-lastY))); }
+  syncPlotSize();
+});
 window.addEventListener('mouseup',()=> dragging=false);
 
 // Data
@@ -219,19 +297,17 @@ plot.addEventListener('mousemove',e=>{
   const lam=pxToNm(px); $('#cursor').textContent=`px:${px} , λ:${isFinite(lam)?lam.toFixed(1):'–'} nm`;
 });
 
-// Calibration (existing)
+// Calibration (existing + wizard)
 for(const l of document.querySelectorAll('.lam')) l.onchange=()=>{ calib.nm[parseInt(l.dataset.idx,10)]=parseFloat(l.value); };
 for(const b of document.querySelectorAll('.pick')) b.onclick=()=>{ picking=parseInt(b.dataset.idx,10); log('Click a peak on the plot to assign pixel.'); };
 plot.addEventListener('click',e=>{
-  if(picking===null && !HQ.active) return; // normal route: only if picking OR wizard active
+  if(picking===null && !HQ.active) return;
   const r=plot.getBoundingClientRect(), x=e.clientX-r.left;
   const px=Math.round(x/plot.width*draw.width);
 
   if(picking!==null){
     calib.px[picking]=px; $('#p'+picking).textContent=`px${['A','B','C'][picking]}: ${px}`; picking=null; return;
   }
-
-  // Wizard route
   if(HQ.active){
     const stage=HQ.stage;
     calib.px[stage]=px;
@@ -265,7 +341,6 @@ const HQ = {active:false, stage:0};
 const H_LINES = [434.0, 486.1, 656.3];
 
 function startHydrogenQuickCal(){
-  // preset nm targets
   calib.nm[0]=H_LINES[0]; calib.nm[1]=H_LINES[1]; calib.nm[2]=H_LINES[2];
   $('#wiz').style.display='flex';
   $('#wizMsg').innerHTML='Step 1 of 3 — On the graph, click the <b>violet</b> peak <b>H-γ (434.0 nm)</b>.';
@@ -276,7 +351,6 @@ function cancelHydrogenQuickCal(){
   HQ.active=false; $('#wiz').style.display='none'; log('Hydrogen Quick-Cal cancelled.');
 }
 function finishHydrogenQuickCal(){
-  // compute 3-pt fit automatically
   const x=[0,1,2].map(i=>calib.px[i]);
   if(x.some(v=>v==null)){ log('Quick-Cal: missing a click; please retry.'); return; }
   const y=[H_LINES[0],H_LINES[1],H_LINES[2]];
@@ -293,9 +367,6 @@ $('#quickH').onclick = startHydrogenQuickCal;
 $('#wizCancel').onclick = cancelHydrogenQuickCal;
 /* ------------------------------------------ */
 
-// Peaks etc. (drawing + legend) remain from your current build
-
-// Draw loop (unchanged core)
 function drawPlot() {
   if (vid.readyState >= 2) {
     ctxD.drawImage(vid, 0, 0, draw.width, draw.height);
@@ -313,9 +384,11 @@ function drawPlot() {
     ? Y.map((v, i) => Math.max(0, v - bgProfile[m === 'r' ? 'R' : m === 'g' ? 'G' : m === 'b' ? 'B' : 'L'][i]))
     : Y;
 
+  // canvas sizing respects CSS + sync
   plot.width = plot.clientWidth;
   plot.height = plot.clientHeight;
   const Wp = plot.width, Hp = plot.height;
+
   ctxP.fillStyle = '#000';
   ctxP.fillRect(0, 0, Wp, Hp);
 
@@ -337,7 +410,7 @@ function drawPlot() {
         ctxP.moveTo(x, 0);
         ctxP.lineTo(x, Hp);
         ctxP.stroke();
-        ctxP.fillText(`${lam}`, x + 4, 22); // single row, larger font
+        ctxP.fillText(`${lam}`, x + 4, 22);
       }
     }
   } else {
@@ -350,7 +423,7 @@ function drawPlot() {
   ctxP.beginPath();
   for (let i = 0; i < Yb.length; i++) {
     const x = (i / draw.width) * Wp;
-    const y = Hp - (Yb[i] / max) * (Hp - 50) - 10; // expanded headroom
+    const y = Hp - (Yb[i] / max) * (Hp - 50) - 10; // headroom
     if (i === 0) ctxP.moveTo(x, y);
     else ctxP.lineTo(x, y);
   }
@@ -358,7 +431,6 @@ function drawPlot() {
 
   requestAnimationFrame(drawPlot);
 }
-
 function loop(){ requestAnimationFrame(loop); }
 requestAnimationFrame(drawPlot);
 </script>
