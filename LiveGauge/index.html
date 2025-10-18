@@ -1,0 +1,595 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LiveGauge</title>
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;margin:24px;line-height:1.35;background:#f7f7f7}
+    .wrap{max-width:1100px;margin:0 auto}
+    .row{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+    .card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:14px 16px}
+    .btn{padding:.5rem 1rem;border-radius:.75rem;border:1px solid #111;background:#111;color:#fff;font-weight:600;cursor:pointer}
+    .btn-ghost{padding:.35rem .65rem;border-radius:.65rem;border:1px solid #ddd;background:#fff;cursor:pointer}
+    .badge{font-size:.7rem;padding:.2rem .5rem;border-radius:9999px;background:#eef}
+    input[type="range"]{width:100%}
+    .mut{color:#666;font-size:12px}
+    .tiny{font-size:11px;line-height:1.2}
+    .rowline{display:flex;gap:8px;align-items:center;margin:.35rem 0}
+    .rowline input[type="text"]{flex:1;padding:.45rem;border:1px solid #ccc;border-radius:8px}
+    .pill{font-size:10px;border:1px solid #ddd;border-radius:9999px;padding:.15rem .4rem}
+    .hdr{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .hdr input{padding:.3rem .5rem;border:1px solid #ccc;border-radius:8px}
+  </style>
+
+  <!-- Firebase -->
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hdr" style="justify-content:space-between;margin-bottom:12px">
+      <div class="hdr">
+        <h1 style="margin:0">LiveGauge</h1>
+        <span class="mut tiny">Class: <strong id="classLabel">—</strong></span>
+        <span class="mut tiny">Session: <strong id="sessionLabel">—</strong></span>
+      </div>
+      <div class="hdr">
+        <span id="connectionBadge" class="badge">offline (local)</span>
+        <input id="classInput" class="tiny" style="width:10rem" placeholder="Enter class name">
+        <button id="setClassBtn" class="btn-ghost tiny" title="Create/Join class">Set Class</button>
+        <button id="shareClassBtn" class="btn-ghost tiny" title="Copy join link">Copy Link</button>
+        <button id="loginBtn" class="btn-ghost" title="Teacher login">Login</button>
+      </div>
+    </header>
+
+    <div class="row">
+      <!-- LEFT: Student join + sliders -->
+      <section style="display:flex;flex-direction:column;gap:12px">
+        <div id="joinCard" class="card">
+          <h3 style="margin:0 0 8px 0">Join</h3>
+          <div class="mut tiny" style="margin-bottom:6px">Class: <span id="roomReadout">—</span></div>
+          <label class="mut">Your name</label>
+          <input id="nameInput" style="width:100%;padding:.6rem;border:1px solid #ccc;border-radius:10px" placeholder="e.g., Jane S." />
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <button id="joinBtn" class="btn">Join & Rate</button>
+            <span id="joinStatus" class="mut"></span>
+          </div>
+        </div>
+
+        <div id="rateCard" class="card" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h3 style="margin:0">Rate (0–10)</h3>
+            <div class="mut">You: <span id="whoami" style="font-weight:600">—</span></div>
+          </div>
+          <div id="criteriaList" style="margin-top:10px;display:flex;flex-direction:column;gap:12px"></div>
+          <div style="margin-top:10px;display:flex;justify-content:flex-end;align-items:center">
+            <div class="mut">Totals update as you slide.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: Results (teacher PIN) -->
+      <aside id="resultsCard" class="card" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <h3 style="margin:0">Results (Live)</h3>
+          <span id="participantsBadge" class="badge">0 participants</span>
+        </div>
+
+        <div id="resultsSummary" style="display:flex;flex-direction:column;gap:6px"></div>
+
+        <div style="border-top:1px solid #eee;margin-top:10px;padding-top:8px" class="tiny">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Final average</strong> (by category)</div>
+            <div style="font-weight:700;font-size:18px" id="finalAverage">0.00</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+            <div>Class total average</div>
+            <div id="classTotalAvg" style="font-weight:600">0.00</div>
+          </div>
+          <div class="mut tiny">Max total = <span id="maxTotal"></span></div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div class="tiny" style="font-weight:700;margin-bottom:4px">Participants</div>
+          <div id="participantsList" class="tiny" style="color:#333"></div>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button id="editCriteriaBtn" class="btn-ghost" title="Add / remove / rename categories">Edit Criteria</button>
+          <button id="resetScores" class="btn-ghost" title="Zero all scores; keep participants">Reset Scores</button>
+          <button id="endSession" class="btn-ghost" title="Start New Session">End Session</button>
+          <button id="endClass" class="btn-ghost" title="Archive class (clear sessions + PIN)">End Class</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Teacher login modal -->
+  <dialog id="loginDlg" style="border:none;border-radius:12px;max-width:380px;width:92%">
+    <form method="dialog" style="padding:16px">
+      <h3 style="margin:0 0 8px 0">Teacher Login</h3>
+      <p class="mut tiny" style="margin-top:0">Enter PIN to unlock the Results & Controls.</p>
+      <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+             style="width:100%;padding:.6rem;border:1px solid #ccc;border-radius:10px" placeholder="4-digit PIN" />
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button id="unlockBtn" class="btn" value="unlock">Unlock</button>
+        <button class="btn-ghost" value="cancel">Close</button>
+      </div>
+      <div id="pinSetup" class="mut tiny" style="margin-top:8px;display:none">
+        No PIN set for this class. Create one now to enable teacher controls.
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <input id="newPinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+                 style="flex:1;padding:.5rem;border:1px solid #ccc;border-radius:8px" placeholder="New 4-digit PIN">
+          <button id="saveNewPinBtn" class="btn-ghost" type="button">Save PIN</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Criteria editor modal -->
+  <dialog id="criteriaDlg" style="border:none;border-radius:12px;max-width:520px;width:92%">
+    <form method="dialog" style="padding:16px" onsubmit="return false;">
+      <h3 style="margin:0 0 6px 0">Edit Criteria</h3>
+      <p class="mut tiny" style="margin-top:0">Change labels, add or remove rows. Saving updates everyone live.</p>
+      <div id="criteriaEditor"></div>
+      <div class="mut tiny" style="margin-top:4px">
+        <span class="pill">Tip</span> Removing a row hides it everywhere. Use <em>Reset Scores</em> to zero new rows for all students.
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button id="addRowBtn" class="btn-ghost" type="button">Add Row</button>
+        <span style="flex:1"></span>
+        <button id="saveCriteriaBtn" class="btn">Save</button>
+        <button id="closeCriteriaBtn" class="btn-ghost">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    // ===== CONFIG =====
+    const CONFIG = {
+      useFirebase: true,
+      firebaseConfig: {
+        apiKey: "AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
+        authDomain: "presentation-83d1f.firebaseapp.com",
+        databaseURL: "https://presentation-83d1f-default-rtdb.firebaseio.com",
+        projectId: "presentation-83d1f",
+        storageBucket: "presentation-83d1f.firebasestorage.app",
+        messagingSenderId: "132406143951",
+        appId: "1:132406143951:web:9695690023bd3f2aedc0ba"
+      }
+    };
+    const MAX_SCORE = 10;
+
+    // ===== DEFAULT CRITERIA (seed if class has none) =====
+    const DEFAULT_CRITERIA = [
+      { id: "content",    label: "Content Accuracy" },
+      { id: "clarity",    label: "Clarity" },
+      { id: "visuals",    label: "Visuals" },
+      { id: "engagement", label: "Engagement" },
+      { id: "delivery",   label: "Delivery" }
+    ];
+    let CRITERIA = DEFAULT_CRITERIA.slice();
+
+    // ===== STATE =====
+    const state = {
+      db:null, me:{id:null,name:null}, online:false, studentRef:null, joined:false,
+      classKey:null, sessionId:null, pin:null, classHasPin:false
+    };
+    let cacheStudents = {};
+
+    // ===== UTIL =====
+    const $ = s => document.querySelector(s);
+    const $$ = s => Array.from(document.querySelectorAll(s));
+    function mean(a){ return a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0; }
+    function show(el,on){ el.style.display = on ? '' : 'none'; }
+    function badge(txt){ $('#connectionBadge').textContent = txt; }
+    function uid(){ return Math.random().toString(36).slice(2,9); }
+    function nowId(){ return String(Date.now()); }
+    function throttle(fn, ms){ let t=0, lastArgs=null; return (...args)=>{ const n=Date.now(); lastArgs=args; if(n-t>=ms){ t=n; fn(...lastArgs);} }; }
+    function sanitizeClassName(s){
+      return (s||'').trim().toUpperCase().replace(/[^A-Z0-9\-]/g,'-').replace(/-+/g,'-').slice(0,32) || 'CLASS';
+    }
+    // NEW: safe escaping so labels with ` or < > " ' don’t break HTML/JS
+    function escHtml(s){
+      return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function escAttr(s){
+      return String(s)
+        .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+        .replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/`/g,'&#96;').replace(/'/g,'&#39;');
+    }
+
+    // URL helpers
+    function getUrlParam(name){ const u = new URL(location.href); return u.searchParams.get(name); }
+    function setUrlParam(name, value){ const u = new URL(location.href); if(value==null) u.searchParams.delete(name); else u.searchParams.set(name, value); history.replaceState({}, "", u.toString()); }
+
+    // Reset token guards
+    function seenKey(kind){ return `lg_seen_${state.classKey}_${kind}_${state.sessionId||'none'}`; }
+    function getSeen(kind){ return Number(localStorage.getItem(seenKey(kind)) || 0); }
+    function setSeen(kind, v){ localStorage.setItem(seenKey(kind), String(v)); }
+
+    // Paths
+    const classPath  = () => `/classes/${state.classKey}`;
+    const configPath = () => `${classPath()}/config`;
+    const critPath   = () => `${classPath()}/criteria`;
+    const sessRoot   = () => `${classPath()}/sessions`;
+    const basePath   = () => `${sessRoot()}/${state.sessionId}`;
+
+    // ===== FIREBASE INIT =====
+    function dbInit(){
+      if(!CONFIG.useFirebase){ badge('offline (local)'); return; }
+      try{
+        if (firebase.apps && firebase.apps.length === 0) firebase.initializeApp(CONFIG.firebaseConfig);
+        state.db = firebase.database();
+        firebase.auth().signInAnonymously().then(()=>{
+          state.online = true; badge('online (firebase)');
+          bootFromClass();
+        }).catch(()=>{ state.online=false; badge('offline (local)'); });
+      }catch(e){ state.online=false; badge('offline (local)'); }
+    }
+
+    // ===== CLASS / SESSION BOOT =====
+    async function bootFromClass(){
+      const urlC = getUrlParam('class');
+      const savedC = localStorage.getItem('lg_class');
+      const picked = sanitizeClassName(urlC || savedC || 'CLASS');
+      setClassKey(picked, false);
+      $('#classInput').value = state.classKey;
+      $('#classLabel').textContent = state.classKey;
+      $('#roomReadout').textContent = state.classKey;
+
+      const cfgSnap = await state.db.ref(configPath()).get();
+      const cfg = cfgSnap.val() || {};
+      state.classHasPin = typeof cfg.teacherPin === 'string' && cfg.teacherPin.length === 4;
+
+      const cSnap = await state.db.ref(critPath()).get();
+      if(!cSnap.exists()) await state.db.ref(critPath()).set(DEFAULT_CRITERIA);
+      else CRITERIA = Array.isArray(cSnap.val()) ? cSnap.val() : Object.values(cSnap.val());
+
+      await ensureSession();
+      attachListeners();
+      attachResetListeners();
+    }
+
+    function setClassKey(k, writeUrl=true){
+      state.classKey = sanitizeClassName(k);
+      localStorage.setItem('lg_class', state.classKey);
+      if(writeUrl) setUrlParam('class', state.classKey);
+    }
+
+    async function ensureSession(){
+      const curRef = state.db.ref(`${configPath()}/currentSession`);
+      let s = (await curRef.get()).val();
+      if(!s){ s = nowId(); await curRef.set(s); }
+      state.sessionId = s;
+      $('#sessionLabel').textContent = s.slice(-6);
+    }
+
+    async function rotateSession(){
+      const old = state.sessionId;
+      const next = nowId();
+      await state.db.ref(`${configPath()}/currentSession`).set(next);
+      await state.db.ref(`${sessRoot()}/${old}`).set(null);
+      state.sessionId = next;
+      $('#sessionLabel').textContent = next.slice(-6);
+      setSeen('soft', 0); setSeen('hard', 0);
+      detachCoreListeners();
+      attachListeners();
+      attachResetListeners();
+      goToJoinView();
+    }
+
+    // ===== LISTENERS =====
+    let unsub = { students:null, connected:null, criteria:null, soft:null, hard:null };
+    function detachCoreListeners(){
+      try{ if(unsub.students) unsub.students.off(); }catch(e){}
+      try{ if(unsub.connected) unsub.connected.off(); }catch(e){}
+      try{ if(unsub.criteria)  unsub.criteria.off();  }catch(e){}
+      try{ if(unsub.soft)      unsub.soft.off();      }catch(e){}
+      try{ if(unsub.hard)      unsub.hard.off();      }catch(e){}
+    }
+
+    function attachListeners(){
+      unsub.students = state.db.ref(`${basePath()}/students`);
+      unsub.students.on('value', snap=>{ cacheStudents = snap.val() || {}; renderResults(cacheStudents); });
+
+      unsub.connected = state.db.ref('.info/connected');
+      unsub.connected.on('value', s=>{ badge(s.val() ? 'online (firebase)' : 'offline (local)'); });
+
+      unsub.criteria = state.db.ref(critPath());
+      unsub.criteria.on('value', s=>{
+        const v = s.val() || [];
+        CRITERIA = Array.isArray(v) ? v : Object.values(v);
+        if(state.joined) renderSliders();
+        renderResults(cacheStudents);
+      });
+    }
+
+    function attachResetListeners(){
+      unsub.soft = state.db.ref(`${basePath()}/control/softResetAt`);
+      unsub.soft.on('value', s=>{
+        const t = Number(s.val() || 0);
+        if(t && t > getSeen('soft')){
+          setSeen('soft', t);
+          if(state.joined){
+            $$('#criteriaList input[type=range]').forEach(r=>{
+              r.value = 0;
+              r.dispatchEvent(new Event('input'));
+            });
+          }
+        }
+      });
+
+      unsub.hard = state.db.ref(`${basePath()}/control/resetAt`);
+      unsub.hard.on('value', s=>{
+        const t = Number(s.val() || 0);
+        if(t && t > getSeen('hard')){
+          setSeen('hard', t);
+          goToJoinView();
+        }
+      });
+    }
+
+    // ===== JOIN / PRESENCE =====
+    function ensureClientId(){
+      let id = localStorage.getItem('lg_uid');
+      if(!id){ id = uid(); localStorage.setItem('lg_uid', id); }
+      state.me.id = id; return id;
+    }
+    async function joinClass(name){
+      ensureClientId(); state.me.name = name; state.joined = true;
+      $('#whoami').textContent = name; show($('#rateCard'), true); show($('#joinCard'), false);
+
+      const id = state.me.id;
+      state.studentRef = state.db.ref(`${basePath()}/students/${id}`);
+      await state.studentRef.set({ name });
+
+      try { state.studentRef.onDisconnect().remove(); } catch (e) {}
+      window.addEventListener('beforeunload', () => { if(state.studentRef){ try { state.studentRef.remove(); } catch(e) {} }});
+
+      renderSliders();
+    }
+    function goToJoinView(){
+      if(state.studentRef){ try { state.studentRef.remove(); } catch(e) {} }
+      state.studentRef = null; state.joined = false;
+      localStorage.removeItem('lg_uid');
+      $('#nameInput').value = ''; $('#whoami').textContent = '—';
+      $('#criteriaList').innerHTML = ''; show($('#rateCard'), false); show($('#joinCard'), true);
+    }
+
+    // ===== SLIDERS =====
+    function renderSliders(){
+      const wrap = $('#criteriaList'); wrap.innerHTML = '';
+      CRITERIA.forEach((c, idx)=>{
+        const label = escHtml(c.label);
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div style="font-weight:600">${idx+1}. ${label}</div>
+            <div class="mut">0–${MAX_SCORE}</div>
+          </div>
+          <input type="range" min="0" max="${MAX_SCORE}" step="1" value="0" data-crit="${c.id}">
+          <div class="mut" style="text-align:right;margin-top:4px">Score: <strong data-val="${c.id}">0</strong></div>`;
+        wrap.appendChild(div);
+      });
+
+      wrap.querySelectorAll('input[type=range]').forEach(r=>{
+        const send = throttle((critId,v)=>{
+          if(state.studentRef) state.studentRef.child(`scores/${critId}`).set(v);
+        }, 100);
+        r.oninput = ()=>{
+          const critId = r.dataset.crit;
+          const v = Number(r.value);
+          wrap.querySelector(`[data-val="${critId}"]`).textContent = v;
+          send(critId, v);
+        };
+      });
+    }
+
+    // ===== RESULTS =====
+    function renderResults(students){
+      const pool = Object.values(students || {});
+      $('#participantsBadge').textContent = `${pool.length} participants`;
+      $('#participantsList').textContent = pool.map(s=> s && s.name ? s.name : '—').join(', ');
+
+      const res = CRITERIA.map(c=>{
+        const vals = pool
+          .map(s => (s && s.scores && typeof s.scores[c.id] === 'number') ? Number(s.scores[c.id]) : null)
+          .filter(v => v !== null);
+        return { label:c.label, avg: mean(vals) };
+      });
+
+      const box = $('#resultsSummary'); box.innerHTML = '';
+      res.forEach(a=>{
+        const row = document.createElement('div');
+        row.style.display = 'flex'; row.style.justifyContent = 'space-between'; row.style.alignItems = 'center';
+        row.innerHTML = `<div>${escHtml(a.label)}</div><div style="font-weight:600">${(a.avg||0).toFixed(2)} / ${MAX_SCORE}</div>`;
+        box.appendChild(row);
+      });
+
+      const finalAvg = mean(res.map(a=> a.avg || 0));
+      $('#finalAverage').textContent = (finalAvg||0).toFixed(2);
+
+      const totals = pool.map(s => {
+        if(!s || !s.scores) return null;
+        const nums = CRITERIA
+          .map(c => (typeof (s.scores||{})[c.id] === 'number') ? Number(s.scores[c.id]) : null)
+          .filter(v => v !== null);
+        if(!nums.length) return null;
+        return nums.reduce((a,b)=>a+b,0);
+      }).filter(v => v !== null);
+
+      const maxTot = CRITERIA.length * MAX_SCORE;
+      $('#classTotalAvg').textContent = `${(mean(totals)||0).toFixed(2)} / ${maxTot}`;
+      $('#maxTotal').textContent = maxTot;
+    }
+
+    // ===== TEACHER PIN / CONTROLS =====
+    async function fetchPin(){
+      const cfg = (await state.db.ref(configPath()).get()).val() || {};
+      state.classHasPin = typeof cfg.teacherPin === 'string' && cfg.teacherPin.length === 4;
+      return cfg.teacherPin || null;
+    }
+    async function savePin(pin){
+      await state.db.ref(configPath()).update({ teacherPin: pin });
+      state.classHasPin = true;
+    }
+    function validPin(p){ return /^\d{4}$/.test(p || ''); }
+
+    // ===== TEACHER ACTIONS =====
+    async function resetScoresKeepParticipants(){
+      const root = state.db.ref(basePath());
+      const students = (await root.child('students').get()).val() || {};
+      const updates = {};
+      Object.keys(students).forEach(id=>{ CRITERIA.forEach(c=>{ updates[`students/${id}/scores/${c.id}`] = 0; }); });
+      await root.update(updates);
+      await root.child('control/softResetAt').set(firebase.database.ServerValue.TIMESTAMP);
+    }
+    async function endSessionStartNew(){
+      if(!confirm('Start a new session? (Clears current roster & scores)')) return;
+      await state.db.ref(`${basePath()}/students`).set({});
+      await state.db.ref(`${basePath()}/control/resetAt`).set(firebase.database.ServerValue.TIMESTAMP);
+      await rotateSession();
+    }
+    async function endClassArchive(){
+      if(!confirm('End class and clear its PIN and sessions?')) return;
+      await state.db.ref(classPath()).set(null);
+      goToJoinView();
+      await bootFromClass();
+    }
+
+    // ===== CRITERIA EDITOR =====
+    function openCriteriaEditor(){
+      const cont = $('#criteriaEditor');
+      cont.innerHTML = '';
+      const draft = CRITERIA.map(c => ({ id:c.id, label:c.label }));
+
+      function renderDraft(){
+        cont.innerHTML = '';
+        draft.forEach((c, idx)=>{
+          const row = document.createElement('div');
+          row.className = 'rowline';
+          // FIXED: escape attribute & HTML so backticks/quotes don’t break template
+          row.innerHTML = `
+            <span class="tiny" style="width:1.5rem;text-align:right">${idx+1}.</span>
+            <input type="text" value="${escAttr(c.label)}" data-id="${escAttr(c.id)}" placeholder="Label">
+            <button type="button" data-del="${escAttr(c.id)}" class="btn-ghost">Remove</button>
+            <span class="pill tiny" title="ID (stable)">${escHtml(c.id)}</span>`;
+          cont.appendChild(row);
+        });
+      }
+      renderDraft();
+
+      $('#addRowBtn').onclick = ()=>{
+        draft.push({ id: uid(), label: '' });
+        renderDraft();
+      };
+
+      cont.onclick = (e)=>{
+        const id = e.target.getAttribute('data-del');
+        if(id){
+          const ix = draft.findIndex(x=>x.id===id);
+          if(ix>=0){ draft.splice(ix,1); renderDraft(); }
+        }
+      };
+
+      cont.oninput = (e)=>{
+        const inp = e.target;
+        if(inp && inp.matches('input[type="text"]')){
+          const id = inp.getAttribute('data-id');
+          const row = draft.find(x=>x.id===id);
+          if(row) row.label = inp.value;
+        }
+      };
+
+      $('#saveCriteriaBtn').onclick = async ()=>{
+        const cleaned = draft.map(d=>({id:d.id, label:d.label.trim()})).filter(d=> d.label.length>0);
+        if(cleaned.length===0){ alert('Need at least one criterion.'); return; }
+        await state.db.ref(critPath()).set(cleaned);
+        if(confirm('Zero scores for all current participants now?')){
+          await resetScoresKeepParticipants();
+        }
+        $('#criteriaDlg').close();
+      };
+      $('#closeCriteriaBtn').onclick = ()=> $('#criteriaDlg').close();
+      $('#criteriaDlg').showModal();
+    }
+
+    // ===== UI WIRES =====
+    window.addEventListener('load', ()=> {
+      dbInit();
+      const initial = sanitizeClassName(getUrlParam('class') || localStorage.getItem('lg_class') || 'CLASS');
+      $('#classInput').value = initial;
+      $('#classLabel').textContent = initial;
+    });
+
+    $('#setClassBtn').onclick = async ()=>{
+      const val = sanitizeClassName($('#classInput').value);
+      setClassKey(val);
+      $('#classLabel').textContent = state.classKey;
+      $('#roomReadout').textContent = state.classKey;
+      detachCoreListeners();
+      await ensureSession();
+      attachListeners();
+      attachResetListeners();
+      goToJoinView();
+    };
+
+    $('#shareClassBtn').onclick = async ()=>{
+      const link = new URL(location.href);
+      link.searchParams.set('class', state.classKey);
+      try {
+        await navigator.clipboard.writeText(String(link));
+        alert('Join link copied:\n' + link);
+      } catch (e) {
+        prompt('Copy this link:', String(link));
+      }
+    };
+
+    $('#joinBtn').onclick = ()=>{
+      if (state.joined) return;
+      const name = $('#nameInput').value.trim();
+      if(!name){ $('#joinStatus').textContent='Enter a name.'; return; }
+      $('#joinStatus').textContent='';
+      joinClass(name);
+    };
+
+    $('#loginBtn').onclick = async ()=>{
+      const pin = await fetchPin();
+      $('#pinSetup').style.display = pin ? 'none' : '';
+      $('#loginDlg').showModal();
+    };
+
+    $('#saveNewPinBtn').onclick = async ()=>{
+      const np = $('#newPinInput').value.trim();
+      if(!validPin(np)){ alert('Enter a 4-digit PIN (0-9).'); return; }
+      await savePin(np);
+      alert('PIN saved. Use it to unlock teacher controls.');
+      $('#pinSetup').style.display = 'none';
+      $('#newPinInput').value = '';
+    };
+
+    $('#unlockBtn').onclick = async (e)=>{
+      e.preventDefault();
+      const stored = await fetchPin();
+      const inp = $('#pinInput').value.trim();
+      if(validPin(stored) && inp === stored){
+        show($('#resultsCard'), true);
+        $('#loginDlg').close();
+      } else {
+        alert('Wrong PIN');
+      }
+    };
+
+    $('#editCriteriaBtn').onclick = openCriteriaEditor;
+    $('#resetScores').onclick = resetScoresKeepParticipants;
+    $('#endSession').onclick = endSessionStartNew;
+    $('#endClass').onclick = endClassArchive;
+  </script>
+</body>
+</html>
