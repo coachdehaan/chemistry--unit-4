@@ -49,21 +49,20 @@
   .up{background:#1f6d3a;border:1px solid #3dd17b;color:#c6f7da}
   .down{background:#7a2c21;border:1px solid #ff9c8a;color:#ffeae7}
 
+  /* TRAY NOW EMBEDDED (not fixed) */
   .float-tray{
-    position:fixed; z-index:9999; bottom:18px; left:50%; transform:translateX(28%);
+    position: static;
+    z-index: 1;
+    margin-top: 10px;
     backdrop-filter:saturate(1.2) blur(6px);
-    background:rgba(16,22,33,0.86); border:1px solid #2b3a55; border-radius:14px;
-    box-shadow:0 10px 24px rgba(0,0,0,.35); padding:10px 12px; color:#dbe7ff
+    background:rgba(16,22,33,0.86);
+    border:1px solid #2b3a55; border-radius:14px;
+    box-shadow:0 10px 24px rgba(0,0,0,.35);
+    padding:10px 12px; color:#dbe7ff
   }
   .float-tray .top{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
   .float-tray .arrows{display:flex;gap:8px}
   .float-tray .e{cursor:grab}
-  .btn{border:1px solid #2b3a55;background:var(--chip);color:#dce6f4;border-radius:8px;padding:6px 10px;cursor:pointer}
-  .btn.primary{border-color:#3a82ff;background:#3a82ff;color:#fff}
-  .btn.warn{border-color:var(--warn);background:var(--warn);color:#fff}
-  .btn:disabled{opacity:.5;cursor:not-allowed}
-  .btn:active{transform:translateY(1px)}
-  @media (max-width:720px){ .float-tray{left:50%; transform:translateX(-50%); width:min(96%,520px)} }
 
   /* Teacher Panel */
   #teacherPanel{margin-top:16px}
@@ -79,6 +78,9 @@
   .queue{display:flex;flex-direction:column;gap:8px}
   .queue-item{display:flex;align-items:center;gap:8px;border:1px solid #2b3a55;border-radius:10px;padding:6px 8px;background:#0e1726;flex-wrap:wrap}
   .chip{padding:.1rem .45rem;border:1px solid #2b3a55;border-radius:999px;background:#132034}
+
+  /* Totals text */
+  #classTotals strong{font-weight:700}
 </style>
 
 <!-- Firebase compat -->
@@ -173,6 +175,10 @@
         <div id="scol" class="block"></div>
         <div id="pcol" class="block"></div>
         <div id="dcol" class="block"></div>
+
+        <!-- NEW: tray anchor directly after d-column (parks under 3d row area) -->
+        <div id="trayHolder"></div>
+
         <div id="fcol" class="block"></div>
       </div>
     </div>
@@ -209,6 +215,9 @@
               <button id="exportBtn" class="btn">Export Scores CSV</button>
             </div>
 
+            <!-- CLASS TOTALS BAR -->
+            <div id="classTotals" class="hint" style="margin:6px 0 8px 0"></div>
+
             <h4 style="margin:12px 0 8px 0">Live Roster & Scores</h4>
             <div style="max-height:260px;overflow:auto;border:1px solid #2b3a55;border-radius:12px">
               <table id="scoreTable">
@@ -232,18 +241,7 @@
   </div>
 </div>
 
-<!-- Floating tray -->
-<div class="float-tray" aria-label="floating electron tray">
-  <div class="top">
-    <div class="arrows" title="Drag an electron into the next allowed orbital">
-      <div class="e up" draggable="true" data-spin="up">↑</div>
-      <div class="e down" draggable="true" data-spin="down">↓</div>
-    </div>
-    <button id="autoOne" class="btn primary" title="Place next allowed electron">Auto-place 1</button>
-    <button id="autoRemove" class="btn warn" title="Undo last correct placement">Auto-remove 1</button>
-    <button id="clear" class="btn">Clear</button>
-  </div>
-</div>
+<!-- NOTE: no fixed-bottom tray block anymore; tray is injected under 3d via JS -->
 
 <!-- PIN dialog -->
 <dialog id="loginDlg" style="border:none;border-radius:12px;max-width:420px;width:92%">
@@ -268,7 +266,7 @@
 </dialog>
 
 <script>
-/* ===== Error guard (optional console overlay removed for brevity) ===== */
+/* ===== Error guard ===== */
 window.onunhandledrejection = e => console.error(e.reason||e);
 
 /* ===== Firebase core ===== */
@@ -429,6 +427,7 @@ const test = {
   score:null
 };
 
+/* Build orbital grid (s, p, d, f columns) */
 function addRow(container, tag, boxes){
   const line=document.createElement('div'); line.className='rowline';
   const lab=document.createElement('div'); lab.className='rlabel'; lab.textContent=tag;
@@ -464,12 +463,63 @@ function buildBlocks(){
   [...dTags].reverse().forEach(tag=> addRow(dcol, tag, 5));
   [...fTags].reverse().forEach(tag=> addRow(fcol, tag, 7));
 }
-buildBlocks();
 
-/* drag sources */
-document.querySelectorAll('.float-tray .e').forEach(el=>{
-  el.addEventListener('dragstart', ev=>{ ev.dataTransfer.setData('text/plain', el.dataset.spin); });
-});
+/* Build and place tray under 3d */
+function buildTrayHTML(){
+  const wrap = document.createElement('div');
+  wrap.className = 'float-tray';
+  wrap.innerHTML = `
+    <div class="top">
+      <div class="arrows" title="Drag an electron into the next allowed orbital">
+        <div class="e up" draggable="true" data-spin="up">↑</div>
+        <div class="e down" draggable="true" data-spin="down">↓</div>
+      </div>
+      <button id="autoOne" class="btn primary" title="Place next allowed electron">Auto-place 1</button>
+      <button id="autoRemove" class="btn warn" title="Undo last correct placement">Auto-remove 1</button>
+      <button id="clear" class="btn">Clear</button>
+    </div>
+  `;
+  return wrap;
+}
+function placeTrayUnder3d(){
+  const holder = document.getElementById('trayHolder');
+  if(!holder) return;
+  const tray = buildTrayHTML();
+  holder.innerHTML = '';
+  holder.appendChild(tray);
+
+  // wire drag sources
+  holder.querySelectorAll('.float-tray .e').forEach(el=>{
+    el.addEventListener('dragstart', ev=>{
+      ev.dataTransfer.setData('text/plain', el.dataset.spin);
+    });
+  });
+  // wire buttons (respecting test/practice guards)
+  document.getElementById('autoOne').onclick = ()=>{
+    if(test.mode==='test') return;
+    const a=nextAllowed(); if(!a) return;
+    const box=document.querySelector(`.orbital[data-key="${a.key}"]`);
+    attemptPlace(box, a.spin, false);
+  };
+  document.getElementById('autoRemove').onclick = ()=>{
+    if(test.mode==='test') return;
+    if(!state.history.length) return;
+    const last=state.history.pop(); const occ=state.orbitals[last.key];
+    if(occ && occ.length){
+      occ.pop();
+      const box=document.querySelector(`.orbital[data-key="${last.key}"]`);
+      if(box) drawOrbital(box, occ);
+      if(state.Z>0) state.Z--;
+      state.lastQN=null; syncReadouts(); syncQuantumLast();
+    }
+  };
+  document.getElementById('clear').onclick = ()=>{
+    if(test.mode==='test') return;
+    resetBoard();
+  };
+}
+
+/* drag sources inside tray are wired in placeTrayUnder3d() */
 
 /* counters & order */
 function counters(){ const c={}; for(const tag of ORDER){ const sub=tag.replace(/[0-9]/g,""); const cnt=ORB_COUNT[sub]; let sum=0; for(let i=0;i<cnt;i++) sum+=state.orbitals[`${tag}:${i}`]?.length||0; c[tag]=sum; } return c; }
@@ -494,27 +544,7 @@ function qnFromKeySpin(key,spin){
   return {n,l,sub,m_l,m_s};
 }
 
-/* application of prompt */
-let unsubPrompt=null, unsubMyProgress=null;
-function attachPromptListener(){
-  if(!fb.db) return;
-  const ref = fb.db.ref(paths.currentPrompt());
-  if(unsubPrompt) try{ ref.off(); }catch{}
-  ref.on('value', snap=>{
-    const v = snap.val() || null;
-    applyPrompt(v);
-  });
-  unsubPrompt = ref;
-}
-
-function speciesTargetZ(goal){
-  if(!goal) return null;
-  if(goal.kind==='element') return goal.Z;
-  if(goal.kind==='ion') return goal.Z - (goal.charge||0);
-  return null;
-}
-
-/* Noble core helpers */
+/* Noble helpers & configs */
 function nearestNobleCore(z){ let core=null; for(const ng of NOBLES){ if(ng.Z<=z) core=ng; else break; } return core; }
 function buildCountsForZ(z){ const counts={}; for(const tag of ORDER) counts[tag]=0; let left=z; for(const tag of ORDER){ if(left<=0) break; const sub=tag.replace(/[0-9]/g,""); const take=Math.min(CAP[sub],left); counts[tag]=take; left-=take; } return counts; }
 function prefillToZ(z){
@@ -536,19 +566,33 @@ function prefillToZ(z){
   state.history=[]; state.lastQN=null; syncReadouts(); syncQuantumLast();
 }
 
-/* apply prompt (supports list mode) */
+/* apply prompt (supports single or list) */
+let unsubPrompt=null, unsubMyProgress=null;
+function attachPromptListener(){
+  if(!fb.db) return;
+  const ref = fb.db.ref(paths.currentPrompt());
+  if(unsubPrompt) try{ ref.off(); }catch{}
+  ref.on('value', snap=>{
+    const v = snap.val() || null;
+    applyPrompt(v);
+  });
+  unsubPrompt = ref;
+}
+function speciesTargetZ(goal){
+  if(!goal) return null;
+  if(goal.kind==='element') return goal.Z;
+  if(goal.kind==='ion') return goal.Z - (goal.charge||0);
+  return null;
+}
 function applyPrompt(v){
   if(!v){ setPractice(); return; }
-
   test.mode = 'test';
   test.requireQN = !!v.requireQN;
   test.pointsPer = Number(v.pointsPer)||5;
 
-  // Two modes: single goal OR list of items
   if (Array.isArray(v.list) && v.list.length){
-    test.list = v.list.slice();            // array of {Z,charge,ng}
-    $('#itemTotal').textContent = test.list.length;
-    // subscribe to my progress
+    test.list = v.list.slice();
+    document.getElementById('itemTotal').textContent = test.list.length;
     if(unsubMyProgress) try{ fb.db.ref(`${paths.progressRoot()}/${live.me.id}`).off(); }catch{}
     const myRef = fb.db.ref(`${paths.progressRoot()}/${live.me.id}`);
     myRef.on('value', snap=>{
@@ -562,26 +606,27 @@ function applyPrompt(v){
   } else if (v.goal){
     test.list = [{ Z: v.goal.Z, charge: v.goal.charge||0, ng:false }];
     test.idx = 0;
-    $('#itemTotal').textContent = 1;
+    document.getElementById('itemTotal').textContent = 1;
     setUpItemFromList();
   }
 
-  $('#modeBadge').textContent='test';
-  $('#promptText').textContent = labelForCurrent();
-  $('#scoreNow').textContent = test.pointsPer;
-  $('#studentTestBar').style.display = '';
-  $('#qnHint').textContent = test.requireQN ? 'QN are required for credit.' : 'QN not required for this item.';
-  $('#autoOne').disabled=true; $('#autoRemove').disabled=true; $('#clear').disabled=true;
+  document.getElementById('modeBadge').textContent='test';
+  document.getElementById('promptText').textContent = labelForCurrent();
+  document.getElementById('scoreNow').textContent = test.pointsPer;
+  document.getElementById('studentTestBar').style.display = '';
+  document.getElementById('qnHint').textContent = test.requireQN ? 'QN are required for credit.' : 'QN not required for this item.';
+  document.getElementById('autoOne').disabled=true; document.getElementById('autoRemove').disabled=true; document.getElementById('clear').disabled=true;
 }
-
 function setPractice(){
   test.mode='practice'; test.list=null; test.idx=0; test.requireQN=false; test.pointsPer=5; test.score=null;
-  $('#modeBadge').textContent='practice'; $('#promptText').textContent='—'; $('#scoreNow').textContent='—';
-  $('#studentTestBar').style.display='none'; $('#itemIdx').textContent='—'; $('#itemTotal').textContent='—';
-  $('#autoOne').disabled=false; $('#autoRemove').disabled=false; $('#clear').disabled=false;
+  document.getElementById('modeBadge').textContent='practice';
+  document.getElementById('promptText').textContent='—';
+  document.getElementById('scoreNow').textContent='—';
+  document.getElementById('studentTestBar').style.display='none';
+  document.getElementById('itemIdx').textContent='—'; document.getElementById('itemTotal').textContent='—';
+  document.getElementById('autoOne').disabled=false; document.getElementById('autoRemove').disabled=false; document.getElementById('clear').disabled=false;
   resetBoard();
 }
-
 function currentItem(){ return (test.list && test.idx<test.list.length) ? test.list[test.idx] : null; }
 function labelForItem(it){
   if(!it) return '—';
@@ -592,24 +637,19 @@ function labelForItem(it){
   return `${sym}${ion}${ng}`;
 }
 function labelForCurrent(){ return labelForItem(currentItem()); }
-
 function setUpItemFromList(){
   const it = currentItem();
-  $('#itemIdx').textContent = test.list ? String(Math.min(test.idx+1, test.list.length)) : '—';
-  $('#promptText').textContent = labelForItem(it);
+  document.getElementById('itemIdx').textContent = test.list ? String(Math.min(test.idx+1, test.list.length)) : '—';
+  document.getElementById('promptText').textContent = labelForItem(it);
   test.score = test.pointsPer;
-  $('#scoreNow').textContent = test.score;
-
+  document.getElementById('scoreNow').textContent = test.score;
   resetBoard();
   if(!it) return;
 
-  // If NG is set, prefill up to noble core of target species electron count
   const targetZ = (it.charge && it.charge!==0) ? (it.Z - it.charge) : it.Z;
   if(it.ng){
     const core = nearestNobleCore(targetZ);
-    if(core && core.Z>0){
-      prefillToZ(core.Z);
-    }
+    if(core && core.Z>0){ prefillToZ(core.Z); }
   }
 }
 
@@ -661,7 +701,7 @@ function elementSymbol(Z){ return (Z>=1 && Z<=118)? SYMBOLS[Z] : "—"; }
 function periodFromZ(Z){ return PERIOD[Z] || "—"; }
 function shorthand(){
   const Z=state.Z; if(!Z) return "—";
-  const nobleToggle=$('#nobleToggle').checked; const p=periodFromZ(Z);
+  const nobleToggle=document.getElementById('nobleToggle').checked; const p=periodFromZ(Z);
   if(!nobleToggle || (typeof p==="number" && p<4)) return cfgPlain();
   let core=null; for(const ng of NOBLES){ if(ng.Z===Z) return `[${ng.sym}]`; if(ng.Z<Z) core=ng; else break; }
   if(!core) return cfgPlain();
@@ -670,9 +710,15 @@ function shorthand(){
   for(const tag of ORDER){ const rem=(current[tag]||0)-(coreCounts[tag]||0); if(rem>0) parts.push(`${tag}${rem}`); }
   return parts.join(" ");
 }
-function syncReadouts(){ $('#Z').textContent=state.Z; $('#El').textContent=elementSymbol(state.Z); $('#Period').textContent=periodFromZ(state.Z); $('#cfg').innerHTML=cfgHTML(); $('#sh').textContent=shorthand(); }
+function syncReadouts(){
+  document.getElementById('Z').textContent=state.Z;
+  document.getElementById('El').textContent=elementSymbol(state.Z);
+  document.getElementById('Period').textContent=periodFromZ(state.Z);
+  document.getElementById('cfg').innerHTML=cfgHTML();
+  document.getElementById('sh').textContent=shorthand();
+}
 function syncQuantumLast(){
-  const qnEl=$('#qn');
+  const qnEl=document.getElementById('qn');
   if(!state.lastQN){ qnEl.innerHTML='n = —, ℓ = — (—), mℓ = —, ms = —'; return; }
   const q=state.lastQN, lName=({0:'s',1:'p',2:'d',3:'f'})[q.l]||'—';
   qnEl.innerHTML=`n = ${q.n}, ℓ = ${q.l} (${lName}), m<sub>ℓ</sub> = ${q.m_l}, m<sub>s</sub> = ${q.m_s}`;
@@ -686,16 +732,13 @@ function strike(title, html, userAction){
   return;
 }
 
-/* buttons */
-$('#autoOne').onclick = ()=>{ if(test.mode==='test') return; const a=nextAllowed(); if(!a) return; const box=document.querySelector(`.orbital[data-key="${a.key}"]`); attemptPlace(box, a.spin, false); };
-$('#autoRemove').onclick = ()=>{ if(test.mode==='test') return; if(!state.history.length) return; const last=state.history.pop(); const occ=state.orbitals[last.key]; if(occ && occ.length){ occ.pop(); const box=document.querySelector(`.orbital[data-key="${last.key}"]`); if(box) drawOrbital(box, occ); if(state.Z>0) state.Z--; state.lastQN=null; syncReadouts(); syncQuantumLast(); } };
-$('#clear').onclick = ()=>{ if(test.mode==='test') return; resetBoard(); };
-$('#nobleToggle').addEventListener('change', syncReadouts);
-const answersPanel=$('#answersPanel'); const toggleBtn=$('#toggleAnswers');
+/* buttons (tray buttons are rebound after tray insertion) */
+document.getElementById('nobleToggle').addEventListener('change', syncReadouts);
+const answersPanel=document.getElementById('answersPanel'); const toggleBtn=document.getElementById('toggleAnswers');
 toggleBtn.onclick = ()=>{ const hidden=answersPanel.classList.toggle('hidden'); toggleBtn.textContent = hidden?'Show Answers':'Hide Answers'; };
 
 /* scoring */
-function decPoint(){ if(test.mode!=='test') return; if(test.score>0){ test.score--; $('#scoreNow').textContent=test.score; } }
+function decPoint(){ if(test.mode!=='test') return; if(test.score>0){ test.score--; document.getElementById('scoreNow').textContent=test.score; } }
 
 /* auto-check during building (if not requiring QN and exact electron count reached) */
 function maybeAutoCheck(){
@@ -709,7 +752,7 @@ function maybeAutoCheck(){
   }
 }
 
-/* submit */
+/* submit (defensive to avoid null lastQN) */
 document.getElementById('submitBtn').onclick = ()=>{
   if (test.mode !== 'test') return;
   const it = currentItem(); if(!it) return;
@@ -729,10 +772,10 @@ document.getElementById('submitBtn').onclick = ()=>{
       warn("Missing last electron","No last electron recorded. Place the final electron and re-submit.");
       return;
     }
-    const n  = Number($('#qn_n').value||NaN);
-    const l  = $('#qn_l').value==='' ? NaN : Number($('#qn_l').value);
-    const ml = Number($('#qn_ml').value||NaN);
-    const ms = $('#qn_ms').value || '';
+    const n  = Number(document.getElementById('qn_n').value||NaN);
+    const l  = document.getElementById('qn_l').value==='' ? NaN : Number(document.getElementById('qn_l').value);
+    const ml = Number(document.getElementById('qn_ml').value||NaN);
+    const ms = document.getElementById('qn_ms').value || '';
     const L=L_FROM_SUB[q.sub]; const mlList=mlSeq(q.sub);
     const ok = (n===q.n) && (l===L) && mlList.includes(ml) && (ms===q.m_s);
     if (!ok){
@@ -746,10 +789,8 @@ document.getElementById('submitBtn').onclick = ()=>{
   writeResult(true,'submit_ok');
   advanceItem();
 };
-
 function advanceItem(){
   alert(`Correct! Earned ${test.score}/${test.pointsPer}.`);
-  // increment progress on server; reset board for next item
   const myRef = fb.db.ref(`${paths.progressRoot()}/${live.me.id}`);
   const next = (test.idx+1);
   myRef.set(next).catch(()=>{});
@@ -785,10 +826,10 @@ function resetBoard(){
   for(const k in state.orbitals) state.orbitals[k]=[];
   document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
   state.Z=0; state.history=[]; state.lastQN=null; syncReadouts(); syncQuantumLast();
-  $('#qn_n').value=''; $('#qn_l').value=''; $('#qn_ml').value=''; $('#qn_ms').value='';
+  document.getElementById('qn_n').value=''; document.getElementById('qn_l').value=''; document.getElementById('qn_ml').value=''; document.getElementById('qn_ms').value='';
 }
 
-/* ========== Roster & Scores with Right/Total ========== */
+/* ========== Roster & Scores with Right/Total and CLASS TOTALS ========== */
 const roster = new Map(); // id -> {name, at}
 const totals = new Map(); // id -> {sum, last, right, total}
 function subscribeRoster(reset){
@@ -828,7 +869,7 @@ function subscribeScores(reset){
   });
 }
 function renderScores(){
-  const body = $('#scoreBody'); if(!body) return;
+  const body = document.getElementById('scoreBody'); if(!body) return;
   body.innerHTML='';
   const rows=[];
   const ids = new Set([...roster.keys(), ...totals.keys()]);
@@ -836,11 +877,34 @@ function renderScores(){
     const r = roster.get(id)||{};
     const t = totals.get(id)||{sum:0,last:0,right:0,total:0};
     rows.push({
-      id, name: (r.name && String(r.name).trim()) ? r.name.trim() : '(no name)',
-      sum: t.sum||0, last: t.last||0, right: t.right||0, total: t.total||0
+      id,
+      name: (r.name && String(r.name).trim()) ? r.name.trim() : '(no name)',
+      sum: t.sum||0,
+      last: t.last||0,
+      right: t.right||0,
+      total: t.total||0
     });
   });
   rows.sort((a,b)=> (b.sum-a.sum) || ((b.last||0)-(a.last||0)) || a.name.localeCompare(b.name));
+
+  // Aggregate totals
+  const studentCount = rows.length;
+  const classRight = rows.reduce((s,r)=>s+(r.right||0), 0);
+  const classTotal = rows.reduce((s,r)=>s+(r.total||0), 0);
+  const classPoints = rows.reduce((s,r)=>s+(r.sum||0), 0);
+  const pct = classTotal ? Math.round((classRight/classTotal)*100) : 0;
+  const avgPts = studentCount ? (classPoints / studentCount) : 0;
+
+  const totalsEl = document.getElementById('classTotals');
+  if (totalsEl){
+    totalsEl.innerHTML = `
+      <strong>Class totals:</strong>
+      Students: ${studentCount} • Right: ${classRight} / Total: ${classTotal}
+      (${pct}% correct) • Points: ${classPoints} • Avg points/student: ${avgPts.toFixed(1)}
+    `;
+  }
+
+  // Render rows
   rows.forEach(row=>{
     const tr=document.createElement('tr');
     tr.innerHTML = `<td>${escapeHtml(row.name)}</td>
@@ -854,11 +918,36 @@ function renderScores(){
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 function exportCSV(){
   const rows = document.querySelectorAll('#scoreBody tr');
-  const lines = [['Student','Right','Total','Points','Last Submit','ID']];
+
+  // Aggregate to prepend totals row
+  let studentCount = 0, classRight = 0, classTotal = 0, classPoints = 0;
+  rows.forEach(tr=>{
+    studentCount++;
+    const tds = [...tr.children].map(td=>td.textContent);
+    const [rightStr, totalStr] = tds[1].split('/').map(s=>s.trim());
+    classRight  += Number(rightStr||0);
+    classTotal  += Number(totalStr||0);
+    classPoints += Number(tds[2]||0);
+  });
+  const pct = classTotal ? Math.round((classRight/classTotal)*100) : 0;
+  const avgPts = studentCount ? (classPoints/studentCount) : 0;
+
+  const lines = [];
+  lines.push(['Class totals',
+              `Students=${studentCount}`,
+              `Right=${classRight}`,
+              `Total=${classTotal}`,
+              `Percent=${pct}%`,
+              `Points=${classPoints}`,
+              `AvgPoints=${avgPts.toFixed(1)}`]);
+  lines.push(['Student','Right','Total','Points','Last Submit','ID']);
+
   rows.forEach(tr=>{
     const tds=[...tr.children].map(td=>td.textContent);
-    lines.push([tds[0], ...tds[1].split('/').map(s=>s.trim()), tds[2], tds[3], tds[4]]);
+    const [rightStr, totalStr] = tds[1].split('/').map(s=>s.trim());
+    lines.push([tds[0], rightStr, totalStr, tds[2], tds[3], tds[4]]);
   });
+
   function csvEscape(s){ const str = String(s == null ? '' : s); return /[",\n]/.test(str) ? '"' + str.replace(/"/g,'""') + '"' : str; }
   const csv = lines.map(row => row.map(csvEscape).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv'});
@@ -870,8 +959,8 @@ function exportCSV(){
 /* ========== Teacher Panel: build periodic chart + queue ========== */
 const queue = []; // items: {Z, charge, ng}
 function renderQueue(){
-  const wrap = $('#queue'); wrap.innerHTML='';
-  $('#qCount').textContent = String(queue.length);
+  const wrap = document.getElementById('queue'); wrap.innerHTML='';
+  document.getElementById('qCount').textContent = String(queue.length);
   if(!queue.length){ wrap.innerHTML = '<div class="hint">Queue is empty. Click elements on the chart to add.</div>'; return; }
   queue.forEach((it,idx)=>{
     const sym = SYMBOLS[it.Z]||'?';
@@ -900,10 +989,10 @@ document.addEventListener('click', (e)=>{
   if(act==='del'){ queue.splice(idx,1); }
   renderQueue();
 });
-$('#tp_clearQueue').onclick = ()=>{ queue.length=0; renderQueue(); };
+document.getElementById('tp_clearQueue').onclick = ()=>{ queue.length=0; renderQueue(); };
 
 function buildPeriodicGrid(){
-  const pt = $('#pt'); pt.innerHTML='';
+  const pt = document.getElementById('pt'); pt.innerHTML='';
   function blank(n){ for(let i=0;i<n;i++){ const b=document.createElement('div'); b.className='pt-btn pt-blank'; pt.appendChild(b);} }
   function btn(z){
     const b=document.createElement('button');
@@ -936,10 +1025,10 @@ function buildPeriodicGrid(){
 }
 
 /* Send list => broadcast to class */
-$('#tp_sendList').onclick = async ()=>{
+document.getElementById('tp_sendList').onclick = async ()=>{
   if(!queue.length){ alert('Queue is empty.'); return; }
-  const pts = Number($('#tp_points').value||5);
-  const reqQN = !!$('#tp_requireQN').checked;
+  const pts = Number(document.getElementById('tp_points').value||5);
+  const reqQN = !!document.getElementById('tp_requireQN').checked;
   const payload = {
     mode:'test',
     pointsPer: pts,
@@ -954,33 +1043,32 @@ $('#tp_sendList').onclick = async ()=>{
 };
 
 /* Admin controls */
-$('#tp_softReset').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/softResetAt`).set(Date.now()); alert('Soft reset broadcasted.'); };
-$('#tp_newSession').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/resetAt`).set(Date.now()); alert('New session broadcasted.'); };
+document.getElementById('tp_softReset').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/softResetAt`).set(Date.now()); alert('Soft reset broadcasted.'); };
+document.getElementById('tp_newSession').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/resetAt`).set(Date.now()); alert('New session broadcasted.'); };
 document.getElementById('exportBtn').onclick = ()=> exportCSV();
 
 /* ===== UI & login ===== */
-$('#setClassBtn').onclick = async ()=>{
-  const val = sanitizeClassName($('#classInput').value);
+document.getElementById('setClassBtn').onclick = async ()=>{
+  const val = sanitizeClassName(document.getElementById('classInput').value);
   setClassKey(val);
-  $('#classLabel').textContent=live.classKey;
+  document.getElementById('classLabel').textContent=live.classKey;
   const curRef = fb.db.ref(`${paths.configPath()}/currentSession`);
   let s = (await curRef.get()).val(); if(!s){ s=nowId(); await curRef.set(s); }
-  live.sessionId = s; $('#sessionLabel').textContent = s.slice(-6);
+  live.sessionId = s; document.getElementById('sessionLabel').textContent = s.slice(-6);
   ensureStudentPresence();
   attachPromptListener(); attachResetListeners(); subscribeRoster(true); subscribeScores(true);
 };
-$('#shareClassBtn').onclick = async ()=>{
+document.getElementById('shareClassBtn').onclick = async ()=>{
   const link = new URL(location.href); link.searchParams.set('class', live.classKey);
   try{ await navigator.clipboard.writeText(String(link)); alert('Join link copied:\n'+link); }
   catch(e){ prompt('Copy this link:', String(link)); }
 };
-
-$('#loginBtn').onclick = async ()=>{
+document.getElementById('loginBtn').onclick = async ()=>{
   const pin = await fetchPin();
-  $('#pinSetup').style.display = pin ? 'none' : '';
-  $('#loginDlg').showModal();
+  document.getElementById('pinSetup').style.display = pin ? 'none' : '';
+  document.getElementById('loginDlg').showModal();
 };
-$('#saveNewPinBtn').onclick = async ()=>{
+document.getElementById('saveNewPinBtn').onclick = async ()=>{
   const np = document.getElementById('newPinInput').value.trim();
   if(!validPin(np)){ alert('Enter a 4-digit PIN (0-9).'); return; }
   await savePin(np); alert('PIN saved.'); document.getElementById('pinSetup').style.display='none'; document.getElementById('newPinInput').value='';
@@ -994,16 +1082,10 @@ document.getElementById('unlockBtn').onclick = async (e)=>{
   } else { alert('Wrong PIN'); }
 };
 
-/* ===== Build workspace + periodic chart + init DB ===== */
-function resetBoard(){
-  for(const k in state.orbitals) state.orbitals[k]=[];
-  document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
-  state.Z=0; state.history=[]; state.lastQN=null; syncReadouts(); syncQuantumLast();
-  $('#qn_n').value=''; $('#qn_l').value=''; $('#qn_ml').value=''; $('#qn_ms').value='';
-}
+/* ===== Build workspace + tray + periodic chart + init DB ===== */
 function buildAll(){
-  const scol=$('#scol'), pcol=$('#pcol'), dcol=$('#dcol'), fcol=$('#fcol');
-  if(!scol.children.length){ buildBlocks(); }
+  buildBlocks();
+  placeTrayUnder3d();
   buildPeriodicGrid();
   renderQueue();
 }
