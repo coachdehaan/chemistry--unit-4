@@ -9,7 +9,7 @@
     --s:#0e6b73; --p:#4b5f16; --d:#5c1135; --f:#143ea9;
     --boxB:#5a6b86; --ok:#22c55e; --orb:#0f1622;
     --panel:#0b111b; --edge:#273244; --chip:#0f1622;
-    --overlay:rgba(2,8,23,.55); --warn:#ef4444;
+    --warn:#ef4444;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Arial,sans-serif}
@@ -49,20 +49,34 @@
   .up{background:#1f6d3a;border:1px solid #3dd17b;color:#c6f7da}
   .down{background:#7a2c21;border:1px solid #ff9c8a;color:#ffeae7}
 
-  /* TRAY NOW EMBEDDED (not fixed) */
+  /* Workspace is positioning context; tray floats inside bottom-right */
+  .workspace{ position: relative; }
   .float-tray{
-    position: static;
-    z-index: 1;
-    margin-top: 10px;
-    backdrop-filter:saturate(1.2) blur(6px);
-    background:rgba(16,22,33,0.86);
-    border:1px solid #2b3a55; border-radius:14px;
-    box-shadow:0 10px 24px rgba(0,0,0,.35);
-    padding:10px 12px; color:#dbe7ff
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 2;
+    backdrop-filter: saturate(1.2) blur(6px);
+    background: rgba(16,22,33,0.86);
+    border: 1px solid #2b3a55;
+    border-radius: 14px;
+    box-shadow: 0 10px 24px rgba(0,0,0,.35);
+    padding: 10px 12px;
+    color: #dbe7ff;
+    max-width: 420px;
   }
   .float-tray .top{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
   .float-tray .arrows{display:flex;gap:8px}
   .float-tray .e{cursor:grab}
+  @media (max-width: 720px){
+    .float-tray{
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%);
+      bottom: 8px;
+      max-width: 92%;
+    }
+  }
 
   /* Teacher Panel */
   #teacherPanel{margin-top:16px}
@@ -79,7 +93,7 @@
   .queue-item{display:flex;align-items:center;gap:8px;border:1px solid #2b3a55;border-radius:10px;padding:6px 8px;background:#0e1726;flex-wrap:wrap}
   .chip{padding:.1rem .45rem;border:1px solid #2b3a55;border-radius:999px;background:#132034}
 
-  /* Totals text */
+  /* Totals bar */
   #classTotals strong{font-weight:700}
 </style>
 
@@ -163,7 +177,7 @@
     </div>
 
     <!-- Workspace -->
-    <div class="inner">
+    <div class="inner workspace">
       <div class="blocks" id="blocks">
         <div></div>
         <div class="blabel"><div class="bl sbg">s</div><div class="hint">block</div></div>
@@ -175,11 +189,20 @@
         <div id="scol" class="block"></div>
         <div id="pcol" class="block"></div>
         <div id="dcol" class="block"></div>
-
-        <!-- NEW: tray anchor directly after d-column (parks under 3d row area) -->
-        <div id="trayHolder"></div>
-
         <div id="fcol" class="block"></div>
+      </div>
+
+      <!-- Floating tray INSIDE the workspace (bottom-right) -->
+      <div class="float-tray" id="tray">
+        <div class="top">
+          <div class="arrows" title="Drag an electron into the next allowed orbital">
+            <div class="e up" draggable="true" data-spin="up">↑</div>
+            <div class="e down" draggable="true" data-spin="down">↓</div>
+          </div>
+          <button id="autoOne" class="btn primary" title="Place next allowed electron">Auto-place 1</button>
+          <button id="autoRemove" class="btn warn" title="Undo last correct placement">Auto-remove 1</button>
+          <button id="clear" class="btn">Clear</button>
+        </div>
       </div>
     </div>
 
@@ -215,7 +238,6 @@
               <button id="exportBtn" class="btn">Export Scores CSV</button>
             </div>
 
-            <!-- CLASS TOTALS BAR -->
             <div id="classTotals" class="hint" style="margin:6px 0 8px 0"></div>
 
             <h4 style="margin:12px 0 8px 0">Live Roster & Scores</h4>
@@ -240,8 +262,6 @@
 
   </div>
 </div>
-
-<!-- NOTE: no fixed-bottom tray block anymore; tray is injected under 3d via JS -->
 
 <!-- PIN dialog -->
 <dialog id="loginDlg" style="border:none;border-radius:12px;max-width:420px;width:92%">
@@ -306,7 +326,7 @@ const paths = {
   results:    () => `${paths.basePath()}/results`,
   students:   () => `${paths.basePath()}/students`,
   control:    () => `${paths.basePath()}/control`,
-  progressRoot: () => `${paths.basePath()}/progress`  // per-student index into current list
+  progressRoot: () => `${paths.basePath()}/progress`
 };
 
 async function dbInit(){
@@ -423,11 +443,11 @@ const test = {
   requireQN:false,
   pointsPer:5,
   list:null,              // array of {Z, charge, ng:boolean}
-  idx:0,                  // current item index (per student progress)
+  idx:0,                  // current item index
   score:null
 };
 
-/* Build orbital grid (s, p, d, f columns) */
+/* Build orbital grid */
 function addRow(container, tag, boxes){
   const line=document.createElement('div'); line.className='rowline';
   const lab=document.createElement('div'); lab.className='rlabel'; lab.textContent=tag;
@@ -464,47 +484,24 @@ function buildBlocks(){
   [...fTags].reverse().forEach(tag=> addRow(fcol, tag, 7));
 }
 
-/* Build and place tray under 3d */
-function buildTrayHTML(){
-  const wrap = document.createElement('div');
-  wrap.className = 'float-tray';
-  wrap.innerHTML = `
-    <div class="top">
-      <div class="arrows" title="Drag an electron into the next allowed orbital">
-        <div class="e up" draggable="true" data-spin="up">↑</div>
-        <div class="e down" draggable="true" data-spin="down">↓</div>
-      </div>
-      <button id="autoOne" class="btn primary" title="Place next allowed electron">Auto-place 1</button>
-      <button id="autoRemove" class="btn warn" title="Undo last correct placement">Auto-remove 1</button>
-      <button id="clear" class="btn">Clear</button>
-    </div>
-  `;
-  return wrap;
-}
-function placeTrayUnder3d(){
-  const holder = document.getElementById('trayHolder');
-  if(!holder) return;
-  const tray = buildTrayHTML();
-  holder.innerHTML = '';
-  holder.appendChild(tray);
-
-  // wire drag sources
-  holder.querySelectorAll('.float-tray .e').forEach(el=>{
+/* Tray wiring */
+function wireTray(){
+  document.querySelectorAll('#tray .e').forEach(el=>{
     el.addEventListener('dragstart', ev=>{
       ev.dataTransfer.setData('text/plain', el.dataset.spin);
     });
   });
-  // wire buttons (respecting test/practice guards)
-  document.getElementById('autoOne').onclick = ()=>{
-    if(test.mode==='test') return;
-    const a=nextAllowed(); if(!a) return;
-    const box=document.querySelector(`.orbital[data-key="${a.key}"]`);
+  $('#autoOne').onclick = ()=>{
+    if(test.mode==='test') return;     // disabled in test
+    const a = nextAllowed(); if(!a) return;
+    const box = document.querySelector(`.orbital[data-key="${a.key}"]`);
     attemptPlace(box, a.spin, false);
   };
-  document.getElementById('autoRemove').onclick = ()=>{
+  $('#autoRemove').onclick = ()=>{
     if(test.mode==='test') return;
     if(!state.history.length) return;
-    const last=state.history.pop(); const occ=state.orbitals[last.key];
+    const last = state.history.pop();
+    const occ  = state.orbitals[last.key];
     if(occ && occ.length){
       occ.pop();
       const box=document.querySelector(`.orbital[data-key="${last.key}"]`);
@@ -513,13 +510,11 @@ function placeTrayUnder3d(){
       state.lastQN=null; syncReadouts(); syncQuantumLast();
     }
   };
-  document.getElementById('clear').onclick = ()=>{
+  $('#clear').onclick = ()=>{
     if(test.mode==='test') return;
     resetBoard();
   };
 }
-
-/* drag sources inside tray are wired in placeTrayUnder3d() */
 
 /* counters & order */
 function counters(){ const c={}; for(const tag of ORDER){ const sub=tag.replace(/[0-9]/g,""); const cnt=ORB_COUNT[sub]; let sum=0; for(let i=0;i<cnt;i++) sum+=state.orbitals[`${tag}:${i}`]?.length||0; c[tag]=sum; } return c; }
@@ -548,11 +543,9 @@ function qnFromKeySpin(key,spin){
 function nearestNobleCore(z){ let core=null; for(const ng of NOBLES){ if(ng.Z<=z) core=ng; else break; } return core; }
 function buildCountsForZ(z){ const counts={}; for(const tag of ORDER) counts[tag]=0; let left=z; for(const tag of ORDER){ if(left<=0) break; const sub=tag.replace(/[0-9]/g,""); const take=Math.min(CAP[sub],left); counts[tag]=take; left-=take; } return counts; }
 function prefillToZ(z){
-  // Clear
   for(const k in state.orbitals) state.orbitals[k]=[];
   document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
 
-  // Fill up to Z deterministically by allowed order
   let toPlace = z;
   while(toPlace>0){
     const a = nextAllowed();
@@ -566,7 +559,7 @@ function prefillToZ(z){
   state.history=[]; state.lastQN=null; syncReadouts(); syncQuantumLast();
 }
 
-/* apply prompt (supports single or list) */
+/* Prompt handling (single or list), including NG prefill */
 let unsubPrompt=null, unsubMyProgress=null;
 function attachPromptListener(){
   if(!fb.db) return;
@@ -592,7 +585,7 @@ function applyPrompt(v){
 
   if (Array.isArray(v.list) && v.list.length){
     test.list = v.list.slice();
-    document.getElementById('itemTotal').textContent = test.list.length;
+    $('#itemTotal').textContent = test.list.length;
     if(unsubMyProgress) try{ fb.db.ref(`${paths.progressRoot()}/${live.me.id}`).off(); }catch{}
     const myRef = fb.db.ref(`${paths.progressRoot()}/${live.me.id}`);
     myRef.on('value', snap=>{
@@ -606,27 +599,26 @@ function applyPrompt(v){
   } else if (v.goal){
     test.list = [{ Z: v.goal.Z, charge: v.goal.charge||0, ng:false }];
     test.idx = 0;
-    document.getElementById('itemTotal').textContent = 1;
+    $('#itemTotal').textContent = 1;
     setUpItemFromList();
   }
 
-  document.getElementById('modeBadge').textContent='test';
-  document.getElementById('promptText').textContent = labelForCurrent();
-  document.getElementById('scoreNow').textContent = test.pointsPer;
-  document.getElementById('studentTestBar').style.display = '';
-  document.getElementById('qnHint').textContent = test.requireQN ? 'QN are required for credit.' : 'QN not required for this item.';
-  document.getElementById('autoOne').disabled=true; document.getElementById('autoRemove').disabled=true; document.getElementById('clear').disabled=true;
+  $('#modeBadge').textContent='test';
+  $('#promptText').textContent = labelForCurrent();
+  $('#scoreNow').textContent = test.pointsPer;
+  $('#studentTestBar').style.display = '';
+  $('#qnHint').textContent = test.requireQN ? 'QN are required for credit.' : 'QN not required for this item.';
+  $('#autoOne').disabled=true; $('#autoRemove').disabled=true; $('#clear').disabled=true;
 }
+
 function setPractice(){
   test.mode='practice'; test.list=null; test.idx=0; test.requireQN=false; test.pointsPer=5; test.score=null;
-  document.getElementById('modeBadge').textContent='practice';
-  document.getElementById('promptText').textContent='—';
-  document.getElementById('scoreNow').textContent='—';
-  document.getElementById('studentTestBar').style.display='none';
-  document.getElementById('itemIdx').textContent='—'; document.getElementById('itemTotal').textContent='—';
-  document.getElementById('autoOne').disabled=false; document.getElementById('autoRemove').disabled=false; document.getElementById('clear').disabled=false;
+  $('#modeBadge').textContent='practice'; $('#promptText').textContent='—'; $('#scoreNow').textContent='—';
+  $('#studentTestBar').style.display='none'; $('#itemIdx').textContent='—'; $('#itemTotal').textContent='—';
+  $('#autoOne').disabled=false; $('#autoRemove').disabled=false; $('#clear').disabled=false;
   resetBoard();
 }
+
 function currentItem(){ return (test.list && test.idx<test.list.length) ? test.list[test.idx] : null; }
 function labelForItem(it){
   if(!it) return '—';
@@ -637,15 +629,18 @@ function labelForItem(it){
   return `${sym}${ion}${ng}`;
 }
 function labelForCurrent(){ return labelForItem(currentItem()); }
+
 function setUpItemFromList(){
   const it = currentItem();
-  document.getElementById('itemIdx').textContent = test.list ? String(Math.min(test.idx+1, test.list.length)) : '—';
-  document.getElementById('promptText').textContent = labelForItem(it);
+  $('#itemIdx').textContent = test.list ? String(Math.min(test.idx+1, test.list.length)) : '—';
+  $('#promptText').textContent = labelForItem(it);
   test.score = test.pointsPer;
-  document.getElementById('scoreNow').textContent = test.score;
+  $('#scoreNow').textContent = test.score;
+
   resetBoard();
   if(!it) return;
 
+  // Noble-gas prefill: fill up to noble core of TARGET species (Z - charge)
   const targetZ = (it.charge && it.charge!==0) ? (it.Z - it.charge) : it.Z;
   if(it.ng){
     const core = nearestNobleCore(targetZ);
@@ -701,7 +696,7 @@ function elementSymbol(Z){ return (Z>=1 && Z<=118)? SYMBOLS[Z] : "—"; }
 function periodFromZ(Z){ return PERIOD[Z] || "—"; }
 function shorthand(){
   const Z=state.Z; if(!Z) return "—";
-  const nobleToggle=document.getElementById('nobleToggle').checked; const p=periodFromZ(Z);
+  const nobleToggle=$('#nobleToggle').checked; const p=periodFromZ(Z);
   if(!nobleToggle || (typeof p==="number" && p<4)) return cfgPlain();
   let core=null; for(const ng of NOBLES){ if(ng.Z===Z) return `[${ng.sym}]`; if(ng.Z<Z) core=ng; else break; }
   if(!core) return cfgPlain();
@@ -710,15 +705,9 @@ function shorthand(){
   for(const tag of ORDER){ const rem=(current[tag]||0)-(coreCounts[tag]||0); if(rem>0) parts.push(`${tag}${rem}`); }
   return parts.join(" ");
 }
-function syncReadouts(){
-  document.getElementById('Z').textContent=state.Z;
-  document.getElementById('El').textContent=elementSymbol(state.Z);
-  document.getElementById('Period').textContent=periodFromZ(state.Z);
-  document.getElementById('cfg').innerHTML=cfgHTML();
-  document.getElementById('sh').textContent=shorthand();
-}
+function syncReadouts(){ $('#Z').textContent=state.Z; $('#El').textContent=elementSymbol(state.Z); $('#Period').textContent=periodFromZ(state.Z); $('#cfg').innerHTML=cfgHTML(); $('#sh').textContent=shorthand(); }
 function syncQuantumLast(){
-  const qnEl=document.getElementById('qn');
+  const qnEl=$('#qn');
   if(!state.lastQN){ qnEl.innerHTML='n = —, ℓ = — (—), mℓ = —, ms = —'; return; }
   const q=state.lastQN, lName=({0:'s',1:'p',2:'d',3:'f'})[q.l]||'—';
   qnEl.innerHTML=`n = ${q.n}, ℓ = ${q.l} (${lName}), m<sub>ℓ</sub> = ${q.m_l}, m<sub>s</sub> = ${q.m_s}`;
@@ -732,28 +721,29 @@ function strike(title, html, userAction){
   return;
 }
 
-/* buttons (tray buttons are rebound after tray insertion) */
-document.getElementById('nobleToggle').addEventListener('change', syncReadouts);
-const answersPanel=document.getElementById('answersPanel'); const toggleBtn=document.getElementById('toggleAnswers');
+/* controls */
+$('#nobleToggle').addEventListener('change', syncReadouts);
+const answersPanel=$('#answersPanel'); const toggleBtn=$('#toggleAnswers');
 toggleBtn.onclick = ()=>{ const hidden=answersPanel.classList.toggle('hidden'); toggleBtn.textContent = hidden?'Show Answers':'Hide Answers'; };
 
 /* scoring */
-function decPoint(){ if(test.mode!=='test') return; if(test.score>0){ test.score--; document.getElementById('scoreNow').textContent=test.score; } }
+function decPoint(){ if(test.mode!=='test') return; if(test.score>0){ test.score--; $('#scoreNow').textContent=test.score; } }
 
-/* auto-check during building (if not requiring QN and exact electron count reached) */
+/* Auto-check change: ONLY penalize if they exceed target; no auto-correct/advance */
 function maybeAutoCheck(){
+  if (test.mode !== 'test') return;
   const it = currentItem(); if(!it) return;
   const targetZ = speciesTargetZ({kind: it.charge? 'ion':'element', Z: it.Z, charge: it.charge||0});
-  if (state.Z < targetZ) return;
-  if (state.Z > targetZ){ decPoint(); warn("Too many electrons","You exceeded the target electron count."); return; }
-  if(!test.requireQN){
-    writeResult(true,'complete_no_qn');
-    advanceItem();
+  if (targetZ == null) return;
+
+  if (state.Z > targetZ){
+    decPoint();
+    warn("Too many electrons","You exceeded the target electron count. Remove one or submit your answer.");
   }
 }
 
-/* submit (defensive to avoid null lastQN) */
-document.getElementById('submitBtn').onclick = ()=>{
+/* Submit */
+$('#submitBtn').onclick = ()=>{
   if (test.mode !== 'test') return;
   const it = currentItem(); if(!it) return;
   const tZ = speciesTargetZ({kind: it.charge? 'ion':'element', Z: it.Z, charge: it.charge||0});
@@ -772,10 +762,10 @@ document.getElementById('submitBtn').onclick = ()=>{
       warn("Missing last electron","No last electron recorded. Place the final electron and re-submit.");
       return;
     }
-    const n  = Number(document.getElementById('qn_n').value||NaN);
-    const l  = document.getElementById('qn_l').value==='' ? NaN : Number(document.getElementById('qn_l').value);
-    const ml = Number(document.getElementById('qn_ml').value||NaN);
-    const ms = document.getElementById('qn_ms').value || '';
+    const n  = Number($('#qn_n').value||NaN);
+    const l  = $('#qn_l').value==='' ? NaN : Number($('#qn_l').value);
+    const ml = Number($('#qn_ml').value||NaN);
+    const ms = $('#qn_ms').value || '';
     const L=L_FROM_SUB[q.sub]; const mlList=mlSeq(q.sub);
     const ok = (n===q.n) && (l===L) && mlList.includes(ml) && (ms===q.m_s);
     if (!ok){
@@ -789,6 +779,7 @@ document.getElementById('submitBtn').onclick = ()=>{
   writeResult(true,'submit_ok');
   advanceItem();
 };
+
 function advanceItem(){
   alert(`Correct! Earned ${test.score}/${test.pointsPer}.`);
   const myRef = fb.db.ref(`${paths.progressRoot()}/${live.me.id}`);
@@ -826,7 +817,7 @@ function resetBoard(){
   for(const k in state.orbitals) state.orbitals[k]=[];
   document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
   state.Z=0; state.history=[]; state.lastQN=null; syncReadouts(); syncQuantumLast();
-  document.getElementById('qn_n').value=''; document.getElementById('qn_l').value=''; document.getElementById('qn_ml').value=''; document.getElementById('qn_ms').value='';
+  $('#qn_n').value=''; $('#qn_l').value=''; $('#qn_ml').value=''; $('#qn_ms').value='';
 }
 
 /* ========== Roster & Scores with Right/Total and CLASS TOTALS ========== */
@@ -869,7 +860,7 @@ function subscribeScores(reset){
   });
 }
 function renderScores(){
-  const body = document.getElementById('scoreBody'); if(!body) return;
+  const body = $('#scoreBody'); if(!body) return;
   body.innerHTML='';
   const rows=[];
   const ids = new Set([...roster.keys(), ...totals.keys()]);
@@ -895,7 +886,7 @@ function renderScores(){
   const pct = classTotal ? Math.round((classRight/classTotal)*100) : 0;
   const avgPts = studentCount ? (classPoints / studentCount) : 0;
 
-  const totalsEl = document.getElementById('classTotals');
+  const totalsEl = $('#classTotals');
   if (totalsEl){
     totalsEl.innerHTML = `
       <strong>Class totals:</strong>
@@ -918,8 +909,6 @@ function renderScores(){
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 function exportCSV(){
   const rows = document.querySelectorAll('#scoreBody tr');
-
-  // Aggregate to prepend totals row
   let studentCount = 0, classRight = 0, classTotal = 0, classPoints = 0;
   rows.forEach(tr=>{
     studentCount++;
@@ -956,11 +945,11 @@ function exportCSV(){
   URL.revokeObjectURL(url);
 }
 
-/* ========== Teacher Panel: build periodic chart + queue ========== */
+/* Teacher Panel: periodic chart + queue */
 const queue = []; // items: {Z, charge, ng}
 function renderQueue(){
-  const wrap = document.getElementById('queue'); wrap.innerHTML='';
-  document.getElementById('qCount').textContent = String(queue.length);
+  const wrap = $('#queue'); wrap.innerHTML='';
+  $('#qCount').textContent = String(queue.length);
   if(!queue.length){ wrap.innerHTML = '<div class="hint">Queue is empty. Click elements on the chart to add.</div>'; return; }
   queue.forEach((it,idx)=>{
     const sym = SYMBOLS[it.Z]||'?';
@@ -989,10 +978,10 @@ document.addEventListener('click', (e)=>{
   if(act==='del'){ queue.splice(idx,1); }
   renderQueue();
 });
-document.getElementById('tp_clearQueue').onclick = ()=>{ queue.length=0; renderQueue(); };
+$('#tp_clearQueue').onclick = ()=>{ queue.length=0; renderQueue(); };
 
 function buildPeriodicGrid(){
-  const pt = document.getElementById('pt'); pt.innerHTML='';
+  const pt = $('#pt'); pt.innerHTML='';
   function blank(n){ for(let i=0;i<n;i++){ const b=document.createElement('div'); b.className='pt-btn pt-blank'; pt.appendChild(b);} }
   function btn(z){
     const b=document.createElement('button');
@@ -1025,10 +1014,10 @@ function buildPeriodicGrid(){
 }
 
 /* Send list => broadcast to class */
-document.getElementById('tp_sendList').onclick = async ()=>{
+$('#tp_sendList').onclick = async ()=>{
   if(!queue.length){ alert('Queue is empty.'); return; }
-  const pts = Number(document.getElementById('tp_points').value||5);
-  const reqQN = !!document.getElementById('tp_requireQN').checked;
+  const pts = Number($('#tp_points').value||5);
+  const reqQN = !!$('#tp_requireQN').checked;
   const payload = {
     mode:'test',
     pointsPer: pts,
@@ -1037,55 +1026,54 @@ document.getElementById('tp_sendList').onclick = async ()=>{
     version: Date.now()
   };
   await fb.db.ref(paths.currentPrompt()).set(payload);
-  // Reset all student progress to 0
-  await fb.db.ref(paths.progressRoot()).set(null);
+  await fb.db.ref(paths.progressRoot()).set(null); // reset student progress
   alert(`Sent ${queue.length} items.`);
 };
 
 /* Admin controls */
-document.getElementById('tp_softReset').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/softResetAt`).set(Date.now()); alert('Soft reset broadcasted.'); };
-document.getElementById('tp_newSession').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/resetAt`).set(Date.now()); alert('New session broadcasted.'); };
-document.getElementById('exportBtn').onclick = ()=> exportCSV();
+$('#tp_softReset').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/softResetAt`).set(Date.now()); alert('Soft reset broadcasted.'); };
+$('#tp_newSession').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/resetAt`).set(Date.now()); alert('New session broadcasted.'); };
+$('#exportBtn').onclick = ()=> exportCSV();
 
-/* ===== UI & login ===== */
-document.getElementById('setClassBtn').onclick = async ()=>{
-  const val = sanitizeClassName(document.getElementById('classInput').value);
+/* UI & login */
+$('#setClassBtn').onclick = async ()=>{
+  const val = sanitizeClassName($('#classInput').value);
   setClassKey(val);
-  document.getElementById('classLabel').textContent=live.classKey;
+  $('#classLabel').textContent=live.classKey;
   const curRef = fb.db.ref(`${paths.configPath()}/currentSession`);
   let s = (await curRef.get()).val(); if(!s){ s=nowId(); await curRef.set(s); }
-  live.sessionId = s; document.getElementById('sessionLabel').textContent = s.slice(-6);
+  live.sessionId = s; $('#sessionLabel').textContent = s.slice(-6);
   ensureStudentPresence();
   attachPromptListener(); attachResetListeners(); subscribeRoster(true); subscribeScores(true);
 };
-document.getElementById('shareClassBtn').onclick = async ()=>{
+$('#shareClassBtn').onclick = async ()=>{
   const link = new URL(location.href); link.searchParams.set('class', live.classKey);
   try{ await navigator.clipboard.writeText(String(link)); alert('Join link copied:\n'+link); }
   catch(e){ prompt('Copy this link:', String(link)); }
 };
-document.getElementById('loginBtn').onclick = async ()=>{
+$('#loginBtn').onclick = async ()=>{
   const pin = await fetchPin();
-  document.getElementById('pinSetup').style.display = pin ? 'none' : '';
-  document.getElementById('loginDlg').showModal();
+  $('#pinSetup').style.display = pin ? 'none' : '';
+  $('#loginDlg').showModal();
 };
-document.getElementById('saveNewPinBtn').onclick = async ()=>{
-  const np = document.getElementById('newPinInput').value.trim();
+$('#saveNewPinBtn').onclick = async ()=>{
+  const np = $('#newPinInput').value.trim();
   if(!validPin(np)){ alert('Enter a 4-digit PIN (0-9).'); return; }
-  await savePin(np); alert('PIN saved.'); document.getElementById('pinSetup').style.display='none'; document.getElementById('newPinInput').value='';
+  await savePin(np); alert('PIN saved.'); $('#pinSetup').style.display='none'; $('#newPinInput').value='';
 };
-document.getElementById('unlockBtn').onclick = async (e)=>{
+$('#unlockBtn').onclick = async (e)=>{
   e.preventDefault();
-  const stored = await fetchPin(); const inp = document.getElementById('pinInput').value.trim();
+  const stored = await fetchPin(); const inp = $('#pinInput').value.trim();
   if(validPin(stored) && inp === stored){
-    document.getElementById('loginDlg').close();
-    document.getElementById('teacherPanel').classList.remove('hidden');
+    $('#loginDlg').close();
+    $('#teacherPanel').classList.remove('hidden');
   } else { alert('Wrong PIN'); }
 };
 
-/* ===== Build workspace + tray + periodic chart + init DB ===== */
+/* Build everything */
 function buildAll(){
   buildBlocks();
-  placeTrayUnder3d();
+  wireTray();
   buildPeriodicGrid();
   renderQueue();
 }
