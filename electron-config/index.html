@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Electron Configuration — Live Test Mode</title>
+<style>
+  :root{
+    --bg:#0f1216; --fg:#e6eaf0; --mut:#a8b0bd; --accent:#5aa7ff;
+    --s:#0e6b73; --p:#4b5f16; --d:#5c1135; --f:#143ea9;
+    --boxB:#5a6b86; --ok:#22c55e; --orb:#0f1622;
+    --panel:#0b111b; --edge:#273244; --chip:#0f1622;
+    --overlay:rgba(2,8,23,.55); --warn:#ef4444;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Arial,sans-serif}
+  .wrap{max-width:1400px;margin:0 auto;padding:16px}
+  h1{font-size:18px;margin:0 0 10px}
+  .panel{border:1px solid var(--edge);border-radius:12px;background:var(--panel)}
+  .panel .inner{padding:12px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .badge{border:1px solid #2b3a55;border-radius:10px;padding:4px 8px;background:var(--chip);color:#dce6f4}
+  .cfg{background:#111a27;border:1px solid #2b3a55;border-radius:8px;padding:6px 8px}
+  .hint{font-size:12px;color:var(--mut)}
+  .hidden{display:none}
+
+  .hdr{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+  .hdr input{padding:.3rem .5rem;border:1px solid #2b3a55;border-radius:8px;background:#0e1726;color:#dbe7ff}
+  .tiny{font-size:11px;color:#aab8d0}
+
+  .promptbar{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--edge);
+    background:#0b121d;padding:8px 12px;border-bottom:1px solid var(--edge)}
+  .pill{border:1px solid #2b3a55;background:#0e1726;color:#dbe7ff;border-radius:9999px;padding:.15rem .55rem;font-size:12px}
+  .prompt{font-weight:600}
+  .score{font-weight:700}
+
+  .blocks{display:grid;grid-template-columns:auto 1fr 1fr 1fr 1fr;gap:14px;align-items:start}
+  .blabel{display:flex;align-items:center;gap:10px}
+  .bl{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
+  .sbg{background:var(--s)} .pbg{background:var(--p)} .dbg{background:var(--d)} .fbg{background:var(--f)}
+  .block{display:grid;gap:8px}
+  .rowline{display:flex;align-items:center;gap:10px}
+  .rlabel{width:28px;text-align:right;opacity:.85}
+  .orbitals{display:flex;gap:8px}
+  .orbital{width:42px;height:34px;border:2px solid var(--boxB);border-radius:8px;background:var(--orb);display:flex;align-items:center;justify-content:center;position:relative}
+  .orbital.full{border-color:var(--ok)}
+  .orbital.over{outline:2px dashed var(--accent)}
+
+  .e{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;user-select:none}
+  .up{background:#1f6d3a;border:1px solid #3dd17b;color:#c6f7da}
+  .down{background:#7a2c21;border:1px solid #ff9c8a;color:#ffeae7}
+
+  .float-tray{
+    position:fixed; z-index:9999; bottom:18px; left:50%; transform:translateX(28%);
+    backdrop-filter:saturate(1.2) blur(6px);
+    background:rgba(16,22,33,0.86); border:1px solid #2b3a55; border-radius:14px;
+    box-shadow:0 10px 24px rgba(0,0,0,.35); padding:10px 12px; color:#dbe7ff
+  }
+  .float-tray .top{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .float-tray .arrows{display:flex;gap:8px}
+  .float-tray .e{cursor:grab}
+  .btn{border:1px solid #2b3a55;background:var(--chip);color:#dce6f4;border-radius:8px;padding:6px 10px;cursor:pointer}
+  .btn.primary{border-color:#3a82ff;background:#3a82ff;color:#fff}
+  .btn.warn{border-color:var(--warn);background:var(--warn);color:#fff}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn:active{transform:translateY(1px)}
+  @media (max-width:720px){ .float-tray{left:50%; transform:translateX(-50%); width:min(96%,520px)} }
+
+  .modal{position:fixed;inset:0;background:var(--overlay);display:none;align-items:center;justify-content:center;padding:14px}
+  .modal.show{display:flex}
+  .box{max-width:520px;background:var(--panel);border:1px solid #2b3a55;border-radius:12px;padding:14px}
+  .box h2{margin:0 0 8px 0;font-size:16px}
+  .why{color:#c8d3ea}
+
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid #2b3a55; padding: 6px 8px; }
+  th { background: #101a2b; text-align: left; }
+
+  #errOverlay{position:fixed;inset:0;display:none;align-items:flex-start;justify-content:center;background:rgba(0,0,0,.55);z-index:99999}
+  #errOverlay .errBox{margin-top:16px;max-width:900px;width:96%;background:#1a1f2b;border:1px solid #ff6b6b;border-radius:12px;padding:12px;color:#ffecec;font-family:ui-monospace,Consolas,monospace;white-space:pre-wrap}
+</style>
+
+<!-- Firebase compat -->
+<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+<div id="errOverlay"><div class="errBox" id="errBox"></div></div>
+
+<div class="wrap">
+  <div class="panel">
+    <div class="inner">
+      <div class="hdr">
+        <div class="row" style="gap:8px">
+          <h1>Electron Configuration — Block Layout</h1>
+          <span id="connectionBadge" class="badge">offline (local)</span>
+          <span class="tiny">Class: <strong id="classLabel">—</strong></span>
+          <span class="tiny">Session: <strong id="sessionLabel">—</strong></span>
+        </div>
+        <div class="row" style="gap:8px">
+          <input id="classInput" class="tiny" style="width:9rem" placeholder="CLASS">
+          <button id="setClassBtn" class="btn">Set Class</button>
+          <button id="shareClassBtn" class="btn">Copy Link</button>
+          <input id="nameInput" class="tiny" style="width:9rem" placeholder="Your name">
+          <button id="saveNameBtn" class="btn">Save Name</button>
+          <button id="loginBtn" class="btn">Teacher Login</button>
+          <label class="hint"><input id="nobleToggle" type="checkbox" checked> Noble-gas shorthand ≥ Period 4</label>
+          <button id="toggleAnswers" class="btn">Show Answers</button>
+        </div>
+      </div>
+
+      <div id="answersPanel" class="hidden" aria-live="polite">
+        <div class="row" style="margin-top:6px;">
+          <div class="badge">Z = <strong id="Z">0</strong></div>
+          <div class="badge">Element: <strong id="El">—</strong></div>
+          <div class="badge">Period: <strong id="Period">—</strong></div>
+        </div>
+        <div style="margin-top:8px;">
+          <div>Full configuration:</div>
+          <div id="cfg" class="cfg">—</div>
+          <div class="hint" style="margin-top:4px;">Shorthand: <span id="sh" class="cfg">—</span></div>
+        </div>
+        <div style="margin-top:8px;">
+          <div>Quantum numbers (last e⁻):</div>
+          <div id="qn" class="cfg">n = —, ℓ = — (—), m<sub>ℓ</sub> = —, m<sub>s</sub> = —</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="promptbar">
+      <div>
+        <span class="pill" id="modeBadge">practice</span>
+        <span class="prompt" id="promptText">—</span>
+      </div>
+      <div class="tiny">Points this item: <span class="score" id="scoreNow">—</span></div>
+    </div>
+
+    <div class="inner" id="studentTestBar" style="display:none">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="row" style="gap:12px;flex-wrap:wrap">
+          <div class="hint">Enter quantum numbers (last e⁻):</div>
+          <input id="qn_n" type="number" min="1" max="7" step="1" placeholder="n">
+          <select id="qn_l">
+            <option value="">ℓ</option>
+            <option value="0">0 (s)</option>
+            <option value="1">1 (p)</option>
+            <option value="2">2 (d)</option>
+            <option value="3">3 (f)</option>
+          </select>
+          <input id="qn_ml" type="number" step="1" placeholder="mℓ">
+          <select id="qn_ms">
+            <option value="">mₛ</option>
+            <option value="+1/2">+1/2</option>
+            <option value="-1/2">-1/2</option>
+          </select>
+        </div>
+        <div class="row">
+          <button id="submitBtn" class="btn primary">Submit Answer</button>
+        </div>
+      </div>
+      <div class="hint" id="qnHint">QN may be required depending on teacher prompt.</div>
+    </div>
+
+    <div class="inner">
+      <div class="blocks" id="blocks">
+        <div></div>
+        <div class="blabel"><div class="bl sbg">s</div><div class="hint">block</div></div>
+        <div class="blabel"><div class="bl pbg">p</div><div class="hint">block</div></div>
+        <div class="blabel"><div class="bl dbg">d</div><div class="hint">block</div></div>
+        <div class="blabel"><div class="bl fbg">f</div><div class="hint">block</div></div>
+
+        <div id="labels" class="block"></div>
+        <div id="scol" class="block"></div>
+        <div id="pcol" class="block"></div>
+        <div id="dcol" class="block"></div>
+        <div id="fcol" class="block"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="float-tray" aria-label="floating electron tray">
+  <div class="top">
+    <div class="arrows" title="Drag an electron into the next allowed orbital">
+      <div class="e up" draggable="true" data-spin="up">↑</div>
+      <div class="e down" draggable="true" data-spin="down">↓</div>
+    </div>
+    <button id="autoOne" class="btn primary" title="Place next allowed electron">Auto-place 1</button>
+    <button id="autoRemove" class="btn warn" title="Undo last correct placement">Auto-remove 1</button>
+    <button id="clear" class="btn">Clear</button>
+  </div>
+</div>
+
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="box">
+    <h2 id="mTitle">Not allowed</h2>
+    <div id="mBody" class="why">—</div>
+    <div class="row" style="margin-top:10px;justify-content:flex-end">
+      <button id="ok" class="btn primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<dialog id="loginDlg" style="border:none;border-radius:12px;max-width:420px;width:92%">
+  <form method="dialog" style="padding:16px">
+    <h3 style="margin:0 0 8px 0">Teacher Login</h3>
+    <p class="tiny" style="margin-top:0">Enter PIN to open the Teacher Panel.</p>
+    <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+           style="width:100%;padding:.6rem;border:1px solid #2b3a55;border-radius:10px;background:#0e1726;color:#dbe7ff" placeholder="4-digit PIN">
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button id="unlockBtn" class="btn" value="unlock">Unlock</button>
+      <button class="btn" value="cancel">Close</button>
+    </div>
+    <div id="pinSetup" class="tiny" style="margin-top:8px;display:none">
+      No PIN set for this class. Create one now:
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <input id="newPinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+               style="flex:1;padding:.5rem;border:1px solid #2b3a55;border-radius:8px;background:#0e1726;color:#dbe7ff" placeholder="New 4-digit PIN">
+        <button id="saveNewPinBtn" class="btn" type="button">Save PIN</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="teacherDlg" style="border:none;border-radius:12px;max-width:920px;width:96%">
+  <form method="dialog" style="padding:16px" onsubmit="return false;">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h3 style="margin:0">Teacher Panel</h3>
+      <div class="row"><button id="closeTeacherBtn" class="btn">Close</button></div>
+    </div>
+
+    <div class="row" style="gap:16px;flex-wrap:wrap;margin-top:10px">
+      <fieldset style="min-width:260px;border:1px solid #2b3a55;border-radius:12px;padding:12px">
+        <legend class="tiny">Prompt</legend>
+        <div class="row" style="gap:8px">
+          <label class="tiny">Mode
+            <select id="p_mode" style="display:block;padding:.35rem .5rem;border:1px solid #2b3a55;border-radius:8px;background:#0e1726;color:#dbe7ff">
+              <option value="practice">practice</option>
+              <option value="test">test</option>
+            </select>
+          </label>
+          <label class="tiny">Kind
+            <select id="p_kind" style="display:block;padding:.35rem .5rem;border:1px solid #2b3a55;border-radius:8px;background:#0e1726;color:#dbe7ff">
+              <option value="element">element</option>
+              <option value="ion">ion</option>
+            </select>
+          </label>
+          <label class="tiny">Z
+            <input id="p_Z" type="number" min="1" max="118" value="17" style="display:block;padding:.35rem .5rem;border:1px solid #2b3a55;border-radius:8px;background:#0e1726;color:#dbe7ff">
+          </label>
+          <label class="tiny">Charge (ion)
+            <input id="p_charge" type="number" value="-1" style="display:block;padding:.35rem .5rem;border:1px solid #2b3a55;border-radius:8px;background:#0e1726;color:#dbe7ff">
+          </label>
+          <label class="tiny">Points per
+            <input id="p_points" type="number" min="1" max="20" value="5" style="display:block;padding:.35rem .5rem;border:1px solid #2b3a55;border-radius:8px;background:#0e1726;color:#dbe7ff">
+          </label>
+        </div>
+        <div class="row" style="margin-top:8px;gap:8px">
+          <label class="tiny"><input id="p_requireQN" type="checkbox"> Require quantum numbers (last e⁻)</label>
+        </div>
+        <div class="row" style="margin-top:10px;gap:8px;justify-content:flex-end">
+          <button id="savePromptBtn" class="btn primary" type="button">Save Prompt</button>
+        </div>
+      </fieldset>
+
+      <fieldset style="min-width:240px;border:1px solid #2b3a55;border-radius:12px;padding:12px">
+        <legend class="tiny">Class Controls</legend>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <button id="softResetBtn" class="btn">Soft Reset Boards</button>
+          <button id="newSessionBtn" class="btn warn">Start New Session</button>
+          <button id="exportBtn" class="btn">Export Scores CSV</button>
+        </div>
+        <div class="tiny" style="margin-top:6px">Soft Reset clears student boards; New Session rotates session id.</div>
+      </fieldset>
+    </div>
+
+    <div style="margin-top:14px">
+      <h4 style="margin:4px 0 8px 0">Live Roster & Scores</h4>
+      <div style="max-height:340px;overflow:auto;border:1px solid #2b3a55;border-radius:12px">
+        <table id="scoreTable">
+          <thead>
+            <tr>
+              <th style="width:42%">Student</th>
+              <th style="width:14%">Total</th>
+              <th style="width:22%">Last Submit</th>
+              <th style="width:22%">ID</th>
+            </tr>
+          </thead>
+          <tbody id="scoreBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+  function show(msg, src, line, col, err){
+    var box=document.getElementById('errBox'), wrap=document.getElementById('errOverlay');
+    if(!box||!wrap) return;
+    var details = (err && err.stack) ? err.stack : (msg||'Unknown error');
+    if(src) details = (src + ':' + line + ':' + col + '\\n') + details;
+    box.textContent = details; wrap.style.display='flex';
+  }
+  window.onerror = function(msg, src, line, col, err){ show(msg, src, line, col, err); return false; };
+  window.onunhandledrejection = function(e){ show('Promise rejection', '', 0, 0, e.reason || e); };
+})();
+
+/* Firebase core */
+const CONFIG = {
+  useFirebase: true,
+  firebaseConfig: {
+    apiKey: "AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
+    authDomain: "presentation-83d1f.firebaseapp.com",
+    databaseURL: "https://presentation-83d1f-default-rtdb.firebaseio.com",
+    projectId: "presentation-83d1f",
+    storageBucket: "presentation-83d1f.firebasestorage.app",
+    messagingSenderId: "132406143951",
+    appId: "1:132406143951:web:9695690023bd3f2aedc0ba"
+  }
+};
+const $ = s=>document.querySelector(s);
+function sanitizeClassName(s){
+  return (s||'').trim().toUpperCase()
+    .replace(/[^A-Z0-9-]/g,'-')
+    .replace(/-+/g,'-')
+    .slice(0,32) || 'CLASS';
+}
+function getUrlParam(name){
+  try { return new URL(location.href).searchParams.get(name); }
+  catch (e) { return null; }
+}
+function setUrlParam(name, value){
+  try{
+    const u = new URL(location.href);
+    if(value==null) u.searchParams.delete(name); else u.searchParams.set(name, value);
+    history.replaceState({}, "", u.toString());
+  }catch(e){}
+}
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function nowId(){ return String(Date.now()); }
+function badge(txt){ const b=$('#connectionBadge'); if(b) b.textContent = txt; }
+function fmtTime(t){ if(!t) return '—'; const d=new Date(t); return d.toLocaleString(); }
+
+const fb = { db:null, online:false };
+const live = { classKey:null, sessionId:null, me:{id:null,name:null}, classHasPin:false };
+const paths = {
+  classPath: () => `/classes/${live.classKey}`,
+  configPath: () => `${paths.classPath()}/config`,
+  sessRoot:   () => `${paths.classPath()}/sessions`,
+  basePath:   () => `${paths.sessRoot()}/${live.sessionId}`,
+  prompts:    () => `${paths.basePath()}/prompts`,
+  currentPrompt: () => `${paths.prompts()}/current`,
+  results:    () => `${paths.basePath()}/results`,
+  students:   () => `${paths.basePath()}/students`,
+  control:    () => `${paths.basePath()}/control`
+};
+
+async function dbInit(){
+  if(!CONFIG.useFirebase){ badge('offline (local)'); return; }
+  try{
+    if (firebase.apps && firebase.apps.length === 0) firebase.initializeApp(CONFIG.firebaseConfig);
+    fb.db = firebase.database();
+    await firebase.auth().signInAnonymously();
+    fb.online = true; badge('online (firebase)');
+    await bootFromClass();
+  }catch(e){ fb.online=false; badge('offline (local)'); }
+}
+
+async function bootFromClass(){
+  const urlC = getUrlParam('class');
+  const savedC = localStorage.getItem('ec_class');
+  setClassKey(sanitizeClassName(urlC || savedC || 'CLASS'), false);
+  $('#classInput').value = live.classKey; $('#classLabel').textContent = live.classKey;
+
+  const cfgSnap = await fb.db.ref(paths.configPath()).get();
+  const cfg = cfgSnap.val() || {};
+  live.classHasPin = typeof cfg.teacherPin === 'string' && cfg.teacherPin.length === 4;
+
+  let s = (await fb.db.ref(`${paths.configPath()}/currentSession`).get()).val();
+  if(!s){ s = nowId(); await fb.db.ref(`${paths.configPath()}/currentSession`).set(s); }
+  live.sessionId = s; $('#sessionLabel').textContent = s.slice(-6);
+
+  ensureStudentPresence();
+  attachPromptListener();
+  attachResetListeners();
+  subscribeRoster();
+  subscribeScores();
+}
+
+function setClassKey(k, writeUrl=true){
+  live.classKey = sanitizeClassName(k);
+  localStorage.setItem('ec_class', live.classKey);
+  if(writeUrl) setUrlParam('class', live.classKey);
+}
+function ensureStudentPresence(){
+  let id = localStorage.getItem('ec_uid');
+  if(!id){ id = uid(); localStorage.setItem('ec_uid', id); }
+  live.me.id = id;
+
+  const nm = localStorage.getItem('ec_name') || '';
+  live.me.name = nm || null;
+  if(nm) $('#nameInput').value = nm;
+
+  const ref = fb.db.ref(`${paths.students()}/${id}`);
+  ref.set({ name: nm || null, at: firebase.database.ServerValue.TIMESTAMP }).catch(e=>{});
+  try{ ref.onDisconnect().remove(); }catch(e){}
+}
+
+$('#saveNameBtn').onclick = ()=>{
+  const nm = ($('#nameInput').value||'').trim().slice(0,40);
+  localStorage.setItem('ec_name', nm);
+  live.me.name = nm || null;
+  if(fb.db) fb.db.ref(`${paths.students()}/${live.me.id}`).update({ name: nm || null, at: firebase.database.ServerValue.TIMESTAMP }).catch(e=>{});
+  alert('Name saved.');
+};
+
+async function fetchPin(){
+  const cfg = (await fb.db.ref(paths.configPath()).get()).val() || {};
+  live.classHasPin = typeof cfg.teacherPin === 'string' && cfg.teacherPin.length === 4;
+  return cfg.teacherPin || null;
+}
+async function savePin(pin){ await fb.db.ref(paths.configPath()).update({ teacherPin: pin }); live.classHasPin = true; }
+function validPin(p){ return /^\d{4}$/.test(p || ''); }
+
+function tokenSeenKey(kind){ return `ec_seen_${live.classKey}_${kind}_${live.sessionId||'none'}`; }
+function getSeen(kind){ return Number(localStorage.getItem(tokenSeenKey(kind)) || 0); }
+function setSeen(kind,v){ localStorage.setItem(tokenSeenKey(kind), String(v)); }
+function attachResetListeners(){
+  const softRef = fb.db.ref(`${paths.control()}/softResetAt`);
+  const hardRef = fb.db.ref(`${paths.control()}/resetAt`);
+  softRef.on('value', s=>{
+    const t = Number(s.val()||0);
+    if(t && t>getSeen('soft')){ setSeen('soft',t); resetBoard(); }
+  });
+  hardRef.on('value', async s=>{
+    const t = Number(s.val()||0);
+    if(t && t>getSeen('hard')){
+      setSeen('hard',t);
+      let next = nowId();
+      await fb.db.ref(`${paths.configPath()}/currentSession`).set(next);
+      live.sessionId = next; $('#sessionLabel').textContent = next.slice(-6);
+      resetBoard();
+      attachPromptListener(); subscribeRoster(true); subscribeScores(true);
+    }
+  });
+}
+
+let unsubPrompt = null;
+function attachPromptListener(){
+  if(!fb.db) return;
+  const ref = fb.db.ref(paths.currentPrompt());
+  if(unsubPrompt) try{ ref.off(); }catch(e){}
+  ref.on('value', snap=>{ applyPrompt(snap.val()||null); });
+  unsubPrompt = ref;
+}
+
+/* Engine */
+const ORDER = ["1s","2s","2p","3s","3p","4s","3d","4p","5s","4d","5p","6s","4f","5d","6p","7s","5f","6d","7p"];
+const ORB_COUNT = { s:1, p:3, d:5, f:7 };
+const CAP       = { s:2, p:6, d:10, f:14 };
+
+const SYMBOLS=[null,"H","He","Li","Be","B","C","N","O","F","Ne","Na","Mg","Al","Si","P","S","Cl","Ar",
+"K","Ca","Sc","Ti","V","Cr","Mn","Fe","Co","Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr",
+"Rb","Sr","Y","Zr","Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd","In","Sn","Sb","Te","I","Xe",
+"Cs","Ba","La","Ce","Pr","Nd","Pm","Sm","Eu","Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu",
+"Hf","Ta","W","Re","Os","Ir","Pt","Au","Hg","Tl","Pb","Bi","Po","At","Rn",
+"Fr","Ra","Ac","Th","Pa","U","Np","Pu","Am","Cm","Bk","Cf","Es","Fm","Md","No","Lr",
+"Rf","Db","Sg","Bh","Hs","Mt","Ds","Rg","Cn","Nh","Fl","Mc","Lv","Ts","Og"];
+const PERIOD =(()=>{const b=[2,10,18,36,54,86,118]; const p=[null]; for(let z=1,k=1; z<=118; z++){ if(z>b[k-1]) k++; p[z]=k; } return p;})();
+const NOBLES=[{Z:2,sym:"He"},{Z:10,sym:"Ne"},{Z:18,sym:"Ar"},{Z:36,sym:"Kr"},{Z:54,sym:"Xe"},{Z:86,sym:"Rn"},{Z:118,sym:"Og"}];
+
+const state = { orbitals:{}, Z:0, history:[], lastQN:null };
+
+function addRow(container, tag, boxes){
+  const line=document.createElement('div'); line.className='rowline';
+  const lab=document.createElement('div'); lab.className='rlabel'; lab.textContent=tag;
+  const wrap=document.createElement('div'); wrap.className='orbitals';
+  for(let i=0;i<boxes;i++){
+    const box=document.createElement('div');
+    box.className='orbital';
+    box.dataset.key=`${tag}:${i}`;
+    box.dataset.sub=tag.replace(/[0-9]/g,"");
+    box.dataset.idx=String(i);
+    box.addEventListener('dragover', ev=>{ ev.preventDefault(); box.classList.add('over'); });
+    box.addEventListener('dragleave', ()=> box.classList.remove('over'));
+    box.addEventListener('drop', ev=>{
+      ev.preventDefault(); box.classList.remove('over');
+      const spin=ev.dataTransfer.getData('text/plain')||ev.dataTransfer.getData('text');
+      attemptPlace(box, spin, true);
+    });
+    wrap.appendChild(box);
+    state.orbitals[`${tag}:${i}`]=[];
+  }
+  line.appendChild(lab); line.appendChild(wrap);
+  container.appendChild(line);
+}
+function buildBlocks(){
+  const scol=$('#scol'), pcol=$('#pcol'), dcol=$('#dcol'), fcol=$('#fcol');
+  scol.innerHTML=pcol.innerHTML=dcol.innerHTML=fcol.innerHTML="";
+  const sTags=["1s","2s","3s","4s","5s","6s","7s"];
+  const pTags=["2p","3p","4p","5p","6p","7p"];
+  const dTags=["3d","4d","5d","6d"];
+  const fTags=["4f","5f"];
+  [...sTags].reverse().forEach(tag=> addRow(scol, tag, 1));
+  [...pTags].reverse().forEach(tag=> addRow(pcol, tag, 3));
+  [...dTags].reverse().forEach(tag=> addRow(dcol, tag, 5));
+  [...fTags].reverse().forEach(tag=> addRow(fcol, tag, 7));
+}
+buildBlocks();
+
+document.querySelectorAll('.float-tray .e').forEach(el=>{
+  el.addEventListener('dragstart', ev=>{ ev.dataTransfer.setData('text/plain', el.dataset.spin); });
+});
+
+function counters(){ const c={}; for(const tag of ORDER){ const sub=tag.replace(/[0-9]/g,""); const cnt=ORB_COUNT[sub]; let sum=0; for(let i=0;i<cnt;i++) sum+=state.orbitals[`${tag}:${i}`]?.length||0; c[tag]=sum; } return c; }
+function currentSubshell(){ const c=counters(); for(const tag of ORDER){ const sub=tag.replace(/[0-9]/g,""); if(c[tag] < CAP[sub]) return tag; } return null; }
+function nextAllowed(){
+  const tag=currentSubshell(); if(!tag) return null;
+  const sub=tag.replace(/[0-9]/g,""); const count=ORB_COUNT[sub];
+  const keys=[...Array(count).keys()].map(i=>`${tag}:${i}`);
+  const occs=keys.map(k=>state.orbitals[k]);
+  for(let i=0;i<count;i++){ if((occs[i]||[]).length===0) return {key:keys[i], spin:'up', tag}; }
+  for(let i=0;i<count;i++){ if((occs[i]||[]).length===1 && !occs[i].some(e=>e.spin==='down')) return {key:keys[i], spin:'down', tag}; }
+  for(let i=0;i<count;i++){ if((occs[i]||[]).length===1) return {key:keys[i], spin:(occs[i][0].spin==='up'?'down':'up'), tag}; }
+  return null;
+}
+
+const L_FROM_SUB={s:0,p:1,d:2,f:3};
+function mlSeq(sub){ const l=L_FROM_SUB[sub]; const a=[]; for(let m=-l;m<=l;m++) a.push(m); return a; }
+function qnFromKeySpin(key,spin){
+  const tag=key.split(":")[0], n=parseInt(tag), sub=tag.replace(/[0-9]/g,""), l=L_FROM_SUB[sub];
+  const idx=parseInt(key.split(":")[1],10), mlList=mlSeq(sub), m_l=mlList[idx] ?? 0, m_s=(spin==='up')?'+1/2':'-1/2';
+  return {n,l,sub,m_l,m_s};
+}
+
+function attemptPlace(targetBox, spin, userAction){
+  const allowed = nextAllowed();
+  if(!allowed) return strike("No available orbital", "All orbitals through 7p are filled.", userAction);
+
+  const targetKey = targetBox.dataset.key;
+  const targetOcc = state.orbitals[targetKey];
+
+  if(targetOcc.length>=2) return strike("Pauli exclusion", "That orbital already has two electrons.", userAction);
+  if(targetOcc.length===1 && targetOcc[0].spin===spin) return strike("Pauli exclusion", "Electrons in the same orbital must have opposite spins.", userAction);
+
+  const curTag = allowed.tag, targetTag = targetKey.split(":")[0];
+  if(targetTag !== curTag) return strike("Aufbau order", `Next subshell is <strong>${curTag}</strong>, not <strong>${targetTag}</strong>.`, userAction);
+
+  const sub = curTag.replace(/[0-9]/g,""), count = ORB_COUNT[sub];
+  const keys=[...Array(count).keys()].map(i=>`${curTag}:${i}`);
+  const anyEmpty = keys.some(k=>state.orbitals[k].length===0);
+  if(anyEmpty && targetOcc.length===1) return strike("Hund’s rule", "Place one electron (↑) in each orbital of this subshell before pairing (↓).", userAction);
+
+  if(!(targetKey===allowed.key && spin===allowed.spin)){
+    if(targetKey===allowed.key && spin!==allowed.spin)
+      return strike("Spin / Hund", `Use <strong>${allowed.spin==='up'?'↑':'↓'}</strong> for this step.`, userAction);
+    return strike("Order violation", `Place at <strong>${allowed.key.split(':')[0]}</strong> with <strong>${allowed.spin==='up'?'↑':'↓'}</strong>.`, userAction);
+  }
+
+  targetOcc.push({spin});
+  drawOrbital(targetBox, targetOcc);
+  state.Z++;
+  state.history.push({ key: targetKey, spin });
+  state.lastQN = qnFromKeySpin(targetKey, spin);
+  syncReadouts(); syncQuantumLast();
+
+  if(test.mode==='test'){ maybeAutoCheck(); }
+}
+function drawOrbital(box, occ){
+  box.innerHTML='';
+  occ.forEach(o=>{ const e=document.createElement('div'); e.className='e '+(o.spin==='up'?'up':'down'); e.textContent=(o.spin==='up'?'↑':'↓'); box.appendChild(e); });
+  box.classList.toggle('full', occ.length===2);
+}
+
+function currentConfigCounters(){ const c=counters(), out={}; for(const tag of ORDER){ if(c[tag]>0) out[tag]=c[tag]; } return out; }
+function cfgHTML(){ const c=currentConfigCounters(), parts=[]; for(const tag of ORDER){ if(c[tag]) parts.push(`${tag}<sup>${c[tag]}</sup>`);} return parts.length?parts.join(" "):"—"; }
+function cfgPlain(){ const c=currentConfigCounters(), parts=[]; for(const tag of ORDER){ if(c[tag]) parts.push(`${tag}${c[tag]}`);} return parts.length?parts.join(" "):"—"; }
+function elementSymbol(Z){ return (Z>=1 && Z<=118)? SYMBOLS[Z] : "—"; }
+function periodFromZ(Z){ return PERIOD[Z] || "—"; }
+function buildCountsForZ(z){ const counts={}; for(const tag of ORDER) counts[tag]=0; let left=z; for(const tag of ORDER){ if(left<=0) break; const sub=tag.replace(/[0-9]/g,""); const take=Math.min(CAP[sub],left); counts[tag]=take; left-=take; } return counts; }
+function shorthand(){
+  const Z=state.Z; if(!Z) return "—";
+  const nobleToggle=$('#nobleToggle').checked; const p=periodFromZ(Z);
+  if(!nobleToggle || (typeof p==="number" && p<4)) return cfgPlain();
+  let core=null; for(const ng of NOBLES){ if(ng.Z===Z) return `[${ng.sym}]`; if(ng.Z<Z) core=ng; else break; }
+  if(!core) return cfgPlain();
+  const current=currentConfigCounters(), coreCounts=buildCountsForZ(core.Z);
+  const parts=[`[${core.sym}]`];
+  for(const tag of ORDER){ const rem=(current[tag]||0)-(coreCounts[tag]||0); if(rem>0) parts.push(`${tag}${rem}`); }
+  return parts.join(" ");
+}
+function syncReadouts(){ $('#Z').textContent=state.Z; $('#El').textContent=elementSymbol(state.Z); $('#Period').textContent=periodFromZ(state.Z); $('#cfg').innerHTML=cfgHTML(); $('#sh').textContent=shorthand(); }
+function syncQuantumLast(){
+  const qnEl=$('#qn');
+  if(!state.lastQN){ qnEl.innerHTML='n = —, ℓ = — (—), mℓ = —, ms = —'; return; }
+  const q=state.lastQN, lName=({0:'s',1:'p',2:'d',3:'f'})[q.l]||'—';
+  qnEl.innerHTML=`n = ${q.n}, ℓ = ${q.l} (${lName}), m<sub>ℓ</sub> = ${q.m_l}, m<sub>s</sub> = ${q.m_s}`;
+}
+
+const modal=$('#modal'); const mBody=$('#mBody');
+$('#ok').addEventListener('click', ()=> modal.classList.remove('show'));
+function warn(title, html){ document.getElementById('mTitle').textContent=title; mBody.innerHTML=html; modal.classList.add('show'); }
+function strike(title, html, userAction){
+  if(userAction && test.mode==='test'){ decPoint(); }
+  warn(title, html);
+  return;
+}
+
+$('#autoOne').onclick = ()=>{
+  if(test.mode==='test') return;
+  const a=nextAllowed(); if(!a) return;
+  const box=document.querySelector(`.orbital[data-key="${a.key}"]`); attemptPlace(box, a.spin, false);
+};
+$('#autoRemove').onclick = ()=>{
+  if(test.mode==='test') return;
+  if(!state.history.length) return;
+  const last=state.history.pop(); const occ=state.orbitals[last.key];
+  if(occ && occ.length){ occ.pop(); const box=document.querySelector(`.orbital[data-key="${last.key}"]`); if(box) drawOrbital(box, occ); if(state.Z>0) state.Z--; state.lastQN=null; syncReadouts(); syncQuantumLast(); }
+};
+$('#clear').onclick = ()=>{ if(test.mode==='test') return; resetBoard(); };
+$('#nobleToggle').addEventListener('change', syncReadouts);
+const answersPanel=$('#answersPanel'); const toggleBtn=$('#toggleAnswers');
+toggleBtn.onclick = ()=>{ const hidden=answersPanel.classList.toggle('hidden'); toggleBtn.textContent = hidden?'Show Answers':'Hide Answers'; };
+
+const test = { mode:'practice', goal:null, pointsPer:5, score:null, requireQN:false };
+
+function applyPrompt(v){
+  if(!v){ setPractice(); return; }
+  test.mode = (v.mode==='test')?'test':'practice';
+  test.goal = v.goal || null;
+  test.pointsPer = Number(v.pointsPer)||5;
+  test.requireQN = !!v.requireQN;
+  test.score = test.pointsPer;
+
+  $('#modeBadge').textContent=test.mode;
+  $('#promptText').textContent=promptLabel();
+  $('#scoreNow').textContent = (test.mode==='test')? test.score : '—';
+
+  const isTest = test.mode==='test';
+  $('#autoOne').disabled=isTest; $('#autoRemove').disabled=isTest; $('#clear').disabled=isTest;
+  document.getElementById('studentTestBar').style.display = isTest ? '' : 'none';
+  $('#qnHint').textContent = test.requireQN ? 'QN are required for credit.' : 'QN not required for this item.';
+
+  if(isTest) resetBoard();
+}
+function setPractice(){
+  test.mode='practice'; test.goal=null; test.pointsPer=5; test.score=null; test.requireQN=false;
+  $('#modeBadge').textContent='practice'; $('#promptText').textContent='—'; $('#scoreNow').textContent='—';
+  $('#autoOne').disabled=false; $('#autoRemove').disabled=false; $('#clear').disabled=false;
+  document.getElementById('studentTestBar').style.display='none';
+}
+function promptLabel(){
+  if(test.mode!=='test' || !test.goal) return '—';
+  const g=test.goal; const sym=SYMBOLS[g.Z]||'?';
+  if(g.kind==='element') return `Build element: ${sym} (Z=${g.Z})`;
+  if(g.kind==='ion'){ const ch=g.charge||0; const sign = ch===0?'':(ch>0?`^${ch}+`:`^${Math.abs(ch)}-`); return `Build ion: ${sym}${sign}`; }
+  return '—';
+}
+function speciesTargetZ(g){
+  if(!g) return null;
+  if(g.kind==='element') return g.Z;
+  if(g.kind==='ion') return g.Z - (g.charge||0);
+  return null;
+}
+function resetBoard(){
+  for(const k in state.orbitals) state.orbitals[k]=[];
+  document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
+  state.Z=0; state.history=[]; state.lastQN=null; syncReadouts(); syncQuantumLast();
+  $('#qn_n').value=''; $('#qn_l').value=''; $('#qn_ml').value=''; $('#qn_ms').value='';
+}
+function decPoint(){
+  if(test.mode!=='test') return;
+  if(test.score>0){ test.score--; $('#scoreNow').textContent=test.score; }
+  if(test.score<=0){ revealAnswer(); writeResult(false,'out_of_points'); resetBoard(); }
+}
+function revealAnswer(){
+  if(answersPanel.classList.contains('hidden')){ answersPanel.classList.remove('hidden'); toggleBtn.textContent='Hide Answers'; }
+}
+
+function maybeAutoCheck(){
+  const tZ = speciesTargetZ(test.goal); if(tZ==null) return;
+  if(state.Z < tZ) return;
+  if(state.Z > tZ){ decPoint(); warn("Too many electrons","You exceeded the target electron count."); return; }
+  if(!test.requireQN){
+    writeResult(true,'complete_no_qn'); alert(`Correct! Earned ${test.score}/${test.pointsPer}.`); resetBoard();
+  }
+}
+
+$('#submitBtn').onclick = ()=>{
+  if(test.mode!=='test') return;
+  const tZ = speciesTargetZ(test.goal); if(tZ==null) return;
+
+  if(state.Z !== tZ){ decPoint(); warn("Incorrect submission", `Target requires ${tZ} electrons; you submitted ${state.Z}.`); return; }
+
+  if(test.requireQN){
+    if(!state.lastQN){ decPoint(); warn("Missing last electron","No last electron recorded."); return; }
+    const n = Number($('#qn_n').value||NaN);
+    const l = $('#qn_l').value==='' ? NaN : Number($('#qn_l').value);
+    const ml = Number($('#qn_ml').value||NaN);
+    const ms = $('#qn_ms').value || '';
+    const L=L_FROM_SUB[state.lastQN.sub]; const mlList=mlSeq(state.lastQN.sub);
+    const ok = (n===state.lastQN.n) && (l===L) && (mlList.includes(ml)) && (ms===state.lastQN.m_s);
+    if(!ok){
+      decPoint();
+      warn("Quantum numbers mismatch",
+           `Expected n=${state.lastQN.n}, ℓ=${L} (${state.lastQN.sub}), mℓ ∈ [${mlList[0]}…${mlList[mlList.length-1]}] with chosen orbital ${state.lastQN.m_l}, mₛ=${state.lastQN.m_s}.`);
+      return;
+    }
+  }
+
+  writeResult(true,'submit_ok');
+  alert(`Correct! Earned ${test.score}/${test.pointsPer}.`);
+  resetBoard();
+};
+
+function writeResult(ok, reason){
+  if(!fb.db || !live.classKey || !live.sessionId) return;
+  const ts=Date.now();
+  const payload={
+    ok: !!ok,
+    reason: reason||null,
+    earned: ok ? test.score : 0,
+    pointsPer: test.pointsPer,
+    requireQN: test.requireQN,
+    target: test.goal,
+    zFinal: state.Z,
+    cfg: cfgPlain(),
+    sh: shorthand(),
+    lastQN: state.lastQN,
+    at: ts,
+    who: live.me.id || 'anon',
+    name: live.me.name || null
+  };
+  fb.db.ref(`${paths.results()}/${live.me.id}/${ts}`).set(payload).catch(e=>{});
+}
+
+/* Roster & Scores */
+const roster = new Map();
+const totals = new Map();
+
+function subscribeRoster(reset){
+  if(!fb.db) return;
+  const ref = fb.db.ref(paths.students());
+  if(reset) try{ ref.off(); }catch(e){}
+  ref.on('child_added', snap=>{
+    const id=snap.key, v=snap.val()||{};
+    roster.set(id,{name:v.name||null, at:v.at||0}); renderScores();
+  });
+  ref.on('child_changed', snap=>{
+    const id=snap.key, v=snap.val()||{};
+    roster.set(id,{name:v.name||null, at:v.at||0}); renderScores();
+  });
+  ref.on('child_removed', snap=>{ roster.delete(snap.key); renderScores(); });
+}
+
+function subscribeScores(reset){
+  if(!fb.db) return;
+  const ref = fb.db.ref(paths.results());
+  if(reset) try{ ref.off(); }catch(e){}
+  ref.on('value', snap=>{
+    totals.clear();
+    const all = snap.val()||{};
+    Object.keys(all).forEach(id=>{
+      let sum=0, last=0;
+      const items = all[id]||{};
+      Object.keys(items).forEach(ts=>{
+        const r = items[ts];
+        sum += Number(r.earned||0);
+        last = Math.max(last, Number(r.at||0));
+      });
+      totals.set(id,{sum,last});
+    });
+    renderScores();
+  });
+}
+
+function renderScores(){
+  const body = $('#scoreBody'); if(!body) return;
+  body.innerHTML='';
+  const rows=[];
+  const ids = new Set([...roster.keys(), ...totals.keys()]);
+  ids.forEach(id=>{
+    const r = roster.get(id)||{};
+    const t = totals.get(id)||{sum:0,last:0};
+    rows.push({
+      id, name: (r.name && String(r.name).trim()) ? r.name.trim() : '(no name)',
+      sum: t.sum||0, last: t.last||0
+    });
+  });
+  rows.sort((a,b)=> (b.sum-a.sum) || ((b.last||0)-(a.last||0)) || a.name.localeCompare(b.name));
+  rows.forEach(row=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${escapeHtml(row.name)}</td>
+                    <td>${row.sum}</td>
+                    <td>${fmtTime(row.last)}</td>
+                    <td class="tiny">${row.id}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+function exportCSV(){
+  const rows = document.querySelectorAll('#scoreBody tr');
+  const lines = [['Student','Total','Last Submit','ID']];
+  rows.forEach(tr=>{
+    const cols=[...tr.children].map(td=>td.textContent);
+    lines.push(cols);
+  });
+  function csvEscape(s){
+    const str = String(s == null ? '' : s);
+    return /[",\n]/.test(str) ? '"' + str.replace(/"/g,'""') + '"' : str;
+  }
+  const csv = lines.map(row => row.map(csvEscape).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`ec-scores-${live.classKey}-${live.sessionId}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* Header + dialogs */
+window.addEventListener('load', dbInit);
+
+$('#setClassBtn').onclick = async ()=>{
+  const val = sanitizeClassName($('#classInput').value);
+  setClassKey(val);
+  $('#classLabel').textContent=live.classKey;
+  const curRef = fb.db.ref(`${paths.configPath()}/currentSession`);
+  let s = (await curRef.get()).val(); if(!s){ s=nowId(); await curRef.set(s); }
+  live.sessionId = s; $('#sessionLabel').textContent = s.slice(-6);
+  ensureStudentPresence();
+  attachPromptListener(); attachResetListeners(); subscribeRoster(true); subscribeScores(true);
+};
+
+$('#shareClassBtn').onclick = async ()=>{
+  const link = new URL(location.href); link.searchParams.set('class', live.classKey);
+  try{ await navigator.clipboard.writeText(String(link)); alert('Join link copied:\n'+link); }
+  catch(e){ prompt('Copy this link:', String(link)); }
+};
+
+$('#loginBtn').onclick = async ()=>{
+  const pin = await fetchPin();
+  $('#pinSetup').style.display = pin ? 'none' : '';
+  $('#loginDlg').showModal();
+};
+$('#saveNewPinBtn').onclick = async ()=>{
+  const np = $('#newPinInput').value.trim();
+  if(!validPin(np)){ alert('Enter a 4-digit PIN (0-9).'); return; }
+  await savePin(np); alert('PIN saved.'); $('#pinSetup').style.display='none'; $('#newPinInput').value='';
+};
+$('#unlockBtn').onclick = async (e)=>{
+  e.preventDefault();
+  const stored = await fetchPin(); const inp = $('#pinInput').value.trim();
+  if(validPin(stored) && inp === stored){
+    $('#loginDlg').close();
+    $('#teacherDlg').showModal();
+  } else { alert('Wrong PIN'); }
+};
+$('#closeTeacherBtn').onclick = ()=> $('#teacherDlg').close();
+
+$('#savePromptBtn').onclick = async ()=>{
+  const v = {
+    mode: $('#p_mode').value,
+    pointsPer: Number($('#p_points').value||5),
+    requireQN: $('#p_requireQN').checked,
+    goal: {
+      kind: $('#p_kind').value,
+      Z: Number($('#p_Z').value||0),
+      charge: Number($('#p_charge').value||0)
+    }
+  };
+  await fb.db.ref(paths.currentPrompt()).set(v);
+  alert('Prompt saved.');
+};
+
+$('#softResetBtn').onclick = async ()=>{
+  await fb.db.ref(`${paths.control()}/softResetAt`).set(Date.now());
+  alert('Soft reset broadcasted.');
+};
+$('#newSessionBtn').onclick = async ()=>{
+  await fb.db.ref(`${paths.control()}/resetAt`).set(Date.now());
+  alert('New session broadcasted.');
+};
+$('#exportBtn').onclick = ()=> exportCSV();
+
+syncReadouts(); syncQuantumLast();
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ try{$('#teacherDlg').close();}catch(e){} try{$('#loginDlg').close();}catch(e){} }});
+</script>
+</body>
+</html>
