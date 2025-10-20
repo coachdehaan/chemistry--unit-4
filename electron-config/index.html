@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Electron Configuration — Live Test Mode</title>
+<title>Electron Configuration — Class/Test Mode</title>
 <style>
   :root{
     --bg:#0f1216; --fg:#e6eaf0; --mut:#a8b0bd; --accent:#5aa7ff;
@@ -22,14 +22,17 @@
   .cfg{background:#111a27;border:1px solid #2b3a55;border-radius:8px;padding:6px 8px}
   .hint{font-size:12px;color:var(--mut)}
   .hidden{display:none}
+
   .hdr{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
   .hdr input{padding:.3rem .5rem;border:1px solid #2b3a55;border-radius:8px;background:#0e1726;color:#dbe7ff}
   .tiny{font-size:11px;color:#aab8d0}
+
   .promptbar{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--edge);
     background:#0b121d;padding:8px 12px;border-bottom:1px solid var(--edge)}
   .pill{border:1px solid #2b3a55;background:#0e1726;color:#dbe7ff;border-radius:9999px;padding:.15rem .55rem;font-size:12px}
   .prompt{font-weight:600}
   .score{font-weight:700}
+
   .blocks{display:grid;grid-template-columns:auto 1fr 1fr 1fr 1fr;gap:14px;align-items:start}
   .blabel{display:flex;align-items:center;gap:10px}
   .bl{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
@@ -38,12 +41,14 @@
   .rowline{display:flex;align-items:center;gap:10px}
   .rlabel{width:28px;text-align:right;opacity:.85}
   .orbitals{display:flex;gap:8px}
-  .orbital{width:42px;height:34px;border:2px solid var(--boxB);border-radius:8px;background:var(--orb);display:flex;align-items:center;justify-content:center;position:relative}
+  .orbital{width:42px;height:34px;border:2px solid var(--boxB);border-radius:8px;background:var(--orb);display:flex;align-items:center;justify-content:center}
   .orbital.full{border-color:var(--ok)}
   .orbital.over{outline:2px dashed var(--accent)}
+
   .e{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;user-select:none}
   .up{background:#1f6d3a;border:1px solid #3dd17b;color:#c6f7da}
   .down{background:#7a2c21;border:1px solid #ff9c8a;color:#ffeae7}
+
   .float-tray{
     position:fixed; z-index:9999; bottom:18px; left:50%; transform:translateX(28%);
     backdrop-filter:saturate(1.2) blur(6px);
@@ -59,23 +64,12 @@
   .btn:disabled{opacity:.5;cursor:not-allowed}
   .btn:active{transform:translateY(1px)}
   @media (max-width:720px){ .float-tray{left:50%; transform:translateX(-50%); width:min(96%,520px)} }
-  .modal{position:fixed;inset:0;background:var(--overlay);display:none;align-items:center;justify-content:center;padding:14px}
-  .modal.show{display:flex}
-  .box{max-width:520px;background:var(--panel);border:1px solid #2b3a55;border-radius:12px;padding:14px}
-  .box h2{margin:0 0 8px 0;font-size:16px}
-  .why{color:#c8d3ea}
-  table { border-collapse: collapse; width: 100%; font-size: 13px; }
-  th, td { border: 1px solid #2b3a55; padding: 6px 8px; }
-  th { background: #101a2b; text-align: left; }
-  #errOverlay{position:fixed;inset:0;display:none;align-items:flex-start;justify-content:center;background:rgba(0,0,0,.55);z-index:99999}
-  #errOverlay .errBox{margin-top:16px;max-width:900px;width:96%;background:#1a1f2b;border:1px solid #ff6b6b;border-radius:12px;padding:12px;color:#ffecec;font-family:ui-monospace,Consolas,monospace;white-space:pre-wrap}
 
-  /* Teacher Panel (embedded) */
+  /* Teacher Panel */
   #teacherPanel{margin-top:16px}
   .tp-wrap{display:grid;grid-template-columns: 1.2fr 1fr; gap:16px}
   @media (max-width:1000px){ .tp-wrap{grid-template-columns:1fr} }
   .pt-grid{display:grid;grid-template-columns: repeat(18, 32px); gap:4px; align-items:start}
-  .pt-row{grid-column: 1 / -1; height:0}
   .pt-btn{
     width:32px;height:32px;border-radius:6px;border:1px solid #2b3a55;background:#0e1726;
     color:#dbe7ff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer
@@ -83,9 +77,8 @@
   .pt-btn:hover{outline:2px solid #3a82ff}
   .pt-blank{visibility:hidden}
   .queue{display:flex;flex-direction:column;gap:8px}
-  .queue-item{display:flex;align-items:center;gap:8px;border:1px solid #2b3a55;border-radius:10px;padding:6px 8px;background:#0e1726}
+  .queue-item{display:flex;align-items:center;gap:8px;border:1px solid #2b3a55;border-radius:10px;padding:6px 8px;background:#0e1726;flex-wrap:wrap}
   .chip{padding:.1rem .45rem;border:1px solid #2b3a55;border-radius:999px;background:#132034}
-  .q-cn{font-weight:700}
 </style>
 
 <!-- Firebase compat -->
@@ -94,14 +87,12 @@
 <script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 </head>
 <body>
-<div id="errOverlay"><div class="errBox" id="errBox"></div></div>
-
 <div class="wrap">
   <div class="panel">
     <div class="inner">
       <div class="hdr">
         <div class="row" style="gap:8px">
-          <h1>Electron Configuration — Block Layout</h1>
+          <h1>Electron Configuration — Class/Test Mode</h1>
           <span id="connectionBadge" class="badge">offline (local)</span>
           <span class="tiny">Class: <strong id="classLabel">—</strong></span>
           <span class="tiny">Session: <strong id="sessionLabel">—</strong></span>
@@ -118,7 +109,7 @@
         </div>
       </div>
 
-      <!-- Answers panel -->
+      <!-- Answers -->
       <div id="answersPanel" class="hidden" aria-live="polite">
         <div class="row" style="margin-top:6px;">
           <div class="badge">Z = <strong id="Z">0</strong></div>
@@ -143,28 +134,24 @@
         <span class="pill" id="modeBadge">practice</span>
         <span class="prompt" id="promptText">—</span>
       </div>
-      <div class="tiny">Points this item: <span class="score" id="scoreNow">—</span></div>
+      <div class="tiny">
+        Item: <span id="itemIdx">—</span> /
+        <span id="itemTotal">—</span> •
+        Points: <span class="score" id="scoreNow">—</span>
+      </div>
     </div>
 
-    <!-- Student Test controls -->
+    <!-- Student QN entry (test mode only) -->
     <div class="inner" id="studentTestBar" style="display:none">
       <div class="row" style="justify-content:space-between;align-items:center">
         <div class="row" style="gap:12px;flex-wrap:wrap">
           <div class="hint">Enter quantum numbers (last e⁻):</div>
           <input id="qn_n" type="number" min="1" max="7" step="1" placeholder="n">
           <select id="qn_l">
-            <option value="">ℓ</option>
-            <option value="0">0 (s)</option>
-            <option value="1">1 (p)</option>
-            <option value="2">2 (d)</option>
-            <option value="3">3 (f)</option>
+            <option value="">ℓ</option><option value="0">0 (s)</option><option value="1">1 (p)</option><option value="2">2 (d)</option><option value="3">3 (f)</option>
           </select>
           <input id="qn_ml" type="number" step="1" placeholder="mℓ">
-          <select id="qn_ms">
-            <option value="">mₛ</option>
-            <option value="+1/2">+1/2</option>
-            <option value="-1/2">-1/2</option>
-          </select>
+          <select id="qn_ms"><option value="">mₛ</option><option value="+1/2">+1/2</option><option value="-1/2">-1/2</option></select>
         </div>
         <div class="row">
           <button id="submitBtn" class="btn primary">Submit Answer</button>
@@ -173,7 +160,7 @@
       <div class="hint" id="qnHint">QN may be required depending on teacher prompt.</div>
     </div>
 
-    <!-- BLOCK LAYOUT (student workspace) -->
+    <!-- Workspace -->
     <div class="inner">
       <div class="blocks" id="blocks">
         <div></div>
@@ -190,33 +177,33 @@
       </div>
     </div>
 
-    <!-- Embedded Teacher Panel (hidden until PIN unlock) -->
+    <!-- Embedded Teacher Panel -->
     <div id="teacherPanel" class="inner hidden">
       <h3 style="margin:0 0 8px 0">Teacher Panel</h3>
       <div class="tp-wrap">
-        <!-- Periodic chart + config -->
+        <!-- Periodic chart & queue builder -->
         <div class="panel">
           <div class="inner">
             <div class="row" style="justify-content:space-between;align-items:center">
-              <h4 style="margin:0">Periodic Chart (click to add to queue)</h4>
+              <h4 style="margin:0">Periodic Chart → Queue</h4>
               <div class="row">
-                <label class="tiny">Points per: <input id="tp_points" type="number" min="1" max="20" value="5" style="width:64px"></label>
+                <label class="tiny">Points per item: <input id="tp_points" type="number" min="1" max="20" value="5" style="width:64px"></label>
                 <label class="tiny"><input id="tp_requireQN" type="checkbox"> Require QN</label>
                 <button id="tp_clearQueue" class="btn">Clear Queue</button>
               </div>
             </div>
             <div id="pt" class="pt-grid" style="margin-top:10px"></div>
-            <div class="hint" style="margin-top:6px">Tip: Click any element to add it. Use + / − in the queue to set ionic charge.</div>
+            <div class="hint" style="margin-top:6px">Click elements to add to the test list. Adjust charge (±) and toggle NG (start from noble gas core).</div>
           </div>
         </div>
 
-        <!-- Queue + controls + roster/scores -->
+        <!-- Queue, send, roster -->
         <div class="panel">
           <div class="inner">
-            <h4 style="margin:0 0 8px 0">Test Queue</h4>
+            <h4 style="margin:0 0 8px 0">Test List</h4>
             <div id="queue" class="queue"></div>
-            <div class="row" style="margin-top:8px;gap:8px">
-              <button id="tp_publishNext" class="btn primary">Publish Next</button>
+            <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+              <button id="tp_sendList" class="btn primary">Send Test (<span id="qCount">0</span> items)</button>
               <button id="tp_softReset" class="btn">Soft Reset Boards</button>
               <button id="tp_newSession" class="btn warn">New Session</button>
               <button id="exportBtn" class="btn">Export Scores CSV</button>
@@ -227,10 +214,11 @@
               <table id="scoreTable">
                 <thead>
                   <tr>
-                    <th style="width:42%">Student</th>
-                    <th style="width:14%">Total</th>
+                    <th style="width:30%">Student</th>
+                    <th style="width:14%">Right / Total</th>
+                    <th style="width:14%">Points</th>
                     <th style="width:22%">Last Submit</th>
-                    <th style="width:22%">ID</th>
+                    <th style="width:20%">ID</th>
                   </tr>
                 </thead>
                 <tbody id="scoreBody"></tbody>
@@ -244,7 +232,7 @@
   </div>
 </div>
 
-<!-- FLOATING TRAY -->
+<!-- Floating tray -->
 <div class="float-tray" aria-label="floating electron tray">
   <div class="top">
     <div class="arrows" title="Drag an electron into the next allowed orbital">
@@ -257,11 +245,11 @@
   </div>
 </div>
 
-<!-- Small PIN dialog -->
+<!-- PIN dialog -->
 <dialog id="loginDlg" style="border:none;border-radius:12px;max-width:420px;width:92%">
   <form method="dialog" style="padding:16px">
     <h3 style="margin:0 0 8px 0">Teacher Login</h3>
-    <p class="tiny" style="margin-top:0">Enter PIN to unlock embedded Teacher Panel.</p>
+    <p class="tiny" style="margin-top:0">Enter PIN to unlock Teacher Panel.</p>
     <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4"
            style="width:100%;padding:.6rem;border:1px solid #2b3a55;border-radius:10px;background:#0e1726;color:#dbe7ff" placeholder="4-digit PIN">
     <div style="display:flex;gap:8px;margin-top:10px">
@@ -280,22 +268,10 @@
 </dialog>
 
 <script>
-/* ===== Error overlay ===== */
-(function(){
-  function show(msg, src, line, col, err){
-    var box=document.getElementById('errBox'), wrap=document.getElementById('errOverlay');
-    if(!box||!wrap) return;
-    var details = (err && err.stack) ? err.stack : (msg||'Unknown error');
-    if(src) details = (src + ':' + line + ':' + col + '\n') + details;
-    box.textContent = details; wrap.style.display='flex';
-  }
-  window.onerror = function(msg, src, line, col, err){ show(msg, src, line, col, err); return false; };
-  window.onunhandledrejection = function(e){ show('Promise rejection', '', 0, 0, e.reason || e); };
-})();
+/* ===== Error guard (optional console overlay removed for brevity) ===== */
+window.onunhandledrejection = e => console.error(e.reason||e);
 
-/* =========================
-   Firebase / Live core
-   ========================= */
+/* ===== Firebase core ===== */
 const CONFIG = {
   useFirebase: true,
   firebaseConfig: {
@@ -310,19 +286,10 @@ const CONFIG = {
 };
 
 const $ = s=>document.querySelector(s);
-function sanitizeClassName(s){
-  return (s||'').trim().toUpperCase()
-    .replace(/[^A-Z0-9-]/g,'-')
-    .replace(/-+/g,'-')
-    .slice(0,32) || 'CLASS';
-}
-function getUrlParam(name){ try { return new URL(location.href).searchParams.get(name); } catch (e) { return null; } }
+function sanitizeClassName(s){ return (s||'').trim().toUpperCase().replace(/[^A-Z0-9-]/g,'-').replace(/-+/g,'-').slice(0,32) || 'CLASS'; }
+function getUrlParam(name){ try { return new URL(location.href).searchParams.get(name); } catch { return null; } }
 function setUrlParam(name, value){
-  try{
-    const u = new URL(location.href);
-    if(value==null) u.searchParams.delete(name); else u.searchParams.set(name, value);
-    history.replaceState({}, "", u.toString());
-  }catch(e){}
+  try{ const u=new URL(location.href); if(value==null) u.searchParams.delete(name); else u.searchParams.set(name,value); history.replaceState({}, "", u.toString()); }catch{}
 }
 function uid(){ return Math.random().toString(36).slice(2,9); }
 function nowId(){ return String(Date.now()); }
@@ -340,7 +307,8 @@ const paths = {
   currentPrompt: () => `${paths.prompts()}/current`,
   results:    () => `${paths.basePath()}/results`,
   students:   () => `${paths.basePath()}/students`,
-  control:    () => `${paths.basePath()}/control`
+  control:    () => `${paths.basePath()}/control`,
+  progressRoot: () => `${paths.basePath()}/progress`  // per-student index into current list
 };
 
 async function dbInit(){
@@ -351,7 +319,7 @@ async function dbInit(){
     await firebase.auth().signInAnonymously();
     fb.online = true; badge('online (firebase)');
     await bootFromClass();
-  }catch(e){ fb.online=false; badge('offline (local)'); }
+  }catch(e){ console.error(e); fb.online=false; badge('offline (local)'); }
 }
 
 async function bootFromClass(){
@@ -390,16 +358,14 @@ function ensureStudentPresence(){
   if(nm) $('#nameInput').value = nm;
 
   const ref = fb.db.ref(`${paths.students()}/${id}`);
-  ref.set({ name: nm || null, at: firebase.database.ServerValue.TIMESTAMP }).catch(e=>{});
-  try{ ref.onDisconnect().remove(); }catch(e){}
+  ref.set({ name: nm || null, at: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
+  try{ ref.onDisconnect().remove(); }catch{}
 }
-
-/* Save student display name */
 $('#saveNameBtn').onclick = ()=>{
   const nm = ($('#nameInput').value||'').trim().slice(0,40);
   localStorage.setItem('ec_name', nm);
   live.me.name = nm || null;
-  if(fb.db) fb.db.ref(`${paths.students()}/${live.me.id}`).update({ name: nm || null, at: firebase.database.ServerValue.TIMESTAMP }).catch(e=>{});
+  if(fb.db) fb.db.ref(`${paths.students()}/${live.me.id}`).update({ name: nm || null, at: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
   alert('Name saved.');
 };
 
@@ -412,7 +378,7 @@ async function fetchPin(){
 async function savePin(pin){ await fb.db.ref(paths.configPath()).update({ teacherPin: pin }); live.classHasPin = true; }
 function validPin(p){ return /^\d{4}$/.test(p || ''); }
 
-/* Reset broadcast listeners */
+/* Reset listeners */
 function tokenSeenKey(kind){ return `ec_seen_${live.classKey}_${kind}_${live.sessionId||'none'}`; }
 function getSeen(kind){ return Number(localStorage.getItem(tokenSeenKey(kind)) || 0); }
 function setSeen(kind,v){ localStorage.setItem(tokenSeenKey(kind), String(v)); }
@@ -436,20 +402,8 @@ function attachResetListeners(){
   });
 }
 
-/* Prompt listener (drives Test mode) */
-let unsubPrompt = null;
-function attachPromptListener(){
-  if(!fb.db) return;
-  const ref = fb.db.ref(paths.currentPrompt());
-  if(unsubPrompt) try{ ref.off(); }catch(e){}
-  ref.on('value', snap=>{
-    applyPrompt(snap.val()||null);
-  });
-  unsubPrompt = ref;
-}
-
 /* =========================
-   Base student engine
+   Student/Test engine + list
    ========================= */
 const ORDER = ["1s","2s","2p","3s","3p","4s","3d","4p","5s","4d","5p","6s","4f","5d","6p","7s","5f","6d","7p"];
 const ORB_COUNT = { s:1, p:3, d:5, f:7 };
@@ -466,6 +420,14 @@ const PERIOD =(()=>{const b=[2,10,18,36,54,86,118]; const p=[null]; for(let z=1,
 const NOBLES=[{Z:2,sym:"He"},{Z:10,sym:"Ne"},{Z:18,sym:"Ar"},{Z:36,sym:"Kr"},{Z:54,sym:"Xe"},{Z:86,sym:"Rn"},{Z:118,sym:"Og"}];
 
 const state = { orbitals:{}, Z:0, history:[], lastQN:null };
+const test = {
+  mode:'practice',
+  requireQN:false,
+  pointsPer:5,
+  list:null,              // array of {Z, charge, ng:boolean}
+  idx:0,                  // current item index (per student progress)
+  score:null
+};
 
 function addRow(container, tag, boxes){
   const line=document.createElement('div'); line.className='rowline';
@@ -482,7 +444,7 @@ function addRow(container, tag, boxes){
     box.addEventListener('drop', ev=>{
       ev.preventDefault(); box.classList.remove('over');
       const spin=ev.dataTransfer.getData('text/plain')||ev.dataTransfer.getData('text');
-      attemptPlace(box, spin, /*userAction*/true);
+      attemptPlace(box, spin, true);
     });
     wrap.appendChild(box);
     state.orbitals[`${tag}:${i}`]=[];
@@ -504,7 +466,7 @@ function buildBlocks(){
 }
 buildBlocks();
 
-/* tray drags */
+/* drag sources */
 document.querySelectorAll('.float-tray .e').forEach(el=>{
   el.addEventListener('dragstart', ev=>{ ev.dataTransfer.setData('text/plain', el.dataset.spin); });
 });
@@ -523,7 +485,7 @@ function nextAllowed(){
   return null;
 }
 
-/* quantum numbers */
+/* QN helpers */
 const L_FROM_SUB={s:0,p:1,d:2,f:3};
 function mlSeq(sub){ const l=L_FROM_SUB[sub]; const a=[]; for(let m=-l;m<=l;m++) a.push(m); return a; }
 function qnFromKeySpin(key,spin){
@@ -532,32 +494,150 @@ function qnFromKeySpin(key,spin){
   return {n,l,sub,m_l,m_s};
 }
 
-/* placement + warnings (+ scoring hook when in test) */
+/* application of prompt */
+let unsubPrompt=null, unsubMyProgress=null;
+function attachPromptListener(){
+  if(!fb.db) return;
+  const ref = fb.db.ref(paths.currentPrompt());
+  if(unsubPrompt) try{ ref.off(); }catch{}
+  ref.on('value', snap=>{
+    const v = snap.val() || null;
+    applyPrompt(v);
+  });
+  unsubPrompt = ref;
+}
+
+function speciesTargetZ(goal){
+  if(!goal) return null;
+  if(goal.kind==='element') return goal.Z;
+  if(goal.kind==='ion') return goal.Z - (goal.charge||0);
+  return null;
+}
+
+/* Noble core helpers */
+function nearestNobleCore(z){ let core=null; for(const ng of NOBLES){ if(ng.Z<=z) core=ng; else break; } return core; }
+function buildCountsForZ(z){ const counts={}; for(const tag of ORDER) counts[tag]=0; let left=z; for(const tag of ORDER){ if(left<=0) break; const sub=tag.replace(/[0-9]/g,""); const take=Math.min(CAP[sub],left); counts[tag]=take; left-=take; } return counts; }
+function prefillToZ(z){
+  // Clear
+  for(const k in state.orbitals) state.orbitals[k]=[];
+  document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
+
+  // Fill up to Z deterministically by allowed order
+  let toPlace = z;
+  while(toPlace>0){
+    const a = nextAllowed();
+    if(!a) break;
+    const box = document.querySelector(`.orbital[data-key="${a.key}"]`);
+    state.orbitals[a.key].push({spin:a.spin});
+    drawOrbital(box, state.orbitals[a.key]);
+    state.Z++;
+    toPlace--;
+  }
+  state.history=[]; state.lastQN=null; syncReadouts(); syncQuantumLast();
+}
+
+/* apply prompt (supports list mode) */
+function applyPrompt(v){
+  if(!v){ setPractice(); return; }
+
+  test.mode = 'test';
+  test.requireQN = !!v.requireQN;
+  test.pointsPer = Number(v.pointsPer)||5;
+
+  // Two modes: single goal OR list of items
+  if (Array.isArray(v.list) && v.list.length){
+    test.list = v.list.slice();            // array of {Z,charge,ng}
+    $('#itemTotal').textContent = test.list.length;
+    // subscribe to my progress
+    if(unsubMyProgress) try{ fb.db.ref(`${paths.progressRoot()}/${live.me.id}`).off(); }catch{}
+    const myRef = fb.db.ref(`${paths.progressRoot()}/${live.me.id}`);
+    myRef.on('value', snap=>{
+      let idx = Number(snap.val()||0);
+      if(!Number.isInteger(idx) || idx<0) idx=0;
+      if(idx >= test.list.length) idx = test.list.length;
+      test.idx = idx;
+      setUpItemFromList();
+    });
+    unsubMyProgress = myRef;
+  } else if (v.goal){
+    test.list = [{ Z: v.goal.Z, charge: v.goal.charge||0, ng:false }];
+    test.idx = 0;
+    $('#itemTotal').textContent = 1;
+    setUpItemFromList();
+  }
+
+  $('#modeBadge').textContent='test';
+  $('#promptText').textContent = labelForCurrent();
+  $('#scoreNow').textContent = test.pointsPer;
+  $('#studentTestBar').style.display = '';
+  $('#qnHint').textContent = test.requireQN ? 'QN are required for credit.' : 'QN not required for this item.';
+  $('#autoOne').disabled=true; $('#autoRemove').disabled=true; $('#clear').disabled=true;
+}
+
+function setPractice(){
+  test.mode='practice'; test.list=null; test.idx=0; test.requireQN=false; test.pointsPer=5; test.score=null;
+  $('#modeBadge').textContent='practice'; $('#promptText').textContent='—'; $('#scoreNow').textContent='—';
+  $('#studentTestBar').style.display='none'; $('#itemIdx').textContent='—'; $('#itemTotal').textContent='—';
+  $('#autoOne').disabled=false; $('#autoRemove').disabled=false; $('#clear').disabled=false;
+  resetBoard();
+}
+
+function currentItem(){ return (test.list && test.idx<test.list.length) ? test.list[test.idx] : null; }
+function labelForItem(it){
+  if(!it) return '—';
+  const sym = SYMBOLS[it.Z]||'?';
+  const ch = it.charge||0;
+  const ion = ch===0 ? '' : (ch>0?`^${ch}+`:`^${Math.abs(ch)}-`);
+  const ng = it.ng ? ' (NG)' : '';
+  return `${sym}${ion}${ng}`;
+}
+function labelForCurrent(){ return labelForItem(currentItem()); }
+
+function setUpItemFromList(){
+  const it = currentItem();
+  $('#itemIdx').textContent = test.list ? String(Math.min(test.idx+1, test.list.length)) : '—';
+  $('#promptText').textContent = labelForItem(it);
+  test.score = test.pointsPer;
+  $('#scoreNow').textContent = test.score;
+
+  resetBoard();
+  if(!it) return;
+
+  // If NG is set, prefill up to noble core of target species electron count
+  const targetZ = (it.charge && it.charge!==0) ? (it.Z - it.charge) : it.Z;
+  if(it.ng){
+    const core = nearestNobleCore(targetZ);
+    if(core && core.Z>0){
+      prefillToZ(core.Z);
+    }
+  }
+}
+
+/* placement + rules + scoring hook */
 function attemptPlace(targetBox, spin, userAction){
   const allowed = nextAllowed();
-  if(!allowed) return strike("No available orbital", "All orbitals through 7p are filled.", userAction);
+  if(!allowed) return strike("No available orbital","All orbitals through 7p are filled.", userAction);
 
   const targetKey = targetBox.dataset.key;
   const targetOcc = state.orbitals[targetKey];
 
-  if(targetOcc.length>=2) return strike("Pauli exclusion", "That orbital already has two electrons.", userAction);
-  if(targetOcc.length===1 && targetOcc[0].spin===spin) return strike("Pauli exclusion", "Electrons in the same orbital must have opposite spins.", userAction);
+  if(targetOcc.length>=2) return strike("Pauli exclusion","That orbital already has two electrons.", userAction);
+  if(targetOcc.length===1 && targetOcc[0].spin===spin) return strike("Pauli exclusion","Electrons in the same orbital must have opposite spins.", userAction);
 
   const curTag = allowed.tag, targetTag = targetKey.split(":")[0];
-  if(targetTag !== curTag) return strike("Aufbau order", `Next subshell is <strong>${curTag}</strong>, not <strong>${targetTag}</strong>.`, userAction);
+  if(targetTag !== curTag) return strike("Aufbau order",`Next subshell is <strong>${curTag}</strong>, not <strong>${targetTag}</strong>.`, userAction);
 
   const sub = curTag.replace(/[0-9]/g,""), count = ORB_COUNT[sub];
   const keys=[...Array(count).keys()].map(i=>`${curTag}:${i}`);
   const anyEmpty = keys.some(k=>state.orbitals[k].length===0);
-  if(anyEmpty && targetOcc.length===1) return strike("Hund’s rule", "Place one electron (↑) in each orbital of this subshell before pairing (↓).", userAction);
+  if(anyEmpty && targetOcc.length===1) return strike("Hund’s rule","Place one electron (↑) in each orbital of this subshell before pairing (↓).", userAction);
 
   if(!(targetKey===allowed.key && spin===allowed.spin)){
     if(targetKey===allowed.key && spin!==allowed.spin)
-      return strike("Spin / Hund", `Use <strong>${allowed.spin==='up'?'↑':'↓'}</strong> for this step.`, userAction);
-    return strike("Order violation", `Place at <strong>${allowed.key.split(':')[0]}</strong> with <strong>${allowed.spin==='up'?'↑':'↓'}</strong>.`, userAction);
+      return strike("Spin / Hund",`Use <strong>${allowed.spin==='up'?'↑':'↓'}</strong> for this step.`, userAction);
+    return strike("Order violation",`Place at <strong>${allowed.key.split(':')[0]}</strong> with <strong>${allowed.spin==='up'?'↑':'↓'}</strong>.`, userAction);
   }
 
-  // commit
   targetOcc.push({spin});
   drawOrbital(targetBox, targetOcc);
   state.Z++;
@@ -579,7 +659,6 @@ function cfgHTML(){ const c=currentConfigCounters(), parts=[]; for(const tag of 
 function cfgPlain(){ const c=currentConfigCounters(), parts=[]; for(const tag of ORDER){ if(c[tag]) parts.push(`${tag}${c[tag]}`);} return parts.length?parts.join(" "):"—"; }
 function elementSymbol(Z){ return (Z>=1 && Z<=118)? SYMBOLS[Z] : "—"; }
 function periodFromZ(Z){ return PERIOD[Z] || "—"; }
-function buildCountsForZ(z){ const counts={}; for(const tag of ORDER) counts[tag]=0; let left=z; for(const tag of ORDER){ if(left<=0) break; const sub=tag.replace(/[0-9]/g,""); const take=Math.min(CAP[sub],left); counts[tag]=take; left-=take; } return counts; }
 function shorthand(){
   const Z=state.Z; if(!Z) return "—";
   const nobleToggle=$('#nobleToggle').checked; const p=periodFromZ(Z);
@@ -599,17 +678,15 @@ function syncQuantumLast(){
   qnEl.innerHTML=`n = ${q.n}, ℓ = ${q.l} (${lName}), m<sub>ℓ</sub> = ${q.m_l}, m<sub>s</sub> = ${q.m_s}`;
 }
 
-/* warnings / strikes */
-const modal=document.createElement('div'); // using custom modal
-Object.assign(modal,{id:'modal',className:'modal'});
-document.body.appendChild(modal);
-modal.innerHTML = `<div class="box"><h2 id="mTitle">Not allowed</h2><div id="mBody" class="why">—</div><div class="row" style="margin-top:10px;justify-content:flex-end"><button id="ok" class="btn primary">OK</button></div></div>`;
-const mBody=document.getElementById('mBody');
-document.getElementById('ok').addEventListener('click', ()=> modal.classList.remove('show'));
-function warn(title, html){ document.getElementById('mTitle').textContent=title; mBody.innerHTML=html; modal.classList.add('show'); }
-function strike(title, html, userAction){ if(userAction && test.mode==='test'){ decPoint(); } warn(title, html); return; }
+/* warnings */
+function warn(title, html){ alert(title + ": " + (html||"")); }
+function strike(title, html, userAction){
+  if(userAction && test.mode==='test'){ decPoint(); }
+  warn(title, html);
+  return;
+}
 
-/* Buttons */
+/* buttons */
 $('#autoOne').onclick = ()=>{ if(test.mode==='test') return; const a=nextAllowed(); if(!a) return; const box=document.querySelector(`.orbital[data-key="${a.key}"]`); attemptPlace(box, a.spin, false); };
 $('#autoRemove').onclick = ()=>{ if(test.mode==='test') return; if(!state.history.length) return; const last=state.history.pop(); const occ=state.orbitals[last.key]; if(occ && occ.length){ occ.pop(); const box=document.querySelector(`.orbital[data-key="${last.key}"]`); if(box) drawOrbital(box, occ); if(state.Z>0) state.Z--; state.lastQN=null; syncReadouts(); syncQuantumLast(); } };
 $('#clear').onclick = ()=>{ if(test.mode==='test') return; resetBoard(); };
@@ -617,103 +694,107 @@ $('#nobleToggle').addEventListener('change', syncReadouts);
 const answersPanel=$('#answersPanel'); const toggleBtn=$('#toggleAnswers');
 toggleBtn.onclick = ()=>{ const hidden=answersPanel.classList.toggle('hidden'); toggleBtn.textContent = hidden?'Show Answers':'Hide Answers'; };
 
-/* =========================
-   Test Mode, scoring, submissions
-   ========================= */
-const test = { mode:'practice', goal:null, pointsPer:5, score:null, requireQN:false };
+/* scoring */
+function decPoint(){ if(test.mode!=='test') return; if(test.score>0){ test.score--; $('#scoreNow').textContent=test.score; } }
 
-function applyPrompt(v){
-  if(!v){ setPractice(); return; }
-  test.mode = (v.mode==='test')?'test':'practice';
-  test.goal = v.goal || null;
-  test.pointsPer = Number(v.pointsPer)||5;
-  test.requireQN = !!v.requireQN;
-  test.score = test.pointsPer;
-
-  $('#modeBadge').textContent=test.mode;
-  $('#promptText').textContent=promptLabel();
-  $('#scoreNow').textContent = (test.mode==='test')? test.score : '—';
-
-  const isTest = test.mode==='test';
-  $('#autoOne').disabled=isTest; $('#autoRemove').disabled=isTest; $('#clear').disabled=isTest;
-  document.getElementById('studentTestBar').style.display = isTest ? '' : 'none';
-  $('#qnHint').textContent = test.requireQN ? 'QN are required for credit.' : 'QN not required for this item.';
-
-  if(isTest) resetBoard();
+/* auto-check during building (if not requiring QN and exact electron count reached) */
+function maybeAutoCheck(){
+  const it = currentItem(); if(!it) return;
+  const targetZ = speciesTargetZ({kind: it.charge? 'ion':'element', Z: it.Z, charge: it.charge||0});
+  if (state.Z < targetZ) return;
+  if (state.Z > targetZ){ decPoint(); warn("Too many electrons","You exceeded the target electron count."); return; }
+  if(!test.requireQN){
+    writeResult(true,'complete_no_qn');
+    advanceItem();
+  }
 }
-function setPractice(){
-  test.mode='practice'; test.goal=null; test.pointsPer=5; test.score=null; test.requireQN=false;
-  $('#modeBadge').textContent='practice'; $('#promptText').textContent='—'; $('#scoreNow').textContent='—';
-  $('#autoOne').disabled=false; $('#autoRemove').disabled=false; $('#clear').disabled=false;
-  document.getElementById('studentTestBar').style.display='none';
+
+/* submit */
+document.getElementById('submitBtn').onclick = ()=>{
+  if (test.mode !== 'test') return;
+  const it = currentItem(); if(!it) return;
+  const tZ = speciesTargetZ({kind: it.charge? 'ion':'element', Z: it.Z, charge: it.charge||0});
+  if (tZ == null) return;
+
+  if (state.Z !== tZ){
+    decPoint();
+    warn("Incorrect submission", `Target requires ${tZ} electrons; you submitted ${state.Z}.`);
+    return;
+  }
+
+  if (test.requireQN){
+    const q = state.lastQN;
+    if (!q){
+      decPoint();
+      warn("Missing last electron","No last electron recorded. Place the final electron and re-submit.");
+      return;
+    }
+    const n  = Number($('#qn_n').value||NaN);
+    const l  = $('#qn_l').value==='' ? NaN : Number($('#qn_l').value);
+    const ml = Number($('#qn_ml').value||NaN);
+    const ms = $('#qn_ms').value || '';
+    const L=L_FROM_SUB[q.sub]; const mlList=mlSeq(q.sub);
+    const ok = (n===q.n) && (l===L) && mlList.includes(ml) && (ms===q.m_s);
+    if (!ok){
+      decPoint();
+      warn("Quantum numbers mismatch",
+           `Expected n=${q.n}, ℓ=${L} (${q.sub}), mℓ ∈ [${mlList[0]}…${mlList[mlList.length-1]}] (chosen ${q.m_l}), mₛ=${q.m_s}.`);
+      return;
+    }
+  }
+
+  writeResult(true,'submit_ok');
+  advanceItem();
+};
+
+function advanceItem(){
+  alert(`Correct! Earned ${test.score}/${test.pointsPer}.`);
+  // increment progress on server; reset board for next item
+  const myRef = fb.db.ref(`${paths.progressRoot()}/${live.me.id}`);
+  const next = (test.idx+1);
+  myRef.set(next).catch(()=>{});
+  resetBoard();
 }
-function promptLabel(){
-  if(test.mode!=='test' || !test.goal) return '—';
-  const g=test.goal; const sym=SYMBOLS[g.Z]||'?';
-  if(g.kind==='element') return `Build element: ${sym} (Z=${g.Z})`;
-  if(g.kind==='ion'){ const ch=g.charge||0; const sign = ch===0?'':(ch>0?`^${ch}+`:`^${Math.abs(ch)}-`); return `Build ion: ${sym}${sign}`; }
-  return '—';
+
+/* write result */
+function writeResult(ok, reason){
+  if(!fb.db || !live.classKey || !live.sessionId) return;
+  const it = currentItem();
+  const ts=Date.now();
+  const payload={
+    ok: !!ok,
+    reason: reason||null,
+    earned: ok ? test.score : 0,
+    pointsPer: test.pointsPer,
+    requireQN: test.requireQN,
+    target: it ? { Z: it.Z, charge: it.charge||0, ng: !!it.ng } : null,
+    zFinal: state.Z,
+    cfg: cfgPlain(),
+    sh: shorthand(),
+    lastQN: state.lastQN,
+    itemIndex: test.idx,
+    at: ts,
+    who: live.me.id || 'anon',
+    name: live.me.name || null
+  };
+  fb.db.ref(`${paths.results()}/${live.me.id}/${ts}`).set(payload).catch(()=>{});
 }
-function speciesTargetZ(g){ if(!g) return null; if(g.kind==='element') return g.Z; if(g.kind==='ion') return g.Z - (g.charge||0); return null; }
+
+/* reset board */
 function resetBoard(){
   for(const k in state.orbitals) state.orbitals[k]=[];
   document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
   state.Z=0; state.history=[]; state.lastQN=null; syncReadouts(); syncQuantumLast();
   $('#qn_n').value=''; $('#qn_l').value=''; $('#qn_ml').value=''; $('#qn_ms').value='';
 }
-function decPoint(){ if(test.mode!=='test') return; if(test.score>0){ test.score--; $('#scoreNow').textContent=test.score; } if(test.score<=0){ revealAnswer(); writeResult(false,'out_of_points'); resetBoard(); } }
-function revealAnswer(){ if(answersPanel.classList.contains('hidden')){ answersPanel.classList.remove('hidden'); toggleBtn.textContent='Hide Answers'; } }
-function maybeAutoCheck(){
-  const tZ = speciesTargetZ(test.goal); if(tZ==null) return;
-  if(state.Z < tZ) return;
-  if(state.Z > tZ){ decPoint(); warn("Too many electrons","You exceeded the target electron count."); return; }
-  if(!test.requireQN){
-    writeResult(true,'complete_no_qn'); alert(`Correct! Earned ${test.score}/${test.pointsPer}.`); resetBoard();
-  }
-}
-$('#submitBtn').onclick = ()=>{
-  if(test.mode!=='test') return;
-  const tZ = speciesTargetZ(test.goal); if(tZ==null) return;
-  if(state.Z !== tZ){ decPoint(); warn("Incorrect submission", `Target requires ${tZ} electrons; you submitted ${state.Z}.`); return; }
-  if(test.requireQN){
-    if(!state.lastQN){ decPoint(); warn("Missing last electron","No last electron recorded."); return; }
-    const n = Number($('#qn_n').value||NaN);
-    const l = $('#qn_l').value==='' ? NaN : Number($('#qn_l').value);
-    const ml = Number($('#qn_ml').value||NaN);
-    const ms = $('#qn_ms').value || '';
-    const L=L_FROM_SUB[state.lastQN.sub]; const mlList=mlSeq(state.lastQN.sub);
-    const ok = (n===state.lastQN.n) && (l===L) && (mlList.includes(ml)) && (ms===state.lastQN.m_s);
-    if(!ok){
-      decPoint();
-      warn("Quantum numbers mismatch",
-           `Expected n=${state.lastQN.n}, ℓ=${L} (${state.lastQN.sub}), mℓ ∈ [${mlList[0]}…${mlList[mlList.length-1]}] with chosen orbital ${state.lastQN.m_l}, mₛ=${state.lastQN.m_s}.`);
-      return;
-    }
-  }
-  writeResult(true,'submit_ok');
-  alert(`Correct! Earned ${test.score}/${test.pointsPer}.`);
-  resetBoard();
-};
-function writeResult(ok, reason){
-  if(!fb.db || !live.classKey || !live.sessionId) return;
-  const ts=Date.now();
-  const payload={
-    ok: !!ok, reason: reason||null, earned: ok ? test.score : 0, pointsPer: test.pointsPer,
-    requireQN: test.requireQN, target: test.goal, zFinal: state.Z, cfg: cfgPlain(), sh: shorthand(),
-    lastQN: state.lastQN, at: ts, who: live.me.id || 'anon', name: live.me.name || null
-  };
-  fb.db.ref(`${paths.results()}/${live.me.id}/${ts}`).set(payload).catch(e=>{});
-}
 
-/* =========================
-   Roster & Scores (teacher)
-   ========================= */
+/* ========== Roster & Scores with Right/Total ========== */
 const roster = new Map(); // id -> {name, at}
-const totals = new Map(); // id -> {sum, last}
+const totals = new Map(); // id -> {sum, last, right, total}
 function subscribeRoster(reset){
   if(!fb.db) return;
   const ref = fb.db.ref(paths.students());
-  if(reset) try{ ref.off(); }catch(e){}
+  if(reset) try{ ref.off(); }catch{}
   ref.on('child_added', snap=>{
     const id=snap.key, v=snap.val()||{};
     roster.set(id,{name:v.name||null, at:v.at||0}); renderScores();
@@ -727,19 +808,21 @@ function subscribeRoster(reset){
 function subscribeScores(reset){
   if(!fb.db) return;
   const ref = fb.db.ref(paths.results());
-  if(reset) try{ ref.off(); }catch(e){}
+  if(reset) try{ ref.off(); }catch{}
   ref.on('value', snap=>{
     totals.clear();
     const all = snap.val()||{};
     Object.keys(all).forEach(id=>{
-      let sum=0, last=0;
+      let sum=0, last=0, right=0, total=0;
       const items = all[id]||{};
       Object.keys(items).forEach(ts=>{
         const r = items[ts];
         sum += Number(r.earned||0);
         last = Math.max(last, Number(r.at||0));
+        total += 1;
+        if(r.ok) right += 1;
       });
-      totals.set(id,{sum,last});
+      totals.set(id,{sum,last,right,total});
     });
     renderScores();
   });
@@ -751,23 +834,30 @@ function renderScores(){
   const ids = new Set([...roster.keys(), ...totals.keys()]);
   ids.forEach(id=>{
     const r = roster.get(id)||{};
-    const t = totals.get(id)||{sum:0,last:0};
-    rows.push({ id, name: (r.name && String(r.name).trim()) ? r.name.trim() : '(no name)', sum: t.sum||0, last: t.last||0 });
+    const t = totals.get(id)||{sum:0,last:0,right:0,total:0};
+    rows.push({
+      id, name: (r.name && String(r.name).trim()) ? r.name.trim() : '(no name)',
+      sum: t.sum||0, last: t.last||0, right: t.right||0, total: t.total||0
+    });
   });
   rows.sort((a,b)=> (b.sum-a.sum) || ((b.last||0)-(a.last||0)) || a.name.localeCompare(b.name));
   rows.forEach(row=>{
     const tr=document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(row.name)}</td><td>${row.sum}</td><td>${fmtTime(row.last)}</td><td class="tiny">${row.id}</td>`;
+    tr.innerHTML = `<td>${escapeHtml(row.name)}</td>
+                    <td>${row.right} / ${row.total}</td>
+                    <td>${row.sum}</td>
+                    <td>${fmtTime(row.last)}</td>
+                    <td class="tiny">${row.id}</td>`;
     body.appendChild(tr);
   });
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 function exportCSV(){
   const rows = document.querySelectorAll('#scoreBody tr');
-  const lines = [['Student','Total','Last Submit','ID']];
+  const lines = [['Student','Right','Total','Points','Last Submit','ID']];
   rows.forEach(tr=>{
-    const cols=[...tr.children].map(td=>td.textContent);
-    lines.push(cols);
+    const tds=[...tr.children].map(td=>td.textContent);
+    lines.push([tds[0], ...tds[1].split('/').map(s=>s.trim()), tds[2], tds[3], tds[4]]);
   });
   function csvEscape(s){ const str = String(s == null ? '' : s); return /[",\n]/.test(str) ? '"' + str.replace(/"/g,'""') + '"' : str; }
   const csv = lines.map(row => row.map(csvEscape).join(',')).join('\n');
@@ -777,66 +867,48 @@ function exportCSV(){
   URL.revokeObjectURL(url);
 }
 
-/* =========================
-   Embedded Teacher Panel logic
-   ========================= */
-const teacherPanel = $('#teacherPanel');
-const queue = []; // items: {kind:'element'|'ion', Z, charge}
+/* ========== Teacher Panel: build periodic chart + queue ========== */
+const queue = []; // items: {Z, charge, ng}
 function renderQueue(){
   const wrap = $('#queue'); wrap.innerHTML='';
+  $('#qCount').textContent = String(queue.length);
   if(!queue.length){ wrap.innerHTML = '<div class="hint">Queue is empty. Click elements on the chart to add.</div>'; return; }
   queue.forEach((it,idx)=>{
-    const div=document.createElement('div'); div.className='queue-item';
     const sym = SYMBOLS[it.Z]||'?';
-    const chargeStr = it.charge===0?'': (it.charge>0?`^${it.charge}+`:`^${Math.abs(it.charge)}-`);
-    div.innerHTML = `
-      <span class="q-cn">${sym}</span>
-      <span class="tiny">Z=${it.Z}</span>
-      <span class="chip">${it.kind==='ion'?'ion':'element'}${chargeStr}</span>
+    const ch = it.charge||0;
+    const ion = ch===0 ? '' : (ch>0?`^${ch}+`:`^${Math.abs(ch)}-`);
+    const row=document.createElement('div'); row.className='queue-item';
+    row.innerHTML = `
+      <span class="chip" title="atomic number">Z=${it.Z}</span>
+      <strong>${sym}${ion}</strong>
       <button class="btn" data-act="minus" data-idx="${idx}">−</button>
       <button class="btn" data-act="plus" data-idx="${idx}">+</button>
+      <label class="tiny"><input type="checkbox" data-act="ng" data-idx="${idx}" ${it.ng?'checked':''}> NG</label>
       <button class="btn warn" data-act="del" data-idx="${idx}">Remove</button>
     `;
-    wrap.appendChild(div);
+    wrap.appendChild(row);
   });
 }
-function publishNext(){
-  if(!queue.length){ alert('Queue is empty.'); return; }
-  const pts = Number($('#tp_points').value||5);
-  const reqQN = !!$('#tp_requireQN').checked;
-  const item = queue.shift();
-  const goal = (item.charge===0) ? {kind:'element', Z:item.Z, charge:0} : {kind:'ion', Z:item.Z, charge:item.charge};
-  fb.db.ref(paths.currentPrompt()).set({ mode:'test', pointsPer: pts, requireQN: reqQN, goal }).then(()=>{
-    renderQueue();
-    alert(`Published: ${(SYMBOLS[item.Z]||'?')}${item.charge===0?'':(item.charge>0?`^${item.charge}+`:`^${Math.abs(item.charge)}-`)}`);
-  });
-}
-$('#tp_publishNext').onclick = publishNext;
-$('#tp_clearQueue').onclick = ()=>{ queue.length=0; renderQueue(); };
-$('#tp_softReset').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/softResetAt`).set(Date.now()); alert('Soft reset broadcasted.'); };
-$('#tp_newSession').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/resetAt`).set(Date.now()); alert('New session broadcasted.'); };
-document.getElementById('exportBtn').onclick = ()=> exportCSV();
 document.addEventListener('click', (e)=>{
   const act = e.target?.dataset?.act; if(!act) return;
   const idx = Number(e.target.dataset.idx);
   if(Number.isNaN(idx)) return;
   const it = queue[idx]; if(!it) return;
-  if(act==='plus'){ it.kind='ion'; it.charge = (it.charge||0)+1; }
-  if(act==='minus'){ it.kind='ion'; it.charge = (it.charge||0)-1; }
+  if(act==='plus'){ it.charge = (it.charge||0)+1; }
+  if(act==='minus'){ it.charge = (it.charge||0)-1; }
+  if(act==='ng'){ it.ng = !!e.target.checked; }
   if(act==='del'){ queue.splice(idx,1); }
   renderQueue();
 });
+$('#tp_clearQueue').onclick = ()=>{ queue.length=0; renderQueue(); };
 
-/* Periodic grid (18 columns + f-block strip) */
 function buildPeriodicGrid(){
   const pt = $('#pt'); pt.innerHTML='';
-  // Helpers to place blanks
   function blank(n){ for(let i=0;i<n;i++){ const b=document.createElement('div'); b.className='pt-btn pt-blank'; pt.appendChild(b);} }
   function btn(z){
     const b=document.createElement('button');
-    b.type='button'; b.className='pt-btn';
-    b.textContent = SYMBOLS[z]||'?'; b.title = `${SYMBOLS[z]||'?'} (Z=${z})`;
-    b.addEventListener('click', ()=>{ queue.push({kind:'element', Z:z, charge:0}); renderQueue(); });
+    b.type='button'; b.className='pt-btn'; b.textContent = SYMBOLS[z]||'?'; b.title = `${SYMBOLS[z]||'?'} (Z=${z})`;
+    b.addEventListener('click', ()=>{ queue.push({Z:z, charge:0, ng:false}); renderQueue(); });
     pt.appendChild(b);
   }
   // Period 1
@@ -849,32 +921,60 @@ function buildPeriodicGrid(){
   btn(19); btn(20); btn(21); btn(22); btn(23); btn(24); btn(25); btn(26); btn(27); btn(28); btn(29); btn(30); btn(31); btn(32); btn(33); btn(34); btn(35); btn(36);
   // Period 5
   btn(37); btn(38); btn(39); btn(40); btn(41); btn(42); btn(43); btn(44); btn(45); btn(46); btn(47); btn(48); btn(49); btn(50); btn(51); btn(52); btn(53); btn(54);
-  // Period 6 (La shown at group 3; f-block below)
+  // Period 6
   btn(55); btn(56); btn(57); btn(72); btn(73); btn(74); btn(75); btn(76); btn(77); btn(78); btn(79); btn(80); btn(81); btn(82); btn(83); btn(84); btn(85); btn(86);
-  // Period 7 (Ac shown at group 3; f-block below)
+  // Period 7
   btn(87); btn(88); btn(89); btn(104); btn(105); btn(106); btn(107); btn(108); btn(109); btn(110); btn(111); btn(112); btn(113); btn(114); btn(115); btn(116); btn(117); btn(118);
-  // f-block strip (two rows)
-  const strip = document.createElement('div'); strip.style.gridColumn='1 / -1'; strip.style.marginTop='8px';
-  strip.innerHTML = `<div class="hint">f-block:</div>`;
-  pt.appendChild(strip);
-  // 4f: Ce(58) .. Lu(71)
+  // f-block rows
+  const strip = document.createElement('div'); strip.style.gridColumn='1 / -1'; strip.style.marginTop='8px'; pt.appendChild(strip);
   const row4f=document.createElement('div'); row4f.style.display='flex'; row4f.style.gap='4px';
-  function btnF(z){
-    const b=document.createElement('button'); b.type='button'; b.className='pt-btn'; b.textContent=SYMBOLS[z]||'?'; b.title=`${SYMBOLS[z]||'?'} (Z=${z})`;
-    b.addEventListener('click', ()=>{ queue.push({kind:'element', Z:z, charge:0}); renderQueue(); });
-    return b;
-  }
-  for(let z=58; z<=71; z++) row4f.appendChild(btnF(z));
+  for(let z=58; z<=71; z++){ const b=document.createElement('button'); b.type='button'; b.className='pt-btn'; b.textContent=SYMBOLS[z]||'?'; b.title=`${SYMBOLS[z]||'?'} (Z=${z})`; b.onclick=()=>{ queue.push({Z:z, charge:0, ng:false}); renderQueue(); }; row4f.appendChild(b); }
   pt.appendChild(row4f);
-  // 5f: Th(90) .. Lr(103)
   const row5f=document.createElement('div'); row5f.style.display='flex'; row5f.style.gap='4px'; row5f.style.marginTop='4px';
-  for(let z=90; z<=103; z++) row5f.appendChild(btnF(z));
+  for(let z=90; z<=103; z++){ const b=document.createElement('button'); b.type='button'; b.className='pt-btn'; b.textContent=SYMBOLS[z]||'?'; b.title=`${SYMBOLS[z]||'?'} (Z=${z})`; b.onclick=()=>{ queue.push({Z:z, charge:0, ng:false}); renderQueue(); }; row5f.appendChild(b); }
   pt.appendChild(row5f);
 }
 
-/* =========================
-   Teacher login embedding
-   ========================= */
+/* Send list => broadcast to class */
+$('#tp_sendList').onclick = async ()=>{
+  if(!queue.length){ alert('Queue is empty.'); return; }
+  const pts = Number($('#tp_points').value||5);
+  const reqQN = !!$('#tp_requireQN').checked;
+  const payload = {
+    mode:'test',
+    pointsPer: pts,
+    requireQN: reqQN,
+    list: queue.map(it=>({Z:it.Z, charge:it.charge||0, ng:!!it.ng})),
+    version: Date.now()
+  };
+  await fb.db.ref(paths.currentPrompt()).set(payload);
+  // Reset all student progress to 0
+  await fb.db.ref(paths.progressRoot()).set(null);
+  alert(`Sent ${queue.length} items.`);
+};
+
+/* Admin controls */
+$('#tp_softReset').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/softResetAt`).set(Date.now()); alert('Soft reset broadcasted.'); };
+$('#tp_newSession').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/resetAt`).set(Date.now()); alert('New session broadcasted.'); };
+document.getElementById('exportBtn').onclick = ()=> exportCSV();
+
+/* ===== UI & login ===== */
+$('#setClassBtn').onclick = async ()=>{
+  const val = sanitizeClassName($('#classInput').value);
+  setClassKey(val);
+  $('#classLabel').textContent=live.classKey;
+  const curRef = fb.db.ref(`${paths.configPath()}/currentSession`);
+  let s = (await curRef.get()).val(); if(!s){ s=nowId(); await curRef.set(s); }
+  live.sessionId = s; $('#sessionLabel').textContent = s.slice(-6);
+  ensureStudentPresence();
+  attachPromptListener(); attachResetListeners(); subscribeRoster(true); subscribeScores(true);
+};
+$('#shareClassBtn').onclick = async ()=>{
+  const link = new URL(location.href); link.searchParams.set('class', live.classKey);
+  try{ await navigator.clipboard.writeText(String(link)); alert('Join link copied:\n'+link); }
+  catch(e){ prompt('Copy this link:', String(link)); }
+};
+
 $('#loginBtn').onclick = async ()=>{
   const pin = await fetchPin();
   $('#pinSetup').style.display = pin ? 'none' : '';
@@ -890,45 +990,24 @@ document.getElementById('unlockBtn').onclick = async (e)=>{
   const stored = await fetchPin(); const inp = document.getElementById('pinInput').value.trim();
   if(validPin(stored) && inp === stored){
     document.getElementById('loginDlg').close();
-    teacherPanel.classList.remove('hidden');
-    // seed teacher panel controls from current
-    document.getElementById('tp_points').value = test.pointsPer || 5;
-    document.getElementById('tp_requireQN').checked = !!test.requireQN;
+    document.getElementById('teacherPanel').classList.remove('hidden');
   } else { alert('Wrong PIN'); }
 };
 
-/* =========================
-   Build UI & init
-   ========================= */
+/* ===== Build workspace + periodic chart + init DB ===== */
 function resetBoard(){
   for(const k in state.orbitals) state.orbitals[k]=[];
   document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
   state.Z=0; state.history=[]; state.lastQN=null; syncReadouts(); syncQuantumLast();
-  document.getElementById('qn_n').value=''; document.getElementById('qn_l').value=''; document.getElementById('qn_ml').value=''; document.getElementById('qn_ms').value='';
+  $('#qn_n').value=''; $('#qn_l').value=''; $('#qn_ml').value=''; $('#qn_ms').value='';
 }
-
-function exportCSV(){
-  const rows = document.querySelectorAll('#scoreBody tr');
-  const lines = [['Student','Total','Last Submit','ID']];
-  rows.forEach(tr=>{
-    const cols=[...tr.children].map(td=>td.textContent);
-    lines.push(cols);
-  });
-  function csvEscape(s){ const str = String(s == null ? '' : s); return /[",\n]/.test(str) ? '"' + str.replace(/"/g,'""') + '"' : str; }
-  const csv = lines.map(row => row.map(csvEscape).join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download=`ec-scores-${live.classKey}-${live.sessionId}.csv`; a.click();
-  URL.revokeObjectURL(url);
-}
-
-/* Header + dialogs + initial build */
-window.addEventListener('load', ()=>{
-  dbInit();
+function buildAll(){
+  const scol=$('#scol'), pcol=$('#pcol'), dcol=$('#dcol'), fcol=$('#fcol');
+  if(!scol.children.length){ buildBlocks(); }
   buildPeriodicGrid();
-  syncReadouts(); syncQuantumLast();
-  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ try{document.getElementById('loginDlg').close();}catch(e){} }});
-});
+  renderQueue();
+}
+window.addEventListener('load', ()=>{ buildAll(); dbInit(); });
 </script>
 </body>
 </html>
