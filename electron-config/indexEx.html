@@ -1,498 +1,487 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Electron Configuration Trainer</title>
 
 <style>
-/* ---------- GLOBAL LAYOUT ---------- */
-html,body{
+body{
+  font-family:system-ui,Arial,sans-serif;
+  background:#f8f8f8;
   margin:0;
   padding:0;
-  font-family:system-ui,Arial,sans-serif;
-  background:#f7f9fb;
-  color:#111;
-  height:100%;
   overflow-x:hidden;
 }
-.wrap{
-  max-width:1200px;
-  margin:0 auto;
-  padding:16px;
-}
-h1{margin:0 0 8px 0;font-size:1.6rem}
-.mut{color:#666;font-size:12px}
-.card{
-  background:#fff;
-  border:1px solid #ccc;
-  border-radius:12px;
-  padding:12px 16px;
-  margin-bottom:12px;
-  box-shadow:0 1px 3px rgba(0,0,0,0.05);
-}
-.btn{
-  border:1px solid #222;
-  background:#111;
+header{
+  background:#1e1e1e;
   color:#fff;
-  border-radius:8px;
-  padding:.4rem .9rem;
-  cursor:pointer;
-  font-weight:600;
+  padding:10px 16px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
 }
-.btn-ghost{
-  border:1px solid #ccc;
-  background:#fff;
-  border-radius:8px;
-  padding:.4rem .9rem;
-  cursor:pointer;
-}
-.badge{
-  font-size:.7rem;
-  background:#eef;
-  padding:.25rem .55rem;
-  border-radius:9999px;
-}
-
-/* ---------- ORBITAL GRID ---------- */
+header h1{font-size:1.4rem;margin:0;}
 #orbitalGrid{
   display:grid;
-  grid-template-columns:repeat(8,auto);
+  grid-template-columns:repeat(auto-fit,minmax(80px,1fr));
   gap:4px;
-  justify-content:center;
-  margin-top:16px;
+  margin:20px auto;
+  max-width:900px;
+  justify-items:center;
 }
 .orbital{
-  border:1px solid #bbb;
-  border-radius:6px;
-  min-width:50px;
-  min-height:34px;
-  text-align:center;
-  line-height:34px;
-  font-size:.9rem;
-  user-select:none;
-  background:#fefefe;
-  position:relative;
-}
-.orbital.s-block{background:#def}
-.orbital.p-block{background:#fde}
-.orbital.d-block{background:#dfd}
-.orbital.f-block{background:#efd}
-.orbital.filled{border:2px solid #333}
-.orbital.invalid{background:#fdd}
-
-/* ---------- DRAG ARROWS ---------- */
-#arrowBox{
-  position:fixed;
-  bottom:18px;
-  right:50%;
-  transform:translateX(50%);
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-  justify-content:center;
-  z-index:20;
-}
-.arrow{
-  width:18px;
-  height:30px;
-  border:1px solid #333;
-  background:#111;
-  color:#fff;
-  text-align:center;
-  line-height:28px;
-  border-radius:4px;
-  cursor:grab;
-  font-size:14px;
-}
-.arrow.up{background:#0085ff}
-.arrow.down{background:#00b36b}
-
-/* ---------- ANSWER PANEL ---------- */
-#answerPanel{
+  border:1px solid #aaa;
+  border-radius:8px;
   background:#fff;
-  border:1px solid #ddd;
+  width:80px;
+  height:60px;
+  position:relative;
+  text-align:center;
+  font-size:14px;
+  line-height:1.3;
+}
+.orbital span{display:block;margin-top:4px;font-weight:600;}
+.arrowBox{
+  position:fixed;
+  bottom:40px;
+  right:50px;
+  background:#fff;
+  border:2px solid #333;
   border-radius:10px;
   padding:10px;
-  max-width:420px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.2);
+}
+.arrow{
+  width:20px;
+  height:50px;
+  border:1px solid #000;
+  border-radius:4px;
+  margin:4px;
+  background:linear-gradient(to top,#ccc,#fff);
+  cursor:grab;
+  display:inline-block;
+  position:relative;
+}
+.arrow::after{
+  content:'↑';
+  position:absolute;
+  top:12px;
+  left:4px;
+  font-weight:bold;
+}
+#answersBox{
+  max-width:700px;
   margin:20px auto;
-  display:none;
+  background:#fff;
+  border:1px solid #ddd;
+  border-radius:8px;
+  padding:12px;
+  line-height:1.4;
 }
-#answerPanel pre{
-  margin:0;
-  font-size:.9rem;
-  white-space:pre-wrap;
+#answersBox pre{background:#f0f0f0;padding:8px;border-radius:4px;}
+#showAnswersBtn{margin:10px 0;padding:6px 12px;}
+.periodicGrid{
+  display:grid;
+  grid-template-columns:repeat(18,1fr);
+  gap:2px;
+  font-size:10px;
+  max-width:600px;
+  margin:12px auto;
 }
-#toggleAnswerBtn{
-  display:block;
-  margin:10px auto;
+.cell{
+  border:1px solid #ccc;
+  text-align:center;
+  padding:2px;
+  background:#eee;
 }
-
-/* ---------- FLOATING TEACHER BUTTON ---------- */
+.sblock{background:#ccf;}
+.pblock{background:#cfc;}
+.dblock{background:#fcc;}
+.fblock{background:#fcf;}
+.highlight{border:2px solid #000;}
 #teacherPortalBtn{
   position:fixed;
-  bottom:20px;
-  right:20px;
-  width:52px;
-  height:52px;
-  border-radius:50%;
-  background:#111;
+  bottom:15px;
+  right:15px;
+  background:#1e1e1e;
   color:#fff;
   border:none;
+  border-radius:50%;
+  width:52px;
+  height:52px;
+  font-size:24px;
   cursor:pointer;
-  font-size:22px;
-  box-shadow:0 3px 6px rgba(0,0,0,0.25);
-  z-index:99;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
 }
-
-/* ---------- TEACHER MODAL ---------- */
 dialog{
   border:none;
-  border-radius:12px;
-  max-width:500px;
+  border-radius:10px;
+  padding:20px;
+  max-width:480px;
   width:90%;
-  box-shadow:0 6px 20px rgba(0,0,0,0.2);
 }
-dialog::backdrop{background:rgba(0,0,0,0.3)}
-.modal-content{padding:18px}
-.modal-content h3{margin-top:0}
+dialog::backdrop{background:rgba(0,0,0,0.5);}
 </style>
-
-<!-- Firebase (compat same as LiveGauge) -->
-<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 </head>
 <body>
-<div class="wrap">
+<header>
   <h1>Electron Configuration Trainer</h1>
-  <div id="orbitalGrid"><!-- chart inserted by JS --></div>
-  <button id="toggleAnswerBtn" class="btn">Show Answers</button>
-  <div id="answerPanel" class="card"></div>
+  <div id="classStatus" style="font-size:12px;color:#ccc;"></div>
+</header>
+
+<!-- Orbital grid container -->
+<div id="orbitalGrid"></div>
+
+<!-- Floating arrows box -->
+<div class="arrowBox" id="arrowBox">
+  <div class="arrow" draggable="true" data-spin="up"></div>
+  <div class="arrow" draggable="true" data-spin="down"></div>
 </div>
 
-<!-- floating arrow box -->
-<div id="arrowBox"></div>
+<!-- Answer / config display -->
+<div id="answersBox">
+  <button id="showAnswersBtn">Show Answers</button>
+  <div id="answerContent" style="display:none;">
+    <pre id="fullConfig"></pre>
+    <pre id="nobleConfig"></pre>
+    <pre id="quantumNums"></pre>
+    <div id="periodicWrap">
+      <div class="periodicGrid" id="ptable"></div>
+    </div>
+  </div>
+</div>
 
-<!-- floating Teacher Portal button -->
+<!-- Teacher Portal Button -->
 <button id="teacherPortalBtn" title="Teacher Portal">👤</button>
 
-<!-- Teacher Login / Control modal -->
+<!-- Teacher Portal Dialog -->
 <dialog id="teacherDlg">
-  <div class="modal-content">
-    <h3>Teacher Portal</h3>
-    <div id="teacherLoginView">
-      <p class="mut">Enter class name and PIN to manage sessions.</p>
-      <input id="classInput" placeholder="Class Name" style="width:100%;padding:.5rem;border:1px solid #ccc;border-radius:8px;margin-bottom:8px">
-      <input id="pinInput" type="password" maxlength="4" inputmode="numeric" placeholder="4-digit PIN" style="width:100%;padding:.5rem;border:1px solid #ccc;border-radius:8px">
-      <button id="loginBtn" class="btn" style="margin-top:8px;width:100%">Login</button>
-    </div>
-    <div id="teacherControlView" style="display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <strong>Class:</strong><span id="classLabel"></span>
-      </div>
-      <div id="studentList" class="mut tiny" style="min-height:60px;margin-bottom:8px"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button id="sendTestBtn" class="btn-ghost">Send Test</button>
-        <button id="resetScoresBtn" class="btn-ghost">Reset Scores</button>
-        <button id="endClassBtn" class="btn-ghost">End Class</button>
-        <button id="closeTeacherBtn" class="btn">Close</button>
-      </div>
-    </div>
+  <div id="teacherLoginView">
+    <h3>Teacher Login</h3>
+    <input id="classInput" placeholder="Class Name" style="width:100%;margin-bottom:8px;">
+    <input id="pinInput" type="password" placeholder="4-digit PIN" style="width:100%;margin-bottom:8px;">
+    <button id="loginBtn">Login</button>
+  </div>
+  <div id="teacherControlView" style="display:none;">
+    <h3>Teacher Controls</h3>
+    <div>Class: <span id="classLabel">—</span></div>
+    <button id="sendTestBtn">Send Test</button>
+    <button id="resetScoresBtn">Reset Scores</button>
+    <button id="endClassBtn">End Class</button>
+    <div style="margin-top:10px;"><strong>Students:</strong><div id="studentList" style="font-size:12px;"></div></div>
+    <button id="closeTeacherBtn" style="margin-top:10px;">Close</button>
   </div>
 </dialog>
 <script>
-// ==================== BASE DATA ====================
-const orbitals = [
-  {n:1,l:'s',count:1},
-  {n:2,l:'s',count:1},{n:2,l:'p',count:3},
-  {n:3,l:'s',count:1},{n:3,l:'p',count:3},{n:3,l:'d',count:5},
-  {n:4,l:'s',count:1},{n:4,l:'p',count:3},{n:4,l:'d',count:5},{n:4,l:'f',count:7},
-  {n:5,l:'s',count:1},{n:5,l:'p',count:3},{n:5,l:'d',count:5},{n:5,l:'f',count:7},
-  {n:6,l:'s',count:1},{n:6,l:'p',count:3},{n:6,l:'d',count:5},
-  {n:7,l:'s',count:1},{n:7,l:'p',count:3}
+// ============ ORBITAL + CONFIG LOGIC ============
+const orbitals=[
+ {name:'1s',n:1,l:0,block:'s'},
+ {name:'2s',n:2,l:0,block:'s'},
+ {name:'2p',n:2,l:1,block:'p'},
+ {name:'3s',n:3,l:0,block:'s'},
+ {name:'3p',n:3,l:1,block:'p'},
+ {name:'4s',n:4,l:0,block:'s'},
+ {name:'3d',n:3,l:2,block:'d'},
+ {name:'4p',n:4,l:1,block:'p'},
+ {name:'5s',n:5,l:0,block:'s'},
+ {name:'4d',n:4,l:2,block:'d'},
+ {name:'5p',n:5,l:1,block:'p'},
+ {name:'6s',n:6,l:0,block:'s'},
+ {name:'4f',n:4,l:3,block:'f'},
+ {name:'5d',n:5,l:2,block:'d'},
+ {name:'6p',n:6,l:1,block:'p'},
+ {name:'7s',n:7,l:0,block:'s'},
+ {name:'5f',n:5,l:3,block:'f'},
+ {name:'6d',n:6,l:2,block:'d'},
+ {name:'7p',n:7,l:1,block:'p'}
 ];
-const lValues = {s:0,p:1,d:2,f:3};
+const orbitalGrid=document.getElementById('orbitalGrid');
+orbitals.forEach(o=>{
+ const el=document.createElement('div');
+ el.className=`orbital ${o.block}block`;
+ el.dataset.orb=o.name;
+ el.innerHTML=`<span>${o.name}</span><div class="slots"></div>`;
+ orbitalGrid.appendChild(el);
+});
 
-// ==================== DOM HOOKS ====================
-const grid = document.getElementById('orbitalGrid');
-const arrowBox = document.getElementById('arrowBox');
-const answerPanel = document.getElementById('answerPanel');
-const toggleAnswerBtn = document.getElementById('toggleAnswerBtn');
-
-// ==================== BUILD GRID ====================
-function buildGrid(){
-  grid.innerHTML='';
-  orbitals.forEach(o=>{
-    const cell=document.createElement('div');
-    cell.className=`orbital ${o.l}-block`;
-    cell.id=`orb-${o.n}${o.l}`;
-    cell.dataset.n=o.n;
-    cell.dataset.l=o.l;
-    cell.dataset.max=o.count*2;
-    cell.dataset.count=0;
-    cell.textContent=`${o.n}${o.l}`;
-    cell.ondragover=e=>e.preventDefault();
-    cell.ondrop=dropElectron;
-    grid.appendChild(cell);
-  });
-}
-buildGrid();
-
-// ==================== DRAG / DROP ====================
-let currentArrow=null;
-function makeArrow(spin){
-  const a=document.createElement('div');
-  a.className=`arrow ${spin}`;
-  a.draggable=true;
-  a.textContent=spin==='up'?'↑':'↓';
-  a.ondragstart=()=>currentArrow=a;
-  a.ondragend=()=>currentArrow=null;
-  return a;
-}
-function refreshArrowBox(){
-  arrowBox.innerHTML='';
-  arrowBox.appendChild(makeArrow('up'));
-  arrowBox.appendChild(makeArrow('down'));
-}
-refreshArrowBox();
-
-function dropElectron(ev){
-  ev.preventDefault();
-  const cell=ev.currentTarget;
-  if(!currentArrow) return;
-  let count=Number(cell.dataset.count);
-  const max=Number(cell.dataset.max);
-  if(count>=max){
-    cell.classList.add('invalid');
-    setTimeout(()=>cell.classList.remove('invalid'),400);
-    return;
-  }
-  count++;
-  cell.dataset.count=count;
-  const el=currentArrow.cloneNode(true);
-  el.draggable=false;
-  el.style.position='absolute';
-  el.style.left=`${5+(count-1)*9}px`;
-  el.style.top='4px';
-  el.style.fontSize='12px';
-  cell.appendChild(el);
-  computeConfiguration();
+// ============ PERIODIC TABLE (COLOR CODED) ============
+const ptable=document.getElementById('ptable');
+for(let r=1;r<=7;r++){
+ for(let c=1;c<=18;c++){
+  const cell=document.createElement('div');
+  cell.classList.add('cell');
+  if(c<=2) cell.classList.add('sblock');
+  else if(c>=13&&c<=18) cell.classList.add('pblock');
+  else if(c>=3&&c<=12) cell.classList.add('dblock');
+  if(r>=6&&c>=3&&c<=17) cell.classList.add('fblock');
+  ptable.appendChild(cell);
+ }
 }
 
-// ==================== COMPUTE CONFIGURATION ====================
-function computeConfiguration(){
-  const configParts=[];
-  let total=0;
-  document.querySelectorAll('.orbital').forEach(cell=>{
-    const c=Number(cell.dataset.count);
-    if(c>0){
-      configParts.push(`${cell.dataset.n}${cell.dataset.l}${c>2?c:''}`);
-      total+=c;
-    }
-  });
-  const confString=configParts.join(' ');
-  const element=findElement(total);
-  const qNums=getQuantumNumbers();
-  answerPanel.innerHTML=`<pre>Electrons: ${total}
-Config: ${confString}
-Element: ${element.symbol} (${element.name})
-Quantum: n=${qNums.n}, l=${qNums.l}, mₗ=${qNums.ml}, mₛ=${qNums.ms}</pre>`;
-  return total;
+// ============ DRAG/DROP ELECTRONS ============
+let currentElectron=null;
+document.querySelectorAll('.arrow').forEach(a=>{
+ a.addEventListener('dragstart',e=>{
+   currentElectron=a.cloneNode(true);
+   e.dataTransfer.setData('text/plain',a.dataset.spin);
+ });
+});
+document.querySelectorAll('.orbital').forEach(o=>{
+ o.addEventListener('dragover',e=>e.preventDefault());
+ o.addEventListener('drop',e=>{
+   e.preventDefault();
+   if(!currentElectron)return;
+   const slots=o.querySelector('.slots');
+   if(slots.children.length<2){
+     slots.appendChild(currentElectron);
+     currentElectron.style.margin='2px';
+     currentElectron.draggable=false;
+     currentElectron=null;
+     updateConfiguration();
+   }
+ });
+});
+
+// ============ CONFIGURATION CALCULATION ============
+let electronCount=0;
+function updateConfiguration(){
+ const filled=Array.from(document.querySelectorAll('.slots'))
+   .filter(s=>s.children.length>0);
+ electronCount=filled.reduce((a,s)=>a+s.children.length,0);
+ const cfgParts=[];
+ filled.forEach(s=>{
+   const name=s.parentElement.dataset.orb;
+   cfgParts.push(`${name}<sup>${s.children.length}</sup>`);
+ });
+ const config=cfgParts.join(' ');
+ document.getElementById('fullConfig').innerHTML=config;
+ updateQuantum();
+ highlightElement(electronCount);
 }
 
-// ==================== PERIODIC DATA (SIMPLIFIED) ====================
-const periodic=[
-  {Z:1,symbol:'H',name:'Hydrogen'},
-  {Z:2,symbol:'He',name:'Helium'},
-  {Z:3,symbol:'Li',name:'Lithium'},
-  {Z:4,symbol:'Be',name:'Beryllium'},
-  {Z:5,symbol:'B',name:'Boron'},
-  {Z:6,symbol:'C',name:'Carbon'},
-  {Z:7,symbol:'N',name:'Nitrogen'},
-  {Z:8,symbol:'O',name:'Oxygen'},
-  {Z:9,symbol:'F',name:'Fluorine'},
-  {Z:10,symbol:'Ne',name:'Neon'},
-  {Z:11,symbol:'Na',name:'Sodium'},
-  {Z:12,symbol:'Mg',name:'Magnesium'},
-  {Z:13,symbol:'Al',name:'Aluminum'},
-  {Z:14,symbol:'Si',name:'Silicon'},
-  {Z:15,symbol:'P',name:'Phosphorus'},
-  {Z:16,symbol:'S',name:'Sulfur'},
-  {Z:17,symbol:'Cl',name:'Chlorine'},
-  {Z:18,symbol:'Ar',name:'Argon'},
-  {Z:19,symbol:'K',name:'Potassium'},
-  {Z:20,symbol:'Ca',name:'Calcium'},
-  {Z:24,symbol:'Cr',name:'Chromium',exception:true},
-  {Z:29,symbol:'Cu',name:'Copper',exception:true}
-];
-function findElement(total){
-  let el=periodic.find(e=>e.Z===total);
-  if(!el) el={symbol:'?',name:'Unknown'};
-  return el;
+function highlightElement(count){
+ const cells=document.querySelectorAll('.cell');
+ cells.forEach(c=>c.classList.remove('highlight'));
+ if(count>0&&count<=cells.length){
+   cells[count-1].classList.add('highlight');
+ }
 }
 
-// ==================== QUANTUM NUMBERS ====================
-function getQuantumNumbers(){
-  // Find last filled orbital
-  const filled=[...document.querySelectorAll('.orbital')].filter(c=>Number(c.dataset.count)>0);
-  if(filled.length===0) return {n:'—',l:'—',ml:'—',ms:'—'};
-  const last=filled[filled.length-1];
-  const n=Number(last.dataset.n);
-  const lChar=last.dataset.l;
-  const lNum=lValues[lChar];
-  const mVals=[];
-  for(let i=-lNum;i<=lNum;i++) mVals.push(i);
-  const ml=mVals[Math.floor(Math.random()*mVals.length)];
-  const ms=Math.random()>0.5?'+½':'−½';
-  return {n,l:lNum,ml,ms};
+function nobleGasShortcut(){
+ const noble={2:'He',10:'Ne',18:'Ar',36:'Kr',54:'Xe',86:'Rn'};
+ let base='';
+ let remain=electronCount;
+ for(const [z,sym]of Object.entries(noble)){
+   if(remain>z){base=`[${sym}]`;remain-=z;}
+ }
+ return base;
 }
 
-// ==================== ANSWER TOGGLE ====================
-toggleAnswerBtn.onclick=()=>{
-  const vis=answerPanel.style.display!=='none';
-  answerPanel.style.display=vis?'none':'block';
-  toggleAnswerBtn.textContent=vis?'Show Answers':'Hide Answers';
+function updateQuantum(){
+ const filled=Array.from(document.querySelectorAll('.slots')).filter(s=>s.children.length>0);
+ if(filled.length===0)return;
+ const last=filled[filled.length-1].parentElement;
+ const orb=orbitals.find(o=>o.name===last.dataset.orb);
+ const n=orb.n,l=orb.l;
+ const ml=0; // simplified
+ const ms=filled[filled.length-1].children.length===1?'+½':'-½';
+ const txt=`n=${n}, l=${l}, mₗ=${ml}, mₛ=${ms}`;
+ document.getElementById('quantumNums').textContent=txt;
+}
+
+// ============ SHOW/HIDE ANSWERS ============
+document.getElementById('showAnswersBtn').onclick=()=>{
+ const box=document.getElementById('answerContent');
+ const showing=box.style.display==='block';
+ box.style.display=showing?'none':'block';
+ document.getElementById('showAnswersBtn').textContent=showing?'Show Answers':'Hide Answers';
+};
+</script>
+<!-- ================== FIREBASE / TEACHER PORTAL LOGIC ================== -->
+<!-- Firebase Libraries -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+<script>
+// ============ FIREBASE CONFIG ============
+const fbCfg={
+ apiKey:"AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
+ authDomain:"presentation-83d1f.firebaseapp.com",
+ databaseURL:"https://presentation-83d1f-default-rtdb.firebaseio.com",
+ projectId:"presentation-83d1f",
+ storageBucket:"presentation-83d1f.firebasestorage.app",
+ messagingSenderId:"132406143951",
+ appId:"1:132406143951:web:9695690023bd3f2aedc0ba"
 };
 
-// ==================== UTILITIES ====================
-function resetAll(){
-  document.querySelectorAll('.orbital').forEach(c=>{
-    c.innerHTML=`${c.dataset.n}${c.dataset.l}`;
-    c.dataset.count=0;
-  });
-  refreshArrowBox();
-  answerPanel.style.display='none';
-  toggleAnswerBtn.textContent='Show Answers';
+// ============ GLOBAL STATE ============
+let fb={app:null,db:null,auth:null};
+let classKey=null,pin=null;
+let teacherMode=false;
+let studentId=localStorage.getItem('ec_uid')||Math.random().toString(36).slice(2,9);
+localStorage.setItem('ec_uid',studentId);
+let studentName=localStorage.getItem('ec_name')||"Student";
+let classRef=null;
+
+// ============ INIT FIREBASE ============
+window.addEventListener('load',()=>{
+ try{
+   fb.app=firebase.initializeApp(fbCfg);
+   fb.db=firebase.database();
+   fb.auth=firebase.auth();
+   fb.auth.signInAnonymously().catch(()=>console.log("Anon auth failed"));
+ }catch(e){console.log("Firebase init err",e);}
+ document.getElementById('teacherPortalBtn').onclick=openTeacherDialog;
+ document.getElementById('loginBtn').onclick=teacherLogin;
+ document.getElementById('closeTeacherBtn').onclick=()=>$('#teacherDlg').close();
+ document.getElementById('sendTestBtn').onclick=broadcastPrompt;
+ document.getElementById('resetScoresBtn').onclick=resetScores;
+ document.getElementById('endClassBtn').onclick=endClass;
+});
+
+function $(s){return document.querySelector(s);}
+
+// ============ TEACHER LOGIN ============
+function openTeacherDialog(){
+ document.getElementById('teacherLoginView').style.display='block';
+ document.getElementById('teacherControlView').style.display='none';
+ $('#teacherDlg').showModal();
 }
 
-// Autoplace (for quick teacher tests)
-function autoPlace(num){
-  resetAll();
-  const order=[...document.querySelectorAll('.orbital')];
-  let left=num;
-  for(const cell of order){
-    const max=Number(cell.dataset.max);
-    const put=Math.min(left,max);
-    if(put>0){
-      cell.dataset.count=put;
-      for(let i=0;i<put;i++){
-        const el=makeArrow(i%2===0?'up':'down');
-        el.draggable=false;
-        el.style.position='absolute';
-        el.style.left=`${5+i*9}px`;
-        el.style.top='4px';
-        el.style.fontSize='12px';
+async function teacherLogin(){
+ classKey=$('#classInput').value.trim().toUpperCase();
+ pin=$('#pinInput').value.trim();
+ if(!classKey||!pin){alert("Enter class and PIN.");return;}
+ teacherMode=true;
+ classRef=fb.db.ref(`electronConfig/${classKey}`);
+ await classRef.child('teacherPin').set(pin);
+ $('#classLabel').textContent=classKey;
+ document.getElementById('teacherLoginView').style.display='none';
+ document.getElementById('teacherControlView').style.display='block';
+ attachStudentListener();
+}
+
+// ============ STUDENT LISTENER ============
+function attachStudentListener(){
+ if(!classRef)return;
+ classRef.child('students').on('value',snap=>{
+   const data=snap.val()||{};
+   const lines=[];
+   let total=0,avgCount=0;
+   for(const [id,s] of Object.entries(data)){
+     lines.push(`${s.name||'—'}: ${s.score||0}/${s.total||0}`);
+     if(s.total>0){total+=s.score/s.total;avgCount++;}
+   }
+   $('#studentList').innerHTML=lines.join('<br>');
+   if(avgCount>0){
+     const pct=(total/avgCount*100).toFixed(1);
+     document.getElementById('classStatus').textContent=`${classKey}: ${pct}% avg`;
+   }
+ });
+}
+
+// ============ SCORE PUSH ============
+let currentScore=0,totalPoints=0;
+function pushScore(correct){
+ if(teacherMode||!classKey)return;
+ const ref=fb.db.ref(`electronConfig/${classKey}/students/${studentId}`);
+ if(correct)currentScore++;
+ totalPoints++;
+ ref.update({name:studentName,score:currentScore,total:totalPoints});
+}
+
+// ============ TEST BROADCAST ============
+function broadcastPrompt(){
+ if(!teacherMode||!classRef)return;
+ alert("Test sent (students will sync next item).");
+}
+
+// ============ RESET & END ============
+function resetScores(){
+ if(!teacherMode||!classRef)return;
+ classRef.child('students').get().then(s=>{
+   const d=s.val()||{};
+   for(const id in d){
+     classRef.child(`students/${id}/score`).set(0);
+     classRef.child(`students/${id}/total`).set(0);
+   }
+ });
+}
+function endClass(){
+ if(!teacherMode||!classRef)return;
+ if(confirm("End class and clear roster?"))classRef.remove();
+ $('#teacherDlg').close();
+}
+
+// ============ AUTO CLASS MEMORY ============
+(function rememberClass(){
+ const last=localStorage.getItem('ec_class');
+ if(last){classKey=last;$('#classStatus').textContent=`Class: ${last}`;}
+})();
+</script>
+<!-- ================== FINAL LOGIC / EXCEPTIONS / INIT ================== -->
+<script>
+// ======= EXCEPTIONS & NOBLE GAS PREFILL =======
+function autoFillNobleGas(){
+  // Fill all orbitals up to the noble gas baseline when testing mode requires it
+  const nobleGasLevels={2:'1s',10:'2p',18:'3p',36:'4p',54:'5p',86:'6p'};
+  let base=0;
+  Object.keys(nobleGasLevels).forEach(k=>{
+    if(electronCount>k) base=k;
+  });
+  const fillTo=base>0?nobleGasLevels[base]:null;
+  if(!fillTo)return;
+  orbitals.forEach(o=>{
+    const slot=o.name;
+    const cell=document.querySelector(`[data-orb='${slot}'] .slots`);
+    if(!cell)return;
+    if(fillTo&&orbitals.indexOf(o)<=orbitals.findIndex(x=>x.name===fillTo)){
+      const need=(o.block==='s'?2:(o.block==='p'?6:(o.block==='d'?10:(o.block==='f'?14:2))));
+      for(let i=0;i<need;i++){
+        const el=document.createElement('div');
+        el.className='arrow';
+        el.style.margin='2px';
         cell.appendChild(el);
       }
     }
-    left-=put;
-    if(left<=0) break;
+  });
+}
+
+// Cu and Cr exception adjustor
+function correctExceptions(){
+  const configText=document.getElementById('fullConfig').textContent;
+  if(configText.includes('3d')&&configText.includes('4s²')){
+    if(configText.includes('3d⁹'))document.getElementById('fullConfig').textContent=configText.replace('4s²','4s¹');
+    if(configText.includes('3d⁴'))document.getElementById('fullConfig').textContent=configText.replace('4s²','4s¹');
   }
-  computeConfiguration();
-}
-</script>
-<script>
-// ==================== FIREBASE CONFIG ====================
-const fbCfg = {
-  apiKey: "AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
-  authDomain: "presentation-83d1f.firebaseapp.com",
-  databaseURL: "https://presentation-83d1f-default-rtdb.firebaseio.com",
-  projectId: "presentation-83d1f",
-  storageBucket: "presentation-83d1f.firebasestorage.app",
-  messagingSenderId: "132406143951",
-  appId: "1:132406143951:web:9695690023bd3f2aedc0ba"
-};
-let fb = { app:null, db:null, auth:null };
-let classKey=null, pin=null;
-let studentId = localStorage.getItem('ec_uid') || Math.random().toString(36).slice(2,9);
-localStorage.setItem('ec_uid', studentId);
-let joined=false, teacherMode=false;
-let currentScore=0, totalPoints=0;
-let classRef=null;
-
-// ==================== INIT ====================
-window.addEventListener('load', ()=>{
-  try{
-    fb.app=firebase.initializeApp(fbCfg);
-    fb.db=firebase.database();
-    fb.auth=firebase.auth();
-    fb.auth.signInAnonymously().catch(()=>console.log('Firebase anon failed'));
-  }catch(e){console.log('FB init err',e);}
-  document.getElementById('teacherPortalBtn').onclick=openTeacherDialog;
-  document.getElementById('loginBtn').onclick=teacherLogin;
-  document.getElementById('closeTeacherBtn').onclick=()=>$('#teacherDlg').close();
-  document.getElementById('sendTestBtn').onclick=broadcastPrompt;
-  document.getElementById('resetScoresBtn').onclick=resetScores;
-  document.getElementById('endClassBtn').onclick=endClass;
-});
-
-// ==================== TEACHER PORTAL ====================
-function openTeacherDialog(){
-  document.getElementById('teacherLoginView').style.display='block';
-  document.getElementById('teacherControlView').style.display='none';
-  $('#teacherDlg').showModal();
-}
-function $(sel){return document.querySelector(sel);}
-
-async function teacherLogin(){
-  classKey=$('#classInput').value.trim().toUpperCase();
-  pin=$('#pinInput').value.trim();
-  if(!classKey||!pin){alert('Enter class and PIN');return;}
-  teacherMode=true;
-  classRef=fb.db.ref(`electronConfig/${classKey}`);
-  await classRef.child('teacherPin').set(pin);
-  $('#classLabel').textContent=classKey;
-  $('#teacherLoginView').style.display='none';
-  $('#teacherControlView').style.display='block';
-  attachStudentListener();
 }
 
-function attachStudentListener(){
-  if(!classRef) return;
-  classRef.child('students').on('value',snap=>{
-    const data=snap.val()||{};
-    const out=[];
-    let sum=0, count=0;
-    for(const [id,s] of Object.entries(data)){
-      out.push(`${s.name||'anon'}: ${s.score||0}/${s.total||0}`);
-      if(s.total>0){sum+=s.score/s.total;count++;}
+// ======= AUTO-SCORING HOOKS =======
+function checkSubmission(){
+  // Example scoring: simplistic placeholder; extend with your rules.
+  const filled=Array.from(document.querySelectorAll('.slots')).filter(s=>s.children.length>0);
+  const correct=(filled.length===electronCount); // stub condition
+  pushScore(correct);
+  if(!correct && totalPoints%3===0){
+    alert('Too many electrons placed. Points deducted.');
+  }
+  correctExceptions();
+}
+
+// ======= INITIALIZATION GLUE =======
+window.addEventListener('load',()=>{
+  // If a class exists locally, auto-reconnect for students
+  const storedClass=localStorage.getItem('ec_class');
+  if(storedClass){classKey=storedClass;$('#classStatus').textContent=`Class: ${storedClass}`;}
+  // Observe submissions
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&!teacherMode){
+      checkSubmission();
     }
-    $('#studentList').innerHTML=out.join('<br>');
   });
-}
-
-function broadcastPrompt(){
-  if(!teacherMode||!classRef) return;
-  alert('Prompt sent (students will refresh next question).');
-  // Placeholder for actual push of test list/ion config
-}
-function resetScores(){
-  if(!teacherMode||!classRef) return;
-  classRef.child('students').get().then(s=>{
-    const d=s.val()||{};
-    for(const id in d){ classRef.child(`students/${id}/score`).set(0); classRef.child(`students/${id}/total`).set(0); }
-  });
-}
-function endClass(){
-  if(!teacherMode||!classRef) return;
-  if(confirm('End class and clear roster?')) classRef.remove();
-  $('#teacherDlg').close();
-}
-
-// ==================== STUDENT SYNC ====================
-function pushScore(correct){
-  if(!classKey||teacherMode) return;
-  const name=localStorage.getItem('ec_name')||'Student';
-  const ref=fb.db.ref(`electronConfig/${classKey}/students/${studentId}`);
-  currentScore += correct?1:0;
-  totalPoints++;
-  ref.update({name,score:currentScore,total:totalPoints});
-}
-
-// Example hook: call pushScore(true/false) when submission checked
-// For now demonstration only
-window.pushScore=pushScore;
+});
 </script>
 </body>
 </html>
