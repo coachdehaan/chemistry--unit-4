@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Interactive Water Cycle Prototype</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;background:#f0f4f8;font-family:system-ui,Arial,sans-serif}
+  .wrap{position:relative;width:100%;max-width:1600px;margin:0 auto;overflow:hidden}
+  canvas{width:100%;height:auto;display:block}
+  .tooltip{
+    position:absolute;pointer-events:none;
+    background:rgba(0,0,0,.7);color:#fff;padding:6px 10px;
+    border-radius:8px;font-size:14px;white-space:nowrap;
+    transform:translate(-50%,-120%);opacity:0;transition:opacity .15s ease;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <canvas id="cycle"></canvas>
+  <div id="tip" class="tooltip"></div>
+</div>
+
+<script>
+// ----- Setup -----
+const imgSrc = "e60c7965-26c0-422f-a0a8-6e46ab255446.png";  // your uploaded image file
+const canvas = document.getElementById("cycle");
+const ctx = canvas.getContext("2d");
+const tip = document.getElementById("tip");
+
+const zones = [
+  {name:"Atmosphere",        x1:0.02, y1:0.00, x2:0.55, y2:0.25, color:"rgba(135,206,235,0.25)"},
+  {name:"Cryosphere",        x1:0.55, y1:0.05, x2:0.98, y2:0.28, color:"rgba(173,216,230,0.25)"},
+  {name:"Surface Water",     x1:0.15, y1:0.25, x2:0.75, y2:0.58, color:"rgba(30,144,255,0.25)"},
+  {name:"Human Systems",     x1:0.05, y1:0.50, x2:0.65, y2:0.80, color:"rgba(255,165,0,0.25)"},
+  {name:"Groundwater",       x1:0.30, y1:0.70, x2:0.98, y2:1.00, color:"rgba(102,205,170,0.25)"}
+];
+
+let img = new Image();
+img.src = imgSrc;
+img.onload = ()=>resize();
+
+function resize(){
+  canvas.width  = canvas.clientWidth;
+  canvas.height = canvas.clientWidth * (img.height/img.width);
+  draw();
+}
+window.addEventListener("resize", resize);
+
+function draw(highlight){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  if(highlight){
+    ctx.fillStyle = highlight.color;
+    ctx.fillRect(highlight.x1*canvas.width,highlight.y1*canvas.height,
+                 (highlight.x2-highlight.x1)*canvas.width,
+                 (highlight.y2-highlight.y1)*canvas.height);
+  }
+}
+
+// ----- Interaction -----
+canvas.addEventListener("mousemove", e=>{
+  const r = canvas.getBoundingClientRect();
+  const x = (e.clientX - r.left)/r.width;
+  const y = (e.clientY - r.top)/r.height;
+  let hover = zones.find(z=>x>z.x1 && x<z.x2 && y>z.y1 && y<z.y2);
+  draw(hover);
+  if(hover){
+    tip.textContent = hover.name;
+    tip.style.left = e.clientX + "px";
+    tip.style.top  = e.clientY + "px";
+    tip.style.opacity = 1;
+  }else{
+    tip.style.opacity = 0;
+  }
+});
+canvas.addEventListener("mouseleave", ()=>{draw(); tip.style.opacity=0;});
+</script>
+</body>
+</html>
