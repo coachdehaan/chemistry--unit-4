@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Electron Configuration Trainer</title>
+
+<style>
+/* ---------- GLOBAL LAYOUT ---------- */
+html,body{
+  margin:0;
+  padding:0;
+  font-family:system-ui,Arial,sans-serif;
+  background:#f7f9fb;
+  color:#111;
+  height:100%;
+  overflow-x:hidden;
+}
+.wrap{
+  max-width:1200px;
+  margin:0 auto;
+  padding:16px;
+}
+h1{margin:0 0 8px 0;font-size:1.6rem}
+.mut{color:#666;font-size:12px}
+.card{
+  background:#fff;
+  border:1px solid #ccc;
+  border-radius:12px;
+  padding:12px 16px;
+  margin-bottom:12px;
+  box-shadow:0 1px 3px rgba(0,0,0,0.05);
+}
+.btn{
+  border:1px solid #222;
+  background:#111;
+  color:#fff;
+  border-radius:8px;
+  padding:.4rem .9rem;
+  cursor:pointer;
+  font-weight:600;
+}
+.btn-ghost{
+  border:1px solid #ccc;
+  background:#fff;
+  border-radius:8px;
+  padding:.4rem .9rem;
+  cursor:pointer;
+}
+.badge{
+  font-size:.7rem;
+  background:#eef;
+  padding:.25rem .55rem;
+  border-radius:9999px;
+}
+
+/* ---------- ORBITAL GRID ---------- */
+#orbitalGrid{
+  display:grid;
+  grid-template-columns:repeat(8,auto);
+  gap:4px;
+  justify-content:center;
+  margin-top:16px;
+}
+.orbital{
+  border:1px solid #bbb;
+  border-radius:6px;
+  min-width:50px;
+  min-height:34px;
+  text-align:center;
+  line-height:34px;
+  font-size:.9rem;
+  user-select:none;
+  background:#fefefe;
+  position:relative;
+}
+.orbital.s-block{background:#def}
+.orbital.p-block{background:#fde}
+.orbital.d-block{background:#dfd}
+.orbital.f-block{background:#efd}
+.orbital.filled{border:2px solid #333}
+.orbital.invalid{background:#fdd}
+
+/* ---------- DRAG ARROWS ---------- */
+#arrowBox{
+  position:fixed;
+  bottom:18px;
+  right:50%;
+  transform:translateX(50%);
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:center;
+  z-index:20;
+}
+.arrow{
+  width:18px;
+  height:30px;
+  border:1px solid #333;
+  background:#111;
+  color:#fff;
+  text-align:center;
+  line-height:28px;
+  border-radius:4px;
+  cursor:grab;
+  font-size:14px;
+}
+.arrow.up{background:#0085ff}
+.arrow.down{background:#00b36b}
+
+/* ---------- ANSWER PANEL ---------- */
+#answerPanel{
+  background:#fff;
+  border:1px solid #ddd;
+  border-radius:10px;
+  padding:10px;
+  max-width:420px;
+  margin:20px auto;
+  display:none;
+}
+#answerPanel pre{
+  margin:0;
+  font-size:.9rem;
+  white-space:pre-wrap;
+}
+#toggleAnswerBtn{
+  display:block;
+  margin:10px auto;
+}
+
+/* ---------- FLOATING TEACHER BUTTON ---------- */
+#teacherPortalBtn{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:52px;
+  height:52px;
+  border-radius:50%;
+  background:#111;
+  color:#fff;
+  border:none;
+  cursor:pointer;
+  font-size:22px;
+  box-shadow:0 3px 6px rgba(0,0,0,0.25);
+  z-index:99;
+}
+
+/* ---------- TEACHER MODAL ---------- */
+dialog{
+  border:none;
+  border-radius:12px;
+  max-width:500px;
+  width:90%;
+  box-shadow:0 6px 20px rgba(0,0,0,0.2);
+}
+dialog::backdrop{background:rgba(0,0,0,0.3)}
+.modal-content{padding:18px}
+.modal-content h3{margin-top:0}
+</style>
+
+<!-- Firebase (compat same as LiveGauge) -->
+<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>Electron Configuration Trainer</h1>
+  <div id="orbitalGrid"><!-- chart inserted by JS --></div>
+  <button id="toggleAnswerBtn" class="btn">Show Answers</button>
+  <div id="answerPanel" class="card"></div>
+</div>
+
+<!-- floating arrow box -->
+<div id="arrowBox"></div>
+
+<!-- floating Teacher Portal button -->
+<button id="teacherPortalBtn" title="Teacher Portal">👤</button>
+
+<!-- Teacher Login / Control modal -->
+<dialog id="teacherDlg">
+  <div class="modal-content">
+    <h3>Teacher Portal</h3>
+    <div id="teacherLoginView">
+      <p class="mut">Enter class name and PIN to manage sessions.</p>
+      <input id="classInput" placeholder="Class Name" style="width:100%;padding:.5rem;border:1px solid #ccc;border-radius:8px;margin-bottom:8px">
+      <input id="pinInput" type="password" maxlength="4" inputmode="numeric" placeholder="4-digit PIN" style="width:100%;padding:.5rem;border:1px solid #ccc;border-radius:8px">
+      <button id="loginBtn" class="btn" style="margin-top:8px;width:100%">Login</button>
+    </div>
+    <div id="teacherControlView" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong>Class:</strong><span id="classLabel"></span>
+      </div>
+      <div id="studentList" class="mut tiny" style="min-height:60px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="sendTestBtn" class="btn-ghost">Send Test</button>
+        <button id="resetScoresBtn" class="btn-ghost">Reset Scores</button>
+        <button id="endClassBtn" class="btn-ghost">End Class</button>
+        <button id="closeTeacherBtn" class="btn">Close</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+<script>
+// ==================== BASE DATA ====================
+const orbitals = [
+  {n:1,l:'s',count:1},
+  {n:2,l:'s',count:1},{n:2,l:'p',count:3},
+  {n:3,l:'s',count:1},{n:3,l:'p',count:3},{n:3,l:'d',count:5},
+  {n:4,l:'s',count:1},{n:4,l:'p',count:3},{n:4,l:'d',count:5},{n:4,l:'f',count:7},
+  {n:5,l:'s',count:1},{n:5,l:'p',count:3},{n:5,l:'d',count:5},{n:5,l:'f',count:7},
+  {n:6,l:'s',count:1},{n:6,l:'p',count:3},{n:6,l:'d',count:5},
+  {n:7,l:'s',count:1},{n:7,l:'p',count:3}
+];
+const lValues = {s:0,p:1,d:2,f:3};
+
+// ==================== DOM HOOKS ====================
+const grid = document.getElementById('orbitalGrid');
+const arrowBox = document.getElementById('arrowBox');
+const answerPanel = document.getElementById('answerPanel');
+const toggleAnswerBtn = document.getElementById('toggleAnswerBtn');
+
+// ==================== BUILD GRID ====================
+function buildGrid(){
+  grid.innerHTML='';
+  orbitals.forEach(o=>{
+    const cell=document.createElement('div');
+    cell.className=`orbital ${o.l}-block`;
+    cell.id=`orb-${o.n}${o.l}`;
+    cell.dataset.n=o.n;
+    cell.dataset.l=o.l;
+    cell.dataset.max=o.count*2;
+    cell.dataset.count=0;
+    cell.textContent=`${o.n}${o.l}`;
+    cell.ondragover=e=>e.preventDefault();
+    cell.ondrop=dropElectron;
+    grid.appendChild(cell);
+  });
+}
+buildGrid();
+
+// ==================== DRAG / DROP ====================
+let currentArrow=null;
+function makeArrow(spin){
+  const a=document.createElement('div');
+  a.className=`arrow ${spin}`;
+  a.draggable=true;
+  a.textContent=spin==='up'?'↑':'↓';
+  a.ondragstart=()=>currentArrow=a;
+  a.ondragend=()=>currentArrow=null;
+  return a;
+}
+function refreshArrowBox(){
+  arrowBox.innerHTML='';
+  arrowBox.appendChild(makeArrow('up'));
+  arrowBox.appendChild(makeArrow('down'));
+}
+refreshArrowBox();
+
+function dropElectron(ev){
+  ev.preventDefault();
+  const cell=ev.currentTarget;
+  if(!currentArrow) return;
+  let count=Number(cell.dataset.count);
+  const max=Number(cell.dataset.max);
+  if(count>=max){
+    cell.classList.add('invalid');
+    setTimeout(()=>cell.classList.remove('invalid'),400);
+    return;
+  }
+  count++;
+  cell.dataset.count=count;
+  const el=currentArrow.cloneNode(true);
+  el.draggable=false;
+  el.style.position='absolute';
+  el.style.left=`${5+(count-1)*9}px`;
+  el.style.top='4px';
+  el.style.fontSize='12px';
+  cell.appendChild(el);
+  computeConfiguration();
+}
+
+// ==================== COMPUTE CONFIGURATION ====================
+function computeConfiguration(){
+  const configParts=[];
+  let total=0;
+  document.querySelectorAll('.orbital').forEach(cell=>{
+    const c=Number(cell.dataset.count);
+    if(c>0){
+      configParts.push(`${cell.dataset.n}${cell.dataset.l}${c>2?c:''}`);
+      total+=c;
+    }
+  });
+  const confString=configParts.join(' ');
+  const element=findElement(total);
+  const qNums=getQuantumNumbers();
+  answerPanel.innerHTML=`<pre>Electrons: ${total}
+Config: ${confString}
+Element: ${element.symbol} (${element.name})
+Quantum: n=${qNums.n}, l=${qNums.l}, mₗ=${qNums.ml}, mₛ=${qNums.ms}</pre>`;
+  return total;
+}
+
+// ==================== PERIODIC DATA (SIMPLIFIED) ====================
+const periodic=[
+  {Z:1,symbol:'H',name:'Hydrogen'},
+  {Z:2,symbol:'He',name:'Helium'},
+  {Z:3,symbol:'Li',name:'Lithium'},
+  {Z:4,symbol:'Be',name:'Beryllium'},
+  {Z:5,symbol:'B',name:'Boron'},
+  {Z:6,symbol:'C',name:'Carbon'},
+  {Z:7,symbol:'N',name:'Nitrogen'},
+  {Z:8,symbol:'O',name:'Oxygen'},
+  {Z:9,symbol:'F',name:'Fluorine'},
+  {Z:10,symbol:'Ne',name:'Neon'},
+  {Z:11,symbol:'Na',name:'Sodium'},
+  {Z:12,symbol:'Mg',name:'Magnesium'},
+  {Z:13,symbol:'Al',name:'Aluminum'},
+  {Z:14,symbol:'Si',name:'Silicon'},
+  {Z:15,symbol:'P',name:'Phosphorus'},
+  {Z:16,symbol:'S',name:'Sulfur'},
+  {Z:17,symbol:'Cl',name:'Chlorine'},
+  {Z:18,symbol:'Ar',name:'Argon'},
+  {Z:19,symbol:'K',name:'Potassium'},
+  {Z:20,symbol:'Ca',name:'Calcium'},
+  {Z:24,symbol:'Cr',name:'Chromium',exception:true},
+  {Z:29,symbol:'Cu',name:'Copper',exception:true}
+];
+function findElement(total){
+  let el=periodic.find(e=>e.Z===total);
+  if(!el) el={symbol:'?',name:'Unknown'};
+  return el;
+}
+
+// ==================== QUANTUM NUMBERS ====================
+function getQuantumNumbers(){
+  // Find last filled orbital
+  const filled=[...document.querySelectorAll('.orbital')].filter(c=>Number(c.dataset.count)>0);
+  if(filled.length===0) return {n:'—',l:'—',ml:'—',ms:'—'};
+  const last=filled[filled.length-1];
+  const n=Number(last.dataset.n);
+  const lChar=last.dataset.l;
+  const lNum=lValues[lChar];
+  const mVals=[];
+  for(let i=-lNum;i<=lNum;i++) mVals.push(i);
+  const ml=mVals[Math.floor(Math.random()*mVals.length)];
+  const ms=Math.random()>0.5?'+½':'−½';
+  return {n,l:lNum,ml,ms};
+}
+
+// ==================== ANSWER TOGGLE ====================
+toggleAnswerBtn.onclick=()=>{
+  const vis=answerPanel.style.display!=='none';
+  answerPanel.style.display=vis?'none':'block';
+  toggleAnswerBtn.textContent=vis?'Show Answers':'Hide Answers';
+};
+
+// ==================== UTILITIES ====================
+function resetAll(){
+  document.querySelectorAll('.orbital').forEach(c=>{
+    c.innerHTML=`${c.dataset.n}${c.dataset.l}`;
+    c.dataset.count=0;
+  });
+  refreshArrowBox();
+  answerPanel.style.display='none';
+  toggleAnswerBtn.textContent='Show Answers';
+}
+
+// Autoplace (for quick teacher tests)
+function autoPlace(num){
+  resetAll();
+  const order=[...document.querySelectorAll('.orbital')];
+  let left=num;
+  for(const cell of order){
+    const max=Number(cell.dataset.max);
+    const put=Math.min(left,max);
+    if(put>0){
+      cell.dataset.count=put;
+      for(let i=0;i<put;i++){
+        const el=makeArrow(i%2===0?'up':'down');
+        el.draggable=false;
+        el.style.position='absolute';
+        el.style.left=`${5+i*9}px`;
+        el.style.top='4px';
+        el.style.fontSize='12px';
+        cell.appendChild(el);
+      }
+    }
+    left-=put;
+    if(left<=0) break;
+  }
+  computeConfiguration();
+}
+</script>
+<script>
+// ==================== FIREBASE CONFIG ====================
+const fbCfg = {
+  apiKey: "AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
+  authDomain: "presentation-83d1f.firebaseapp.com",
+  databaseURL: "https://presentation-83d1f-default-rtdb.firebaseio.com",
+  projectId: "presentation-83d1f",
+  storageBucket: "presentation-83d1f.firebasestorage.app",
+  messagingSenderId: "132406143951",
+  appId: "1:132406143951:web:9695690023bd3f2aedc0ba"
+};
+let fb = { app:null, db:null, auth:null };
+let classKey=null, pin=null;
+let studentId = localStorage.getItem('ec_uid') || Math.random().toString(36).slice(2,9);
+localStorage.setItem('ec_uid', studentId);
+let joined=false, teacherMode=false;
+let currentScore=0, totalPoints=0;
+let classRef=null;
+
+// ==================== INIT ====================
+window.addEventListener('load', ()=>{
+  try{
+    fb.app=firebase.initializeApp(fbCfg);
+    fb.db=firebase.database();
+    fb.auth=firebase.auth();
+    fb.auth.signInAnonymously().catch(()=>console.log('Firebase anon failed'));
+  }catch(e){console.log('FB init err',e);}
+  document.getElementById('teacherPortalBtn').onclick=openTeacherDialog;
+  document.getElementById('loginBtn').onclick=teacherLogin;
+  document.getElementById('closeTeacherBtn').onclick=()=>$('#teacherDlg').close();
+  document.getElementById('sendTestBtn').onclick=broadcastPrompt;
+  document.getElementById('resetScoresBtn').onclick=resetScores;
+  document.getElementById('endClassBtn').onclick=endClass;
+});
+
+// ==================== TEACHER PORTAL ====================
+function openTeacherDialog(){
+  document.getElementById('teacherLoginView').style.display='block';
+  document.getElementById('teacherControlView').style.display='none';
+  $('#teacherDlg').showModal();
+}
+function $(sel){return document.querySelector(sel);}
+
+async function teacherLogin(){
+  classKey=$('#classInput').value.trim().toUpperCase();
+  pin=$('#pinInput').value.trim();
+  if(!classKey||!pin){alert('Enter class and PIN');return;}
+  teacherMode=true;
+  classRef=fb.db.ref(`electronConfig/${classKey}`);
+  await classRef.child('teacherPin').set(pin);
+  $('#classLabel').textContent=classKey;
+  $('#teacherLoginView').style.display='none';
+  $('#teacherControlView').style.display='block';
+  attachStudentListener();
+}
+
+function attachStudentListener(){
+  if(!classRef) return;
+  classRef.child('students').on('value',snap=>{
+    const data=snap.val()||{};
+    const out=[];
+    let sum=0, count=0;
+    for(const [id,s] of Object.entries(data)){
+      out.push(`${s.name||'anon'}: ${s.score||0}/${s.total||0}`);
+      if(s.total>0){sum+=s.score/s.total;count++;}
+    }
+    $('#studentList').innerHTML=out.join('<br>');
+  });
+}
+
+function broadcastPrompt(){
+  if(!teacherMode||!classRef) return;
+  alert('Prompt sent (students will refresh next question).');
+  // Placeholder for actual push of test list/ion config
+}
+function resetScores(){
+  if(!teacherMode||!classRef) return;
+  classRef.child('students').get().then(s=>{
+    const d=s.val()||{};
+    for(const id in d){ classRef.child(`students/${id}/score`).set(0); classRef.child(`students/${id}/total`).set(0); }
+  });
+}
+function endClass(){
+  if(!teacherMode||!classRef) return;
+  if(confirm('End class and clear roster?')) classRef.remove();
+  $('#teacherDlg').close();
+}
+
+// ==================== STUDENT SYNC ====================
+function pushScore(correct){
+  if(!classKey||teacherMode) return;
+  const name=localStorage.getItem('ec_name')||'Student';
+  const ref=fb.db.ref(`electronConfig/${classKey}/students/${studentId}`);
+  currentScore += correct?1:0;
+  totalPoints++;
+  ref.update({name,score:currentScore,total:totalPoints});
+}
+
+// Example hook: call pushScore(true/false) when submission checked
+// For now demonstration only
+window.pushScore=pushScore;
+</script>
+</body>
+</html>
