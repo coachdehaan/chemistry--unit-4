@@ -456,5 +456,111 @@ toggleBtn.addEventListener('click', ()=>{
 syncReadouts();
 syncQuantumLast();
 </script>
+<!-- ===== Firebase Teacher Portal Add-on (non-destructive) ===== -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script>
+const fbCfg={
+ apiKey:"AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
+ authDomain:"presentation-83d1f.firebaseapp.com",
+ databaseURL:"https://presentation-83d1f-default-rtdb.firebaseio.com",
+ projectId:"presentation-83d1f",
+ storageBucket:"presentation-83d1f.firebasestorage.app",
+ messagingSenderId:"132406143951",
+ appId:"1:132406143951:web:9695690023bd3f2aedc0ba"
+};
+let fb={app:null,db:null,auth:null},classKey=null,pin=null,teacherMode=false;
+let studentId=localStorage.getItem('ec_uid')||Math.random().toString(36).slice(2,9);
+localStorage.setItem('ec_uid',studentId);
+let studentName=localStorage.getItem('ec_name')||"Student";
+let classRef=null,currentScore=0,totalPoints=0;
+
+function initFirebase(){
+ try{
+  fb.app=firebase.initializeApp(fbCfg);
+  fb.db=firebase.database();
+  fb.auth=firebase.auth();
+  fb.auth.signInAnonymously();
+ }catch(e){console.log("Firebase init error",e);}
+}
+initFirebase();
+
+function pushScore(correct){
+ if(!classKey)return;
+ const ref=fb.db.ref(`electronConfig/${classKey}/students/${studentId}`);
+ if(correct)currentScore++;
+ totalPoints++;
+ ref.update({name:studentName,score:currentScore,total:totalPoints});
+}
+
+/* ===== Floating Teacher Button + Modal ===== */
+const tpBtn=document.createElement('div');
+tpBtn.style.cssText='position:fixed;bottom:20px;right:20px;width:52px;height:52px;border-radius:50%;background:#3a82ff;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;z-index:9999;box-shadow:0 4px 10px rgba(0,0,0,.4)';
+tpBtn.textContent='T';
+tpBtn.title='Teacher Portal';
+document.body.appendChild(tpBtn);
+
+const dlg=document.createElement('dialog');
+dlg.innerHTML=`
+ <form method="dialog" style="border:none;padding:20px;background:#0b111b;color:#fff;border-radius:10px;min-width:300px">
+  <h3>Teacher Portal</h3>
+  <div id="tpLogin">
+    <label>Class <input id="tpClass" style="width:100%;margin-top:4px"></label><br>
+    <label>PIN <input id="tpPin" type="password" style="width:100%;margin-top:4px"></label><br>
+    <button id="tpEnter" type="button" class="btn primary" style="margin-top:8px">Enter</button>
+  </div>
+  <div id="tpPanel" style="display:none;margin-top:10px">
+    <div id="tpRoster" style="font-size:14px;max-height:180px;overflow:auto;border:1px solid #2b3a55;padding:4px"></div>
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+      <button id="tpStart" type="button" class="btn primary">Start Test</button>
+      <button id="tpReset" type="button" class="btn warn">Reset Scores</button>
+      <button id="tpClose" type="button" class="btn">Close Class</button>
+    </div>
+  </div>
+ </form>`;
+document.body.appendChild(dlg);
+
+tpBtn.onclick=()=>dlg.showModal();
+dlg.addEventListener('close',()=>dlg.close());
+
+$('#tpEnter').onclick=async()=>{
+ classKey=$('#tpClass').value.trim().toUpperCase();
+ pin=$('#tpPin').value.trim();
+ if(!classKey||!pin){alert('Enter class and PIN');return;}
+ classRef=fb.db.ref(`electronConfig/${classKey}`);
+ await classRef.child('teacherPin').set(pin);
+ teacherMode=true;
+ $('#tpLogin').style.display='none';
+ $('#tpPanel').style.display='block';
+ attachRoster();
+};
+function $(s){return document.querySelector(s);}
+function attachRoster(){
+ if(!classRef)return;
+ classRef.child('students').on('value',snap=>{
+   const data=snap.val()||{};
+   let html='',right=0,total=0,count=0;
+   for(const [id,s] of Object.entries(data)){
+     html+=`${s.name||'—'}: ${s.score||0}/${s.total||0}<br>`;
+     if(s.total>0){right+=s.score/ s.total;count++;}
+   }
+   $('#tpRoster').innerHTML=html||'No students yet.';
+ });
+}
+$('#tpStart').onclick=()=>alert('Test broadcast placeholder');
+$('#tpReset').onclick=()=>{
+ if(classRef)classRef.child('students').get().then(s=>{
+   const d=s.val()||{};
+   for(const id in d){
+     classRef.child(`students/${id}`).update({score:0,total:0});
+   }
+ });
+};
+$('#tpClose').onclick=()=>{
+ if(classRef)classRef.remove();
+ dlg.close();
+};
+</script>
 </body>
 </html>
