@@ -464,53 +464,77 @@ sideWrap.innerHTML =
   `<h4 style="margin:2px 0;text-align:center;">Periodic Table</h4><div id="ptableSide" style="display:grid;grid-template-columns:repeat(18,1fr);gap:1px;"></div>`;
 document.querySelector("#answerBox").appendChild(sideWrap);
 
-/* Build the side periodic table */
-function buildSideTable() {
-  const tbl = document.getElementById("ptableSide");
-  tbl.innerHTML = "";
-  PT_ROWS.forEach(r => {
-    r.forEach(sym => {
-      const div = document.createElement("div");
-      div.className = "ptcell";
-      if (!sym) { div.style.visibility = "hidden"; tbl.appendChild(div); return; }
-      let block = "s";
-      if (["He","Ne","Ar","Kr","Xe","Rn","Og","F","Cl","Br","I","At","O","S","Se","Te"].includes(sym)) block = "p";
-      if (["Sc","Ti","V","Cr","Mn","Fe","Co","Ni","Cu","Zn","Y","Zr","Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd","Hf","Ta","W","Re","Os","Ir","Pt","Au","Hg","Rf","Db","Sg","Bh","Hs","Mt","Ds","Rg","Cn"].includes(sym)) block = "d";
-      if (["La","Ce","Pr","Nd","Pm","Sm","Eu","Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu","Ac","Th","Pa","U","Np","Pu","Am","Cm","Bk","Cf","Es","Fm","Md","No","Lr"].includes(sym)) block = "f";
-      div.classList.add(block);
-      div.textContent = sym;
-      tbl.appendChild(div);
+/* ======== RIGHT-SIDE PERIODIC TABLE WITH LIVE HIGHLIGHT ======== */
+function initSideTable() {
+  const ansBox = document.getElementById("answerBox");
+  ansBox.style.position = "relative";
+
+  // create wrapper
+  const wrap = document.createElement("div");
+  wrap.id = "sideTableWrap";
+  wrap.style.cssText = `
+    position:absolute;
+    right:8px;
+    top:8px;
+    width:260px;
+    background:#fff;
+    border:1px solid #ccc;
+    border-radius:8px;
+    padding:6px;
+    font-size:10px;
+    box-shadow:0 2px 5px rgba(0,0,0,.1);
+    display:none;
+  `;
+  wrap.innerHTML = `
+    <h4 style="margin:2px 0;text-align:center;">Periodic Table</h4>
+    <div id="ptableSide" style="display:grid;grid-template-columns:repeat(18,1fr);gap:1px;"></div>
+  `;
+  ansBox.appendChild(wrap);
+
+  // build the grid
+  const tbl = wrap.querySelector("#ptableSide");
+  PT_ROWS.forEach(row => {
+    row.forEach(sym => {
+      const c = document.createElement("div");
+      c.className = "ptcell";
+      if (!sym) { c.style.visibility = "hidden"; tbl.appendChild(c); return; }
+      let block="s";
+      if (["He","Ne","Ar","Kr","Xe","Rn","Og","F","Cl","Br","I","At","O","S","Se","Te"].includes(sym)) block="p";
+      if (["Sc","Ti","V","Cr","Mn","Fe","Co","Ni","Cu","Zn","Y","Zr","Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd","Hf","Ta","W","Re","Os","Ir","Pt","Au","Hg","Rf","Db","Sg","Bh","Hs","Mt","Ds","Rg","Cn"].includes(sym)) block="d";
+      if (["La","Ce","Pr","Nd","Pm","Sm","Eu","Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu","Ac","Th","Pa","U","Np","Pu","Am","Cm","Bk","Cf","Es","Fm","Md","No","Lr"].includes(sym)) block="f";
+      c.classList.add(block);
+      c.textContent = sym;
+      tbl.appendChild(c);
     });
   });
 }
-buildSideTable();
 
-/* Hook it into “Show Answers” toggle */
-const showBtn = document.getElementById("showAnsBtn");
-showBtn.addEventListener("click", () => {
+function highlightSide(sym) {
+  document.querySelectorAll("#ptableSide .ptcell").forEach(c => {
+    c.style.outline = (c.textContent.trim() === sym) ? "2px solid red" : "none";
+  });
+}
+
+// hook to Show Answers button
+document.getElementById("showAnsBtn").addEventListener("click", () => {
   const side = document.getElementById("sideTableWrap");
   const ansBox = document.getElementById("answerBox");
   if (ansBox.classList.contains("show")) {
     side.style.display = "block";
-    highlightSideElement();
+    highlightSide(elementSymbol);
   } else side.style.display = "none";
 });
 
-/* Highlight on electron count updates */
-function highlightSideElement() {
-  const sym = elementSymbol;
-  const cells = document.querySelectorAll("#ptableSide .ptcell");
-  cells.forEach(c => {
-    c.style.outline = (c.textContent.trim() === sym) ? "2px solid red" : "none";
-  });
-}
-function updateElectronCountWithHighlight() {
-  updateElectronCount();
-  if ($("#answerBox").classList.contains("show")) highlightSideElement();
-}
-$$("#orbitalGrid .orbSlot").forEach(slot => {
-  slot.ondrop = e => { dropElectron(e); updateElectronCountWithHighlight(); };
-});
+// hook into count updates
+const oldUpdate = updateElectronCount;
+updateElectronCount = function() {
+  oldUpdate();
+  if (document.getElementById("sideTableWrap").style.display === "block")
+    highlightSide(elementSymbol);
+};
+
+// build side table on load
+window.addEventListener("load", initSideTable);
 </script>
 </body>
 </html>
