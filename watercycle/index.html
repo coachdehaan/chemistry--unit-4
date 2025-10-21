@@ -3,17 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Interactive Water Cycle Prototype</title>
+<title>Interactive Water Cycle – Exploration Map</title>
 <style>
   html,body{margin:0;padding:0;height:100%;background:#f0f4f8;font-family:system-ui,Arial,sans-serif}
   .wrap{position:relative;width:100%;max-width:1600px;margin:0 auto;overflow:hidden}
   canvas{width:100%;height:auto;display:block}
   .tooltip{
     position:absolute;pointer-events:none;
-    background:rgba(0,0,0,.7);color:#fff;padding:6px 10px;
-    border-radius:8px;font-size:14px;white-space:nowrap;
-    transform:translate(-50%,-120%);opacity:0;transition:opacity .15s ease;
+    background:rgba(0,0,0,.78);color:#fff;padding:8px 12px;
+    border-radius:10px;font-size:14px;max-width:240px;
+    transform:translate(-50%,-120%);
+    opacity:0;transition:opacity .15s ease;
   }
+  .tooltip b{display:block;margin-bottom:4px;font-size:15px;color:#9cf}
 </style>
 </head>
 <body>
@@ -23,31 +25,64 @@
 </div>
 
 <script>
-// ----- Setup -----
-const imgSrc = "waterpicClean.png";  // your uploaded image file
+// === Canvas + Image setup ===
+const imgSrc = "watercycle_clean.png";   // confirm file name in repo
 const canvas = document.getElementById("cycle");
 const ctx = canvas.getContext("2d");
 const tip = document.getElementById("tip");
 
+// === Hover regions (normalized coordinates) ===
 const zones = [
-  {name:"Atmosphere",        x1:0.02, y1:0.00, x2:0.55, y2:0.25, color:"rgba(135,206,235,0.25)"},
-  {name:"Cryosphere",        x1:0.55, y1:0.05, x2:0.98, y2:0.28, color:"rgba(173,216,230,0.25)"},
-  {name:"Surface Water",     x1:0.15, y1:0.25, x2:0.75, y2:0.58, color:"rgba(30,144,255,0.25)"},
-  {name:"Human Systems",     x1:0.05, y1:0.50, x2:0.65, y2:0.80, color:"rgba(255,165,0,0.25)"},
-  {name:"Groundwater",       x1:0.30, y1:0.70, x2:0.98, y2:1.00, color:"rgba(102,205,170,0.25)"}
+  // --- Atmosphere & Flux ---
+  {name:"Precipitation over land", desc:"Water droplets condense and fall to Earth as rain or snow.", x1:0.40,y1:0.12,x2:0.52,y2:0.23,color:"rgba(173,216,230,0.25)"},
+  {name:"Transport of moisture", desc:"Winds move water vapor from oceans toward landmasses.", x1:0.10,y1:0.05,x2:0.32,y2:0.15,color:"rgba(173,216,230,0.25)"},
+  {name:"Evapotranspiration", desc:"Combined evaporation from soil and plant transpiration returns moisture to the air.", x1:0.63,y1:0.32,x2:0.72,y2:0.43,color:"rgba(173,216,230,0.25)"},
+
+  // --- Cryosphere ---
+  {name:"Ice sheets & glaciers", desc:"Long-term frozen water stores in polar and alpine regions.", x1:0.77,y1:0.17,x2:0.90,y2:0.27,color:"rgba(173,216,230,0.25)"},
+  {name:"Snowpack", desc:"Seasonal snow layers that release meltwater in spring.", x1:0.87,y1:0.20,x2:0.97,y2:0.29,color:"rgba(173,216,230,0.25)"},
+  {name:"Snowmelt", desc:"Melted snow feeding surface streams and groundwater.", x1:0.73,y1:0.27,x2:0.85,y2:0.36,color:"rgba(173,216,230,0.25)"},
+
+  // --- Surface Water ---
+  {name:"Rivers", desc:"Channels carrying water from highlands toward lakes or oceans.", x1:0.46,y1:0.45,x2:0.62,y2:0.55,color:"rgba(30,144,255,0.25)"},
+  {name:"Lakes (fresh)", desc:"Inland bodies of standing freshwater.", x1:0.36,y1:0.34,x2:0.45,y2:0.42,color:"rgba(30,144,255,0.25)"},
+  {name:"Wetlands", desc:"Transitional zones saturated with water; rich ecosystems filtering water.", x1:0.18,y1:0.42,x2:0.30,y2:0.50,color:"rgba(30,144,255,0.25)"},
+  {name:"Reservoirs", desc:"Artificial lakes formed by dams for storage and control.", x1:0.80,y1:0.40,x2:0.89,y2:0.50,color:"rgba(30,144,255,0.25)"},
+
+  // --- Human Systems ---
+  {name:"Agricultural water use", desc:"Irrigation and livestock watering withdraw surface and groundwater.", x1:0.78,y1:0.55,x2:0.92,y2:0.67,color:"rgba(255,165,0,0.25)"},
+  {name:"Industrial water use", desc:"Factories use water for cooling, processing, and cleaning.", x1:0.47,y1:0.59,x2:0.56,y2:0.69,color:"rgba(255,165,0,0.25)"},
+  {name:"Municipal water use", desc:"Urban systems supplying homes and cities.", x1:0.35,y1:0.58,x2:0.45,y2:0.67,color:"rgba(255,165,0,0.25)"},
+  {name:"Domestic water use", desc:"Household consumption such as drinking and cleaning.", x1:0.26,y1:0.46,x2:0.34,y2:0.54,color:"rgba(255,165,0,0.25)"},
+  {name:"Grazing water use", desc:"Livestock watering along grasslands.", x1:0.63,y1:0.53,x2:0.73,y2:0.62,color:"rgba(255,165,0,0.25)"},
+
+  // --- Groundwater ---
+  {name:"Groundwater recharge", desc:"Infiltrating water replenishes aquifers.", x1:0.89,y1:0.58,x2:0.97,y2:0.70,color:"rgba(102,205,170,0.25)"},
+  {name:"Groundwater flow", desc:"Subsurface water movement through porous rock.", x1:0.55,y1:0.75,x2:0.96,y2:0.95,color:"rgba(102,205,170,0.25)"},
+  {name:"Groundwater discharge", desc:"Subsurface water emerging into oceans or rivers.", x1:0.15,y1:0.86,x2:0.28,y2:0.95,color:"rgba(102,205,170,0.25)"},
+
+  // --- Oceans ---
+  {name:"Ocean evaporation", desc:"Surface water turning into vapor, fueling the atmospheric cycle.", x1:0.08,y1:0.70,x2:0.22,y2:0.80,color:"rgba(70,130,180,0.25)"},
+  {name:"Ocean circulation", desc:"Currents redistribute heat and dissolved materials globally.", x1:0.10,y1:0.80,x2:0.28,y2:0.90,color:"rgba(70,130,180,0.25)"},
+  {name:"Mixed zone", desc:"Upper layer where waves and currents mix ocean water.", x1:0.05,y1:0.82,x2:0.18,y2:0.88,color:"rgba(70,130,180,0.25)"},
+  {name:"Deep water zone", desc:"Cold dense water layer beneath the mixed zone.", x1:0.03,y1:0.89,x2:0.16,y2:0.98,color:"rgba(70,130,180,0.25)"}
 ];
 
+// === Image load & resize ===
 let img = new Image();
 img.src = imgSrc;
 img.onload = ()=>resize();
-
-function resize(){
-  canvas.width  = canvas.clientWidth;
-  canvas.height = canvas.clientWidth * (img.height/img.width);
-  draw();
-}
 window.addEventListener("resize", resize);
 
+function resize(){
+  const ratio = img.height / img.width;
+  canvas.width  = canvas.clientWidth;
+  canvas.height = canvas.clientWidth * ratio;
+  draw();
+}
+
+// === Draw base + highlight ===
+let lastHover = null;
 function draw(highlight){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(img,0,0,canvas.width,canvas.height);
@@ -59,23 +94,35 @@ function draw(highlight){
   }
 }
 
-// ----- Interaction -----
+// === Interaction ===
 canvas.addEventListener("mousemove", e=>{
   const r = canvas.getBoundingClientRect();
   const x = (e.clientX - r.left)/r.width;
   const y = (e.clientY - r.top)/r.height;
-  let hover = zones.find(z=>x>z.x1 && x<z.x2 && y>z.y1 && y<z.y2);
-  draw(hover);
+  const hover = zones.find(z=>x>z.x1 && x<z.x2 && y>z.y1 && y<z.y2);
+
+  if(hover !== lastHover){
+    draw(hover);
+    lastHover = hover;
+  }
+
   if(hover){
-    tip.textContent = hover.name;
-    tip.style.left = e.clientX + "px";
-    tip.style.top  = e.clientY + "px";
+    tip.innerHTML = `<b>${hover.name}</b>${hover.desc}`;
+    const pad = 15;
+    let left = e.clientX, top = e.clientY - pad;
+    // keep tooltip within window
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    if(left + tw/2 > window.innerWidth) left = window.innerWidth - tw/2 - pad;
+    if(left - tw/2 < 0) left = tw/2 + pad;
+    if(top - th < 0) top = e.clientY + pad;
+    tip.style.left = left + "px";
+    tip.style.top  = top  + "px";
     tip.style.opacity = 1;
-  }else{
+  } else {
     tip.style.opacity = 0;
   }
 });
-canvas.addEventListener("mouseleave", ()=>{draw(); tip.style.opacity=0;});
+canvas.addEventListener("mouseleave", ()=>{draw();tip.style.opacity=0;lastHover=null;});
 </script>
 </body>
 </html>
