@@ -456,156 +456,158 @@ toggleBtn.addEventListener('click', ()=>{
 syncReadouts();
 syncQuantumLast();
 </script>
-<!-- ===== Firebase Teacher Portal Add-on (non-destructive) ===== -->
+<!-- === Firebase Teacher Portal (non-destructive, v2) === -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script>
-const fbCfg={
- apiKey:"AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
- authDomain:"presentation-83d1f.firebaseapp.com",
- databaseURL:"https://presentation-83d1f-default-rtdb.firebaseio.com",
- projectId:"presentation-83d1f",
- storageBucket:"presentation-83d1f.firebasestorage.app",
- messagingSenderId:"132406143951",
- appId:"1:132406143951:web:9695690023bd3f2aedc0ba"
-};
-let fb={app:null,db:null,auth:null},classKey=null,pin=null,teacherMode=false;
-let studentId=localStorage.getItem('ec_uid')||Math.random().toString(36).slice(2,9);
-localStorage.setItem('ec_uid',studentId);
-let studentName=localStorage.getItem('ec_name')||"Student";
-let classRef=null,currentScore=0,totalPoints=0;
+(function(){
+  // --- Small helpers ---
+  function $(sel){ return document.querySelector(sel); }
 
-function initFirebase(){
- try{
-  fb.app=firebase.initializeApp(fbCfg);
-  fb.db=firebase.database();
-  fb.auth=firebase.auth();
-  fb.auth.signInAnonymously();
- }catch(e){console.log("Firebase init error",e);}
-}
-initFirebase();
+  // --- Floating Teacher button (shows even if Firebase fails) ---
+  var tpBtn = document.createElement('div');
+  tpBtn.title = 'Teacher Portal';
+  tpBtn.textContent = 'T';
+  tpBtn.setAttribute('id','tpBtnTeacher');
+  tpBtn.style.position='fixed';
+  tpBtn.style.bottom='20px';
+  tpBtn.style.right='20px';
+  tpBtn.style.width='52px';
+  tpBtn.style.height='52px';
+  tpBtn.style.borderRadius='50%';
+  tpBtn.style.background='#1e1e1e';
+  tpBtn.style.color='#fff';
+  tpBtn.style.display='flex';
+  tpBtn.style.alignItems='center';
+  tpBtn.style.justifyContent='center';
+  tpBtn.style.fontWeight='700';
+  tpBtn.style.cursor='pointer';
+  tpBtn.style.zIndex='9999';
+  tpBtn.style.boxShadow='0 3px 8px rgba(0,0,0,.4)';
+  document.body.appendChild(tpBtn);
 
-function pushScore(correct){
- if(!classKey)return;
- const ref=fb.db.ref(`electronConfig/${classKey}/students/${studentId}`);
- if(correct)currentScore++;
- totalPoints++;
- ref.update({name:studentName,score:currentScore,total:totalPoints});
-}
-<!-- === Firebase Teacher Portal (non-destructive) === -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script>
-(() => {
- const cfg={
-  apiKey:"AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
-  authDomain:"presentation-83d1f.firebaseapp.com",
-  databaseURL:"https://presentation-83d1f-default-rtdb.firebaseio.com",
-  projectId:"presentation-83d1f",
-  storageBucket:"presentation-83d1f.firebasestorage.app",
-  messagingSenderId:"132406143951",
-  appId:"1:132406143951:web:9695690023bd3f2aedc0ba"
- };
- let app,db,auth,classKey=null,pin=null,classRef=null;
- let teacherMode=false;
- let studentId=localStorage.getItem('ec_uid')||Math.random().toString(36).slice(2,9);
- localStorage.setItem('ec_uid',studentId);
- let studentName=localStorage.getItem('ec_name')||"Student";
+  // --- Dialog shell (no backticks to avoid editor confusion) ---
+  var dlg = document.createElement('dialog');
+  dlg.innerHTML =
+    '<form method="dialog" style="padding:18px;border:none;background:#0b111b;color:#fff;border-radius:10px;min-width:320px">' +
+      '<div id="tpLogin">' +
+        '<h3 style="margin:0 0 8px 0">Teacher Portal</h3>' +
+        '<label>Class<br><input id="tpClass" style="width:100%;margin-bottom:6px"></label>' +
+        '<label>PIN<br><input id="tpPin" type="password" maxlength="4" inputmode="numeric" style="width:100%;margin-bottom:6px"></label>' +
+        '<button id="tpEnter" type="button" style="margin-top:6px">Enter</button>' +
+      '</div>' +
+      '<div id="tpPanel" style="display:none">' +
+        '<h3 style="margin:10px 0 8px 0">Controls</h3>' +
+        '<div id="tpRoster" style="font-size:13px;max-height:180px;overflow:auto;border:1px solid #2b3a55;padding:6px;margin-bottom:8px"></div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+          '<button id="tpStart" type="button">Start Test</button>' +
+          '<button id="tpReset" type="button">Reset Scores</button>' +
+          '<button id="tpEnd" type="button">End Class</button>' +
+          '<button id="tpClose" type="button" style="margin-left:auto;background:#fff;color:#111;border:1px solid #333;border-radius:8px;padding:.25rem .6rem">Close</button>' +
+        '</div>' +
+      '</div>' +
+    '</form>';
+  document.body.appendChild(dlg);
 
- function initFirebase(){
-   if(app) return;
-   app=firebase.initializeApp(cfg);
-   db=firebase.database();
-   auth=firebase.auth();
-   return auth.signInAnonymously().catch(e=>console.log(e));
- }
+  // Open/close
+  tpBtn.onclick = function(){ try{ dlg.showModal(); }catch(e){ /* older browsers */ } };
+  dlg.addEventListener('close', function(){ try{ dlg.close(); }catch(e){} });
 
- // helper
- const $=s=>document.querySelector(s);
+  // --- Firebase state (scoped) ---
+  var fbApp=null, db=null, auth=null, classKey=null, pin=null, classRef=null, teacherMode=false;
+  var studentId = localStorage.getItem('ec_uid') || Math.random().toString(36).slice(2,9);
+  localStorage.setItem('ec_uid', studentId);
+  var studentName = localStorage.getItem('ec_name') || 'Student';
 
- // floating button
- const btn=document.createElement('div');
- btn.textContent='T';
- Object.assign(btn.style,{
-   position:'fixed',bottom:'20px',right:'20px',width:'52px',height:'52px',
-   borderRadius:'50%',background:'#1e1e1e',color:'#fff',display:'flex',
-   alignItems:'center',justifyContent:'center',fontWeight:'700',cursor:'pointer',
-   zIndex:'9999',boxShadow:'0 3px 8px rgba(0,0,0,.4)'
- });
- btn.title='Teacher Portal';
- document.body.appendChild(btn);
+  var cfg = {
+    apiKey: "AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
+    authDomain: "presentation-83d1f.firebaseapp.com",
+    databaseURL: "https://presentation-83d1f-default-rtdb.firebaseio.com",
+    projectId: "presentation-83d1f",
+    storageBucket: "presentation-83d1f.firebasestorage.app",
+    messagingSenderId: "132406143951",
+    appId: "1:132406143951:web:9695690023bd3f2aedc0ba"
+  };
 
- // dialog
- const dlg=document.createElement('dialog');
- dlg.innerHTML=`
-  <form method="dialog" style="padding:18px;border:none;background:#0b111b;color:#fff;border-radius:10px">
-   <div id="tpLogin">
-     <h3>Teacher Portal</h3>
-     <label>Class<br><input id="tpClass" style="width:100%;margin-bottom:6px"></label>
-     <label>PIN<br><input id="tpPin" type="password" style="width:100%;margin-bottom:6px"></label>
-     <button id="tpEnter" type="button">Enter</button>
-   </div>
-   <div id="tpPanel" style="display:none">
-     <h3>Controls</h3>
-     <div id="tpRoster" style="font-size:13px;max-height:160px;overflow:auto;border:1px solid #2b3a55;padding:4px;margin-bottom:8px"></div>
-     <button id="tpStart" type="button">Start Test</button>
-     <button id="tpReset" type="button">Reset</button>
-     <button id="tpClose" type="button">End</button>
-   </div>
-  </form>`;
- document.body.appendChild(dlg);
+  function initFirebaseIfNeeded(cb){
+    if (fbApp && db && auth){ cb(); return; }
+    try{
+      fbApp = firebase.initializeApp(cfg);
+      db    = firebase.database();
+      auth  = firebase.auth();
+      auth.signInAnonymously().then(cb).catch(function(e){ console.log('Anon auth failed', e); cb(); });
+    }catch(e){
+      console.log('Firebase init error', e);
+      cb();
+    }
+  }
 
- // open/close
- btn.onclick=()=>{dlg.showModal();};
- dlg.addEventListener('close',()=>dlg.close());
+  // Login handler (awaits firebase before switching views)
+  $('#tpEnter').onclick = function(){
+    initFirebaseIfNeeded(function(){
+      classKey = ($('#tpClass').value || '').trim().toUpperCase();
+      pin      = ($('#tpPin').value || '').trim();
+      if(!classKey || !pin){ alert('Enter class and 4-digit PIN'); return; }
+      try{
+        classRef = db.ref('electronConfig/' + classKey);
+        classRef.child('teacherPin').set(pin).then(function(){
+          teacherMode = true;
+          $('#tpLogin').style.display = 'none';
+          $('#tpPanel').style.display = 'block';
+          attachRoster();
+        });
+      }catch(e){ console.log(e); }
+    });
+  };
 
- // login handler
- $('#tpEnter').onclick=async()=>{
-   await initFirebase();
-   classKey=$('#tpClass').value.trim().toUpperCase();
-   pin=$('#tpPin').value.trim();
-   if(!classKey||!pin){alert('Enter class and PIN');return;}
-   try{
-     classRef=db.ref(`electronConfig/${classKey}`);
-     await classRef.child('teacherPin').set(pin);
-     teacherMode=true;
-     $('#tpLogin').style.display='none';
-     $('#tpPanel').style.display='block';
-     attachRoster();
-   }catch(e){console.log(e);}
- };
+  function attachRoster(){
+    if(!classRef) return;
+    classRef.child('students').on('value', function(snap){
+      var data = snap.val() || {};
+      var html = '';
+      for (var id in data){
+        if(!data.hasOwnProperty(id)) continue;
+        var st = data[id] || {};
+        var sc = (st.score||0) + '/' + (st.total||0);
+        html += (st.name||'—') + ': ' + sc + '<br>';
+      }
+      $('#tpRoster').innerHTML = html || 'No students yet.';
+    });
+  }
 
- function attachRoster(){
-   if(!classRef)return;
-   classRef.child('students').on('value',snap=>{
-     const data=snap.val()||{};
-     let html='';
-     for(const [id,s] of Object.entries(data)){
-       html+=`${s.name||'—'}: ${s.score||0}/${s.total||0}<br>`;
-     }
-     $('#tpRoster').innerHTML=html||'No students yet.';
-   });
- }
+  $('#tpStart').onclick = function(){ alert('Test broadcast placeholder'); };
+  $('#tpReset').onclick = function(){
+    if(!classRef) return;
+    classRef.child('students').get().then(function(snap){
+      var d = snap.val() || {};
+      for (var id in d){
+        if(!d.hasOwnProperty(id)) continue;
+        classRef.child('students/' + id).update({score:0,total:0});
+      }
+    });
+  };
+  $('#tpEnd').onclick = function(){
+    if(!classRef) return;
+    if(confirm('End class and clear roster?')){
+      classRef.remove();
+      try{ dlg.close(); }catch(e){}
+    }
+  };
+  $('#tpClose').onclick = function(){ try{ dlg.close(); }catch(e){} };
 
- $('#tpStart').onclick=()=>alert('Broadcast placeholder');
- $('#tpReset').onclick=()=>{ if(classRef) classRef.child('students').get().then(s=>{
-   const d=s.val()||{};
-   for(const id in d){ classRef.child(\`students/\${id}\`).update({score:0,total:0}); }
- });};
- $('#tpClose').onclick=()=>{ if(classRef) classRef.remove(); dlg.close(); };
-
- // scoring hook
- window.pushScore=function(correct){
-   if(!classKey)return;
-   const ref=db.ref(\`electronConfig/\${classKey}/students/\${studentId}\`);
-   const s=correct?1:0;
-   ref.transaction(v=>{
-     v=v||{name:studentName,score:0,total:0};
-     v.total+=1; v.score+=s; return v;
-   });
- };
+  // Public scoring hook your app can call: pushScore(true/false)
+  window.pushScore = function(correct){
+    if(!classKey || !db) return;
+    var ref = db.ref('electronConfig/' + classKey + '/students/' + studentId);
+    var delta = correct ? 1 : 0;
+    ref.transaction(function(v){
+      v = v || {name: studentName, score: 0, total: 0};
+      v.total = (v.total||0) + 1;
+      v.score = (v.score||0) + delta;
+      return v;
+    });
+  };
 })();
 </script>
 
