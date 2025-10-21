@@ -1,10 +1,11 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Electron Configuration — Class/Test Mode</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Electron Configuration Trainer</title>
 
+  <!-- === Styles === -->
   <style>
     :root {
       --bg:#0f1216; --fg:#e6eaf0; --mut:#a8b0bd;
@@ -14,52 +15,35 @@
       --warn:#ef4444; --ok:#22c55e;
     }
     * { box-sizing:border-box; }
-    html,body {
+    html, body {
       margin:0;
       background:var(--bg);
       color:var(--fg);
-      font-family:system-ui,Arial,sans-serif;
+      font-family:system-ui, Arial, sans-serif;
     }
     .wrap { max-width:1400px; margin:0 auto; padding:16px; }
     h1 { font-size:18px; margin:0 0 10px; }
 
-    /* Buttons and badges */
+    /* Buttons */
     .btn {
-      background:#142030;
-      color:#e7eefc;
-      border:1px solid #2b3a55;
-      border-radius:8px;
-      padding:4px 10px;
-      cursor:pointer;
+      background:#142030; color:#e7eefc;
+      border:1px solid #2b3a55; border-radius:8px;
+      padding:4px 10px; cursor:pointer;
     }
     .btn:hover { background:#1d2a40; }
     .btn.warn { background:#3a1612; border-color:#702d23; color:#ffbbb0; }
     .btn.primary { background:#003366; border-color:#2266cc; color:#dff1ff; }
-    .badge {
-      border:1px solid #2b3a55;
-      border-radius:10px;
-      padding:4px 8px;
-      background:#0f1622;
-      color:#dce6f4;
-    }
-    .hint { font-size:12px; color:var(--mut); }
     .hidden { display:none; }
 
-    /* Panels / layout */
-    .panel {
-      border:1px solid var(--edge);
-      border-radius:12px;
-      background:var(--panel);
-    }
+    /* Panels */
+    .panel { border:1px solid var(--edge); border-radius:12px; background:var(--panel); }
     .panel .inner { padding:12px; }
     .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 
     /* Orbital blocks */
     .blocks {
-      display:grid;
-      grid-template-columns:auto 1fr 1fr 1fr 1fr;
-      gap:14px;
-      align-items:start;
+      display:grid; grid-template-columns:auto 1fr 1fr 1fr 1fr;
+      gap:14px; align-items:start;
     }
     .blabel { display:flex; align-items:center; gap:8px; }
     .bl {
@@ -72,14 +56,10 @@
     .dbg { background:var(--d); }
     .fbg { background:var(--f); }
     .block { display:grid; gap:8px; }
-    .rowline { display:flex; align-items:center; gap:10px; }
-    .rlabel { width:28px; text-align:right; opacity:.85; }
     .orbitals { display:flex; gap:8px; }
     .orbital {
-      width:42px; height:34px;
-      border:2px solid #5a6b86;
-      border-radius:8px;
-      background:var(--orb);
+      width:42px; height:34px; border:2px solid #5a6b86;
+      border-radius:8px; background:var(--orb);
       display:flex; align-items:center; justify-content:center;
     }
     .orbital.full { border-color:var(--ok); }
@@ -91,12 +71,8 @@
       display:flex; align-items:center; justify-content:center;
       font-size:14px; user-select:none;
     }
-    .up {
-      background:#1f6d3a; border:1px solid #3dd17b; color:#c6f7da;
-    }
-    .down {
-      background:#7a2c21; border:1px solid #ff9c8a; color:#ffeae7;
-    }
+    .up { background:#1f6d3a; border:1px solid #3dd17b; color:#c6f7da; }
+    .down { background:#7a2c21; border:1px solid #ff9c8a; color:#ffeae7; }
 
     /* Floating tray */
     .workspace { position:relative; }
@@ -118,248 +94,63 @@
       }
     }
 
-    /* Periodic tables */
-    .pt-grid { display:grid; grid-template-columns:repeat(18,32px); gap:4px; align-items:start; }
+    /* Periodic table */
+    .pt-grid {
+      display:grid; grid-template-columns:repeat(18,32px);
+      gap:4px; align-items:start; margin-top:6px;
+    }
     .pt-btn {
       width:32px; height:32px; border-radius:6px;
       border:1px solid #2b3a55; background:#0e1726;
-      color:#dbe7ff; font-size:12px; display:flex;
-      align-items:center; justify-content:center; cursor:pointer;
+      color:#dbe7ff; font-size:12px;
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer;
     }
     .pt-btn:hover { outline:2px solid #3a82ff; }
-    .pt-blank { visibility:hidden; }
-    .pt-mini { grid-template-columns:repeat(18,24px); gap:3px; }
-    .pt-mini .pt-btn { width:24px; height:24px; font-size:10px; pointer-events:none; }
-    .pt-mini .pt-btn:hover { outline:none; }
-    .pt-hi { outline:2px solid #5aa7ff !important; box-shadow:0 0 0 2px rgba(90,167,255,.25); }
     .pt-s { background:var(--s) !important; }
     .pt-p { background:var(--p) !important; }
     .pt-d { background:var(--d) !important; }
     .pt-f { background:var(--f) !important; }
 
-    /* Teacher panel */
-    #teacherPanel { margin-top:16px; }
-    .tp-wrap { display:grid; grid-template-columns:1.2fr 1fr; gap:16px; }
-    @media (max-width:1000px){ .tp-wrap { grid-template-columns:1fr; } }
-    .queue { display:flex; flex-direction:column; gap:8px; }
-    .queue-item {
-      display:flex; align-items:center; gap:8px;
-      border:1px solid #2b3a55; border-radius:10px;
-      padding:6px 8px; background:#0e1726; flex-wrap:wrap;
+    /* Teacher button */
+    #teachBtn {
+      position:fixed; bottom:18px; right:18px;
+      width:54px; height:54px; border-radius:50%;
+      background:#0e1730; border:2px solid #3a82ff;
+      color:#dbe7ff; font-size:22px; cursor:pointer;
+      box-shadow:0 4px 18px rgba(0,0,0,.4); z-index:99;
     }
-    .chip { padding:.1rem .45rem; border:1px solid #2b3a55; border-radius:999px; background:#132034; }
-    #classTotals strong { font-weight:700; }
+    #teachBtn:hover { background:#173a68; }
+
+    dialog {
+      border:none; border-radius:12px;
+      max-width:400px; width:92%; padding:16px;
+      background:#101620; color:#fff;
+    }
+    input, button { font-family:inherit; }
   </style>
+
+  <!-- Firebase libraries -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 </head>
+
 <body>
-<div class="wrap workspace">
+  <div class="wrap workspace">
+    <h1>Electron Configuration Trainer</h1>
 
-  <h1>Electron Configuration Trainer / Class Mode</h1>
-
-  <!-- Firebase / Auth initialization -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-
-  <script>
-    // === FIREBASE CONFIG (embedded from LiveGauge standard) ===
-    const firebaseConfig = {
-      apiKey: "AIzaSyBTD9D-1R6rnhb5wC1C9Cq9QOAxg3XoX7A",
-      authDomain: "livegauge-chem.firebaseapp.com",
-      databaseURL: "https://livegauge-chem-default-rtdb.firebaseio.com",
-      projectId: "livegauge-chem",
-      storageBucket: "livegauge-chem.appspot.com",
-      messagingSenderId: "783311250711",
-      appId: "1:783311250711:web:91f7605c899a432c81d3e7"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const auth = firebase.auth();
-
-    // === GLOBAL STATE ===
-    let currentUser = null;
-    let isTeacher = false;
-    let classKey = "";
-    let studentName = "";
-    let studentScore = 0;
-    let totalPossible = 0;
-    let testQueue = [];
-    let currentItemIndex = 0;
-
-    const EXCEPTIONS = {
-      24: {'4s':1,'3d':5}, // Chromium
-      29: {'4s':1,'3d':10} // Copper
-    };
-
-    // === ELEMENT MAP (partial for brevity; will auto-fill later) ===
-    const ELEMENTS = {
-      1:"H",2:"He",3:"Li",4:"Be",5:"B",6:"C",7:"N",8:"O",9:"F",10:"Ne",
-      11:"Na",12:"Mg",13:"Al",14:"Si",15:"P",16:"S",17:"Cl",18:"Ar",
-      19:"K",20:"Ca",21:"Sc",22:"Ti",23:"V",24:"Cr",25:"Mn",26:"Fe",
-      27:"Co",28:"Ni",29:"Cu",30:"Zn",31:"Ga",32:"Ge",33:"As",34:"Se",
-      35:"Br",36:"Kr"
-    };
-
-    // === Firebase utilities ===
-    function classRef(path="") {
-      return db.ref("classes/"+classKey+(path?"/"+path:""));
-    }
-
-    function updateRoster(name,score){
-      if(!classKey||!name)return;
-      classRef("roster/"+name).set({score:score||0,ts:Date.now()});
-    }
-
-    function loadRoster(){
-      classRef("roster").on("value",snap=>{
-        const val=snap.val()||{};
-        const list=Object.entries(val).map(([n,v])=>({n,score:v.score||0}));
-        renderRoster(list);
-      });
-    }
-
-    function renderRoster(list){
-      const div=document.getElementById("studentList");
-      div.innerHTML="";
-      let tot=0;
-      list.forEach(r=>{
-        tot+=r.score||0;
-        const e=document.createElement("div");
-        e.textContent=`${r.n}: ${r.score}`;
-        div.appendChild(e);
-      });
-      document.getElementById("classTotals").textContent=
-        `Total: ${tot} pts  |  Avg: ${(tot/list.length||0).toFixed(1)}`;
-    }
-
-    // === Authentication ===
-    function signInAnon(){
-      auth.signInAnonymously()
-        .then(()=>console.log("Signed in anonymously"))
-        .catch(e=>alert("Auth error: "+e.message));
-    }
-
-    auth.onAuthStateChanged(u=>{
-      currentUser=u;
-      if(u) console.log("Auth ready",u.uid);
-    });
-
-    // === TEACHER PORTAL ===
-    function setClass(){
-      const val=document.getElementById("classInput").value.trim();
-      if(!val){alert("Enter class name");return;}
-      classKey=val.replace(/[^a-zA-Z0-9_-]/g,"").toLowerCase();
-      localStorage.setItem("classKey",classKey);
-      document.getElementById("classLabel").textContent=classKey;
-      classRef("meta").set({ts:Date.now()});
-      loadRoster();
-      alert("Class set: "+classKey);
-    }
-
-    function closeClass(){
-      if(!classKey)return;
-      if(!confirm("End this class and clear all data?"))return;
-      classRef().remove();
-      document.getElementById("studentList").innerHTML="";
-      document.getElementById("classTotals").textContent="";
-      alert("Class closed.");
-    }
-
-    // === STUDENT JOIN ===
-    function joinClass(){
-      const val=document.getElementById("joinClassInput").value.trim();
-      const name=document.getElementById("studentNameInput").value.trim();
-      if(!val||!name){alert("Enter class and name");return;}
-      classKey=val.toLowerCase();
-      studentName=name;
-      localStorage.setItem("studentName",name);
-      localStorage.setItem("classKey",classKey);
-      document.getElementById("joinArea").classList.add("hidden");
-      document.getElementById("trainerArea").classList.remove("hidden");
-      updateRoster(name,0);
-      alert("Joined "+classKey+" as "+name);
-    }
-
-    // === SCORING ===
-    function adjustScore(delta){
-      studentScore+=delta;
-      if(studentScore<0)studentScore=0;
-      updateRoster(studentName,studentScore);
-      document.getElementById("studentScore").textContent=studentScore;
-    }
-
-    // === ORBITAL BUILDING (simplified) ===
-    const ORBITAL_ORDER=["1s","2s","2p","3s","3p","4s","3d","4p","5s","4d","5p","6s","4f","5d","6p","7s"];
-    let filled={};
-
-    function resetBoard(){
-      filled={};
-      document.querySelectorAll(".orbital").forEach(o=>o.classList.remove("full"));
-    }
-
-    function autoPlaceOne(){
-      for(let o of ORBITAL_ORDER){
-        if(!(o in filled))filled[o]=0;
-        const max=(o.includes("s")?2:o.includes("p")?6:o.includes("d")?10:14);
-        if(filled[o]<max){
-          filled[o]++;
-          if(filled[o]==max)document.querySelector(`[data-orb="${o}"]`)?.classList.add("full");
-          break;
-        }
-      }
-      updateConfigOutput();
-    }
-
-    function autoRemoveOne(){
-      for(let i=ORBITAL_ORDER.length-1;i>=0;i--){
-        const o=ORBITAL_ORDER[i];
-        if(filled[o]>0){filled[o]--;document.querySelector(`[data-orb="${o}"]`)?.classList.remove("full");break;}
-      }
-      updateConfigOutput();
-    }
-
-    // === DISPLAY CONFIGURATION ===
-    function updateConfigOutput(){
-      let text="";
-      for(let o of ORBITAL_ORDER){
-        const n=filled[o]||0;
-        if(n>0)text+=`${o}<sup>${n}</sup> `;
-      }
-      document.getElementById("configText").innerHTML=text.trim();
-    }
-
-    // === INIT ===
-    window.addEventListener("load",()=>{
-      signInAnon();
-      classKey=localStorage.getItem("classKey")||"";
-      studentName=localStorage.getItem("studentName")||"";
-      if(classKey&&studentName){
-        document.getElementById("joinArea").classList.add("hidden");
-        document.getElementById("trainerArea").classList.remove("hidden");
-        loadRoster();
-        updateRoster(studentName,studentScore);
-      }
-    });
-  </script>
-  <!-- === JOIN / TRAINER AREA === -->
-  <div id="joinArea" class="panel inner">
-    <h2>Join a Class</h2>
-    <div class="row">
-      <input id="joinClassInput" placeholder="Class name">
-      <input id="studentNameInput" placeholder="Your name">
-      <button class="btn primary" onclick="joinClass()">Join</button>
-    </div>
-  </div>
-
-  <div id="trainerArea" class="panel inner hidden">
-    <h2>Electron Config Practice</h2>
-    <div class="row">
-      <span class="badge">Class: <span id="classLabel"></span></span>
-      <span class="badge">Student: <span id="studentName"></span></span>
-      <span class="badge">Score: <span id="studentScore">0</span></span>
+    <div class="row" style="margin-bottom:10px">
+      <span id="modeBadge" class="btn primary" style="pointer-events:none">Practice Mode</span>
+      <span id="classBadge" class="btn hidden" style="pointer-events:none"></span>
     </div>
 
-    <!-- Orbital chart -->
+    <div class="row">
+      <button class="btn" onclick="autoPlaceOne()">Auto-place 1</button>
+      <button class="btn" onclick="autoRemoveOne()">Auto-remove 1</button>
+      <button class="btn warn" onclick="resetBoard()">Reset</button>
+    </div>
+
     <div id="orbitalChart" class="blocks" style="margin-top:12px">
       <div class="blabel"><div class="bl sbg">s</div></div>
       <div class="blabel"><div class="bl pbg">p</div></div>
@@ -368,118 +159,297 @@
       <div class="block" id="orbGrid"></div>
     </div>
 
-    <div style="margin-top:8px">
-      <button class="btn" onclick="autoPlaceOne()">Auto-place 1 electron</button>
-      <button class="btn" onclick="autoRemoveOne()">Auto-remove 1</button>
-      <button class="btn warn" onclick="resetBoard()">Reset</button>
-    </div>
+    <p id="configText" style="margin-top:10px;font-family:monospace"></p>
 
-    <p id="configText" style="margin-top:10px;font-family:monospace;"></p>
-
-    <!-- Periodic chart -->
     <h3>Periodic Chart</h3>
     <div id="ptable" class="pt-grid"></div>
-  </div>
 
-  <!-- === TEACHER PANEL === -->
-  <div id="teacherPanel" class="panel inner">
-    <h2>Teacher Controls</h2>
-    <div class="row">
-      <input id="classInput" placeholder="Set class name">
-      <button class="btn primary" onclick="setClass()">Set Class</button>
-      <button class="btn warn" onclick="closeClass()">Close Class</button>
-    </div>
-
-    <div id="teacherQueue" style="margin-top:12px">
-      <h3>Student Roster</h3>
-      <div id="studentList" class="queue"></div>
-      <div id="classTotals" style="margin-top:8px;font-weight:700;"></div>
-    </div>
-  </div>
-
-  <!-- === FLOATING ELECTRON TRAY === -->
-  <div class="float-tray" id="tray">
-    <div class="top">
-      <div class="arrows">
-        <div class="e up" draggable="true">↑</div>
-        <div class="e down" draggable="true">↓</div>
+    <div class="float-tray" id="tray">
+      <div class="top">
+        <div class="arrows">
+          <div class="e up" draggable="true">↑</div>
+          <div class="e down" draggable="true">↓</div>
+        </div>
       </div>
     </div>
   </div>
 
-<script>
-/* ===== Build Orbital grid ===== */
-function buildOrbitals(){
-  const grid=document.getElementById("orbGrid");
-  grid.innerHTML="";
-  ORBITAL_ORDER.forEach(o=>{
-    const div=document.createElement("div");
-    div.className="orbital";
-    div.dataset.orb=o;
-    div.ondragover=(e)=>{e.preventDefault();div.classList.add("over");};
-    div.ondragleave=()=>div.classList.remove("over");
-    div.ondrop=(e)=>{
-      e.preventDefault();div.classList.remove("over");
-      if(!filled[o])filled[o]=0;
-      const max=(o.includes("s")?2:o.includes("p")?6:o.includes("d")?10:14);
-      if(filled[o]<max){filled[o]++;updateConfigOutput();}
-      else{adjustScore(-1);alert("Too many electrons in "+o);}
+  <button id="teachBtn" title="Teacher Login">T</button>
+
+  <dialog id="teachDlg">
+    <h3>Teacher Login</h3>
+    <p style="font-size:13px;color:#bbb">
+      Enter or set a class name and PIN to enable testing mode.
+    </p>
+    <label>Class Name</label>
+    <input id="classInput" placeholder="e.g. CHEM1"
+           style="width:100%;padding:.5rem;border-radius:8px;
+           border:1px solid #333;margin-bottom:8px">
+    <label>4-Digit PIN</label>
+    <input id="pinInput" type="password" inputmode="numeric"
+           pattern="[0-9]*" maxlength="4"
+           style="width:100%;padding:.5rem;border-radius:8px;border:1px solid #333">
+    <div class="row" style="margin-top:12px">
+      <button class="btn primary" onclick="teacherLogin()">Login / Create</button>
+      <button class="btn" onclick="document.getElementById('teachDlg').close()">Close</button>
+    </div>
+  </dialog>
+
+  <script>
+    /* ===== Firebase Init (presentation-83d1f) ===== */
+    const CONFIG = {
+      firebaseConfig: {
+        apiKey: "AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
+        authDomain: "presentation-83d1f.firebaseapp.com",
+        databaseURL: "https://presentation-83d1f-default-rtdb.firebaseio.com",
+        projectId: "presentation-83d1f",
+        storageBucket: "presentation-83d1f.firebasestorage.app",
+        messagingSenderId: "132406143951",
+        appId: "1:132406143951:web:9695690023bd3f2aedc0ba"
+      }
     };
-    grid.appendChild(div);
-  });
-}
+    let app, fdb, fAuth;
+    window.addEventListener("load", () => {
+      try {
+        app = firebase.initializeApp(CONFIG.firebaseConfig);
+        fdb = firebase.database();
+        fAuth = firebase.auth();
+        fAuth.signInAnonymously()
+          .then(() => console.log("Firebase ready"))
+          .catch(e => console.warn("Auth fail", e));
+      } catch (e) {
+        console.error("Firebase init error", e);
+      }
+    });
 
-/* ===== Build Periodic Table ===== */
-function buildPeriodicGrid(){
-  const pt=document.getElementById("ptable");
-  pt.innerHTML="";
-  for(let i=1;i<=36;i++){
-    const b=document.createElement("div");
-    b.className="pt-btn";
-    const sym=ELEMENTS[i]||"";
-    b.textContent=sym;
-    if(i<=2||[3,4,11,12,19,20].includes(i))b.classList.add("pt-s");
-    else if([5,6,7,8,9,10,13,14,15,16,17,18,31,32,33,34,35,36].includes(i))b.classList.add("pt-p");
-    else if(i>=21&&i<=30)b.classList.add("pt-d");
-    pt.appendChild(b);
-  }
-}
+    let useTestingMode = false, classKey = "", teacherPin = "";
+  </script>
+  <script>
+    /* ===== Orbital Grid Setup ===== */
+    const ORBITALS = [
+      ["1s"],
+      ["2s","2p"],
+      ["3s","3p","3d"],
+      ["4s","4p","4d","4f"],
+      ["5s","5p","5d","5f"],
+      ["6s","6p","6d"],
+      ["7s","7p"]
+    ];
 
-/* ===== Noble-gas Prefill Hook ===== */
-function noblePrefill(elementZ){
-  // find previous noble gas core
-  const noble={2:"He",10:"Ne",18:"Ar",36:"Kr"};
-  let coreZ=0;
-  for(let nz of Object.keys(noble))if(elementZ>nz)coreZ=nz;
-  if(coreZ){
-    resetBoard();
-    let cnt=0;
-    for(let o of ORBITAL_ORDER){
-      const max=(o.includes("s")?2:o.includes("p")?6:o.includes("d")?10:14);
-      filled[o]=max;
-      cnt+=max;
-      if(cnt>=coreZ)break;
+    const CAPACITY = { s:2, p:6, d:10, f:14 };
+    let currentConfig = {};
+
+    function buildOrbitalGrid(){
+      const grid=document.getElementById("orbGrid");
+      grid.innerHTML="";
+      ORBITALS.forEach(row=>{
+        const rdiv=document.createElement("div");
+        rdiv.className="orbitals";
+        row.forEach(lbl=>{
+          const div=document.createElement("div");
+          div.className="orbital";
+          div.dataset.orb=lbl;
+          div.addEventListener("dragover",e=>{e.preventDefault();div.classList.add("over");});
+          div.addEventListener("dragleave",()=>div.classList.remove("over"));
+          div.addEventListener("drop",e=>{
+            e.preventDefault();div.classList.remove("over");
+            const spin=e.dataTransfer.getData("spin");
+            addElectron(lbl,spin);
+          });
+          rdiv.appendChild(div);
+        });
+        grid.appendChild(rdiv);
+      });
     }
-    updateConfigOutput();
-  }
-}
 
-/* ===== Exception Merge (Cu/Cr) ===== */
-function applyExceptions(z){
-  if(EXCEPTIONS[z]){
-    const ex=EXCEPTIONS[z];
-    for(let o in ex){filled[o]=ex[o];}
-    updateConfigOutput();
-  }
-}
+    function addElectron(lbl,spin){
+      const el=document.createElement("div");
+      el.className="e "+(spin==="up"?"up":"down");
+      el.textContent=spin==="up"?"↑":"↓";
+      const orb=document.querySelector(`.orbital[data-orb='${lbl}']`);
+      const cap=CAPACITY[lbl[lbl.length-1]];
+      const cur=orb.querySelectorAll(".e").length;
+      if(cur>=cap){
+        orb.classList.add("full");
+        warnTooMany(lbl);
+        return;
+      }
+      orb.appendChild(el);
+      updateConfig();
+    }
 
-/* ===== Main Initialization ===== */
-window.addEventListener("load",()=>{
-  buildOrbitals();
-  buildPeriodicGrid();
-});
-</script>
+    function autoPlaceOne(){
+      const next=findNextOrbital();
+      if(next) addElectron(next,"up");
+    }
+    function autoRemoveOne(){
+      const orbs=Array.from(document.querySelectorAll(".orbital")).reverse();
+      for(const orb of orbs){
+        const e=orb.querySelector(".e:last-child");
+        if(e){e.remove();updateConfig();return;}
+      }
+    }
+    function resetBoard(){
+      document.querySelectorAll(".orbital").forEach(o=>{
+        o.innerHTML="";o.classList.remove("full");
+      });
+      currentConfig={};updateConfig();
+    }
 
-</div>
+    function findNextOrbital(){
+      const order=["1s","2s","2p","3s","3p","4s","3d","4p","5s","4d",
+                   "5p","6s","4f","5d","6p","7s","5f","6d","7p"];
+      for(const o of order){
+        const cap=CAPACITY[o[o.length-1]];
+        const cur=document.querySelectorAll(`.orbital[data-orb='${o}'] .e`).length;
+        if(cur<cap) return o;
+      }
+      return null;
+    }
+
+    function warnTooMany(lbl){
+      const msg=`Too many electrons in ${lbl}.`;
+      console.warn(msg);
+      const el=document.createElement("div");
+      el.textContent=msg;
+      el.style.position="fixed";el.style.bottom="10px";el.style.left="10px";
+      el.style.background="#311";el.style.color="#faa";
+      el.style.padding="4px 8px";el.style.borderRadius="6px";
+      document.body.appendChild(el);
+      setTimeout(()=>el.remove(),2000);
+    }
+
+    function updateConfig(){
+      currentConfig={};
+      document.querySelectorAll(".orbital").forEach(o=>{
+        const lbl=o.dataset.orb;
+        const n=o.querySelectorAll(".e").length;
+        if(n>0) currentConfig[lbl]=n;
+      });
+      const txt=Object.entries(currentConfig).map(([k,v])=>`${k}^${v}`).join(" ");
+      document.getElementById("configText").textContent=txt||"";
+      syncScore(txt);
+    }
+
+    /* ===== Drag Source ===== */
+    document.querySelectorAll(".e").forEach(e=>{
+      e.addEventListener("dragstart",ev=>{
+        ev.dataTransfer.setData("spin", e.classList.contains("up")?"up":"down");
+      });
+    });
+
+    /* ===== Periodic Table ===== */
+    function buildPeriodicTable(){
+      const grid=document.getElementById("ptable");
+      grid.innerHTML="";
+      for(let i=1;i<=118;i++){
+        const btn=document.createElement("div");
+        btn.textContent=i;
+        btn.className="pt-btn";
+        btn.dataset.z=i;
+        // block color rough
+        if(i<=2||[3,4,11,12,19,20,37,38,55,56,87,88].includes(i)) btn.classList.add("pt-s");
+        else if((i>=5&&i<=10)||(i>=13&&i<=18)||(i>=31&&i<=36)||(i>=49&&i<=54)||(i>=81&&i<=86)||(i>=113&&i<=118))
+          btn.classList.add("pt-p");
+        else if((i>=21&&i<=30)||(i>=39&&i<=48)||(i>=71&&i<=80)||(i>=103&&i<=112))
+          btn.classList.add("pt-d");
+        else btn.classList.add("pt-f");
+        btn.addEventListener("click",()=>loadElement(i));
+        grid.appendChild(btn);
+      }
+    }
+
+    function loadElement(z){
+      resetBoard();
+      const conf=electronConfig(z);
+      for(const [orb,n] of Object.entries(conf)){
+        for(let i=0;i<n;i++) addElectron(orb,i%2===0?"up":"down");
+      }
+      highlightElement(z);
+    }
+
+    function highlightElement(z){
+      document.querySelectorAll(".pt-btn").forEach(b=>{
+        b.style.outline=b.dataset.z==z?"2px solid #fff":"";
+      });
+    }
+
+    function electronConfig(z){
+      // Aufbau + Cu/Cr exceptions
+      const order=["1s","2s","2p","3s","3p","4s","3d","4p","5s","4d",
+                   "5p","6s","4f","5d","6p","7s","5f","6d","7p"];
+      const conf={};
+      let remain=z;
+      for(const o of order){
+        const cap=CAPACITY[o[o.length-1]];
+        const add=Math.min(cap,remain);
+        conf[o]=add;
+        remain-=add;
+        if(remain<=0) break;
+      }
+      // exceptions
+      if(conf["4s"]===2 && conf["3d"]===9){conf["4s"]=1;conf["3d"]=10;}
+      if(conf["4s"]===2 && conf["3d"]===4){conf["4s"]=1;conf["3d"]=5;}
+      return conf;
+    }
+
+    /* ===== Teacher Login & Class ===== */
+    function teacherLogin(){
+      const c=document.getElementById("classInput").value.trim().toUpperCase();
+      const p=document.getElementById("pinInput").value.trim();
+      if(!/^[A-Z0-9]{2,20}$/.test(c)){alert("Invalid class name.");return;}
+      if(!/^[0-9]{4}$/.test(p)){alert("PIN must be 4 digits.");return;}
+      classKey=c;teacherPin=p;
+      useTestingMode=true;
+      document.getElementById("modeBadge").textContent="Testing Mode";
+      document.getElementById("classBadge").classList.remove("hidden");
+      document.getElementById("classBadge").textContent=`Class: ${classKey}`;
+      document.getElementById("teachDlg").close();
+      localStorage.setItem("ec_class",classKey);
+      localStorage.setItem("ec_pin",teacherPin);
+      ensureClass();
+    }
+
+    function ensureClass(){
+      if(!fdb) return;
+      const path=`/electronConfig/classes/${classKey}/meta`;
+      fdb.ref(path).update({pin:teacherPin,updated:Date.now()});
+    }
+
+    function syncScore(txt){
+      if(!useTestingMode||!classKey||!fdb) return;
+      const uid=localStorage.getItem("ec_uid")||Math.random().toString(36).slice(2,8);
+      localStorage.setItem("ec_uid",uid);
+      const ref=fdb.ref(`/electronConfig/classes/${classKey}/students/${uid}`);
+      ref.update({config:txt,ts:Date.now()});
+    }
+
+    /* ===== Noble-Gas Auto-Fill ===== */
+    function nobleFill(symbol){
+      const noble={He:2,Ne:10,Ar:18,Kr:36,Xe:54,Rn:86};
+      const z=noble[symbol];
+      if(!z) return;
+      const conf=electronConfig(z);
+      resetBoard();
+      for(const [orb,n] of Object.entries(conf)){
+        for(let i=0;i<n;i++) addElectron(orb,i%2===0?"up":"down");
+      }
+      updateConfig();
+    }
+
+    /* ===== Init ===== */
+    window.addEventListener("load",()=>{
+      buildOrbitalGrid();
+      buildPeriodicTable();
+      const c=localStorage.getItem("ec_class");
+      const p=localStorage.getItem("ec_pin");
+      if(c&&p){classKey=c;teacherPin=p;useTestingMode=true;
+        document.getElementById("modeBadge").textContent="Testing Mode";
+        document.getElementById("classBadge").textContent=`Class: ${classKey}`;
+        document.getElementById("classBadge").classList.remove("hidden");
+      }
+      document.getElementById("teachBtn").onclick=()=>document.getElementById("teachDlg").showModal();
+    });
+  </script>
 </body>
 </html>
