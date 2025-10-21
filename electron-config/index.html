@@ -1,1193 +1,485 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Electron Configuration — Class/Test Mode</title>
-<style>
-  :root{
-    --bg:#0f1216; --fg:#e6eaf0; --mut:#a8b0bd; --accent:#5aa7ff;
-    --s:#0e6b73; --p:#4b5f16; --d:#5c1135; --f:#143ea9;
-    --boxB:#5a6b86; --ok:#22c55e; --orb:#0f1622;
-    --panel:#0b111b; --edge:#273244; --chip:#0f1622;
-    --warn:#ef4444;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Arial,sans-serif}
-  .wrap{max-width:1400px;margin:0 auto;padding:16px}
-  h1{font-size:18px;margin:0 0 10px}
-  .panel{border:1px solid var(--edge);border-radius:12px;background:var(--panel)}
-  .panel .inner{padding:12px}
-  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .badge{border:1px solid #2b3a55;border-radius:10px;padding:4px 8px;background:var(--chip);color:#dce6f4}
-  .cfg{background:#111a27;border:1px solid #2b3a55;border-radius:8px;padding:6px 8px}
-  .hint{font-size:12px;color:var(--mut)}
-  .hidden{display:none}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Electron Configuration — Class/Test Mode</title>
 
-  .hdr{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
-  .hdr input{padding:.3rem .5rem;border:1px solid #2b3a55;border-radius:8px;background:#0e1726;color:#dbe7ff}
-  .tiny{font-size:11px;color:#aab8d0}
-
-  .promptbar{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--edge);
-    background:#0b121d;padding:8px 12px;border-bottom:1px solid var(--edge)}
-  .pill{border:1px solid #2b3a55;background:#0e1726;color:#dbe7ff;border-radius:9999px;padding:.15rem .55rem;font-size:12px}
-  .prompt{font-weight:600}
-  .score{font-weight:700}
-
-  .blocks{display:grid;grid-template-columns:auto 1fr 1fr 1fr 1fr;gap:14px;align-items:start}
-  .blabel{display:flex;align-items:center;gap:10px}
-  .bl{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
-  .sbg{background:var(--s)} .pbg{background:var(--p)} .dbg{background:var(--d)} .fbg{background:var(--f)}
-  .block{display:grid;gap:8px}
-  .rowline{display:flex;align-items:center;gap:10px}
-  .rlabel{width:28px;text-align:right;opacity:.85}
-  .orbitals{display:flex;gap:8px}
-  .orbital{width:42px;height:34px;border:2px solid var(--boxB);border-radius:8px;background:var(--orb);display:flex;align-items:center;justify-content:center}
-  .orbital.full{border-color:var(--ok)}
-  .orbital.over{outline:2px dashed var(--accent)}
-
-  .e{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;user-select:none}
-  .up{background:#1f6d3a;border:1px solid #3dd17b;color:#c6f7da}
-  .down{background:#7a2c21;border:1px solid #ff9c8a;color:#ffeae7}
-
-  /* Workspace is positioning context; tray floats inside bottom-right */
-  .workspace{ position: relative; }
-  .float-tray{
-    position: absolute;
-    right: 12px;
-    bottom: 12px;
-    z-index: 2;
-    backdrop-filter: saturate(1.2) blur(6px);
-    background: rgba(16,22,33,0.86);
-    border: 1px solid #2b3a55;
-    border-radius: 14px;
-    box-shadow: 0 10px 24px rgba(0,0,0,.35);
-    padding: 10px 12px;
-    color: #dbe7ff;
-    max-width: 420px;
-  }
-  .float-tray .top{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
-  .float-tray .arrows{display:flex;gap:8px}
-  .float-tray .e{cursor:grab}
-  @media (max-width: 720px){
-    .float-tray{
-      left: 50%;
-      right: auto;
-      transform: translateX(-50%);
-      bottom: 8px;
-      max-width: 92%;
+  <style>
+    :root {
+      --bg:#0f1216; --fg:#e6eaf0; --mut:#a8b0bd;
+      --accent:#5aa7ff; --s:#1f6d3a; --p:#0e6b73;
+      --d:#5c1135; --f:#143ea9;
+      --panel:#0b111b; --edge:#273244; --orb:#0f1622;
+      --warn:#ef4444; --ok:#22c55e;
     }
-  }
+    * { box-sizing:border-box; }
+    html,body {
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family:system-ui,Arial,sans-serif;
+    }
+    .wrap { max-width:1400px; margin:0 auto; padding:16px; }
+    h1 { font-size:18px; margin:0 0 10px; }
 
-  /* Teacher Panel */
-  #teacherPanel{margin-top:16px}
-  .tp-wrap{display:grid;grid-template-columns: 1.2fr 1fr; gap:16px}
-  @media (max-width:1000px){ .tp-wrap{grid-template-columns:1fr} }
-  .pt-grid{display:grid;grid-template-columns: repeat(18, 32px); gap:4px; align-items:start}
-  .pt-btn{
-    width:32px;height:32px;border-radius:6px;border:1px solid #2b3a55;background:#0e1726;
-    color:#dbe7ff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer
-  }
-  .pt-btn:hover{outline:2px solid #3a82ff}
-  .pt-blank{visibility:hidden}
-  .queue{display:flex;flex-direction:column;gap:8px}
-  .queue-item{display:flex;align-items:center;gap:8px;border:1px solid #2b3a55;border-radius:10px;padding:6px 8px;background:#0e1726;flex-wrap:wrap}
-  .chip{padding:.1rem .45rem;border:1px solid #2b3a55;border-radius:999px;background:#132034}
+    /* Buttons and badges */
+    .btn {
+      background:#142030;
+      color:#e7eefc;
+      border:1px solid #2b3a55;
+      border-radius:8px;
+      padding:4px 10px;
+      cursor:pointer;
+    }
+    .btn:hover { background:#1d2a40; }
+    .btn.warn { background:#3a1612; border-color:#702d23; color:#ffbbb0; }
+    .btn.primary { background:#003366; border-color:#2266cc; color:#dff1ff; }
+    .badge {
+      border:1px solid #2b3a55;
+      border-radius:10px;
+      padding:4px 8px;
+      background:#0f1622;
+      color:#dce6f4;
+    }
+    .hint { font-size:12px; color:var(--mut); }
+    .hidden { display:none; }
 
-  /* Mini periodic table in Answers panel */
-  .pt-mini{grid-template-columns: repeat(18, 24px); gap:3px}
-  .pt-mini .pt-btn{width:24px;height:24px;font-size:10px;pointer-events:none}
-  .pt-mini .pt-btn:hover{outline:none}
-  .pt-hi{outline:2px solid #5aa7ff !important; box-shadow:0 0 0 2px rgba(90,167,255,.25)}
+    /* Panels / layout */
+    .panel {
+      border:1px solid var(--edge);
+      border-radius:12px;
+      background:var(--panel);
+    }
+    .panel .inner { padding:12px; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 
-  /* Totals bar */
-  #classTotals strong{font-weight:700}
-</style>
+    /* Orbital blocks */
+    .blocks {
+      display:grid;
+      grid-template-columns:auto 1fr 1fr 1fr 1fr;
+      gap:14px;
+      align-items:start;
+    }
+    .blabel { display:flex; align-items:center; gap:8px; }
+    .bl {
+      width:28px; height:28px; border-radius:6px;
+      display:flex; align-items:center; justify-content:center;
+      font-weight:700; color:#fff;
+    }
+    .sbg { background:var(--s); }
+    .pbg { background:var(--p); }
+    .dbg { background:var(--d); }
+    .fbg { background:var(--f); }
+    .block { display:grid; gap:8px; }
+    .rowline { display:flex; align-items:center; gap:10px; }
+    .rlabel { width:28px; text-align:right; opacity:.85; }
+    .orbitals { display:flex; gap:8px; }
+    .orbital {
+      width:42px; height:34px;
+      border:2px solid #5a6b86;
+      border-radius:8px;
+      background:var(--orb);
+      display:flex; align-items:center; justify-content:center;
+    }
+    .orbital.full { border-color:var(--ok); }
+    .orbital.over { outline:2px dashed var(--accent); }
 
-<!-- Firebase compat -->
-<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    /* Electrons */
+    .e {
+      width:18px; height:18px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:14px; user-select:none;
+    }
+    .up {
+      background:#1f6d3a; border:1px solid #3dd17b; color:#c6f7da;
+    }
+    .down {
+      background:#7a2c21; border:1px solid #ff9c8a; color:#ffeae7;
+    }
+
+    /* Floating tray */
+    .workspace { position:relative; }
+    .float-tray {
+      position:absolute; right:12px; bottom:12px; z-index:3;
+      backdrop-filter:saturate(1.2) blur(6px);
+      background:rgba(16,22,33,.86);
+      border:1px solid #2b3a55; border-radius:14px;
+      box-shadow:0 10px 24px rgba(0,0,0,.35);
+      padding:10px 12px; color:#dbe7ff; max-width:420px;
+    }
+    .float-tray .top { display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
+    .float-tray .arrows { display:flex; gap:8px; }
+    .float-tray .e { cursor:grab; }
+    @media (max-width:720px) {
+      .float-tray {
+        left:50%; right:auto; transform:translateX(-50%);
+        bottom:8px; max-width:92%;
+      }
+    }
+
+    /* Periodic tables */
+    .pt-grid { display:grid; grid-template-columns:repeat(18,32px); gap:4px; align-items:start; }
+    .pt-btn {
+      width:32px; height:32px; border-radius:6px;
+      border:1px solid #2b3a55; background:#0e1726;
+      color:#dbe7ff; font-size:12px; display:flex;
+      align-items:center; justify-content:center; cursor:pointer;
+    }
+    .pt-btn:hover { outline:2px solid #3a82ff; }
+    .pt-blank { visibility:hidden; }
+    .pt-mini { grid-template-columns:repeat(18,24px); gap:3px; }
+    .pt-mini .pt-btn { width:24px; height:24px; font-size:10px; pointer-events:none; }
+    .pt-mini .pt-btn:hover { outline:none; }
+    .pt-hi { outline:2px solid #5aa7ff !important; box-shadow:0 0 0 2px rgba(90,167,255,.25); }
+    .pt-s { background:var(--s) !important; }
+    .pt-p { background:var(--p) !important; }
+    .pt-d { background:var(--d) !important; }
+    .pt-f { background:var(--f) !important; }
+
+    /* Teacher panel */
+    #teacherPanel { margin-top:16px; }
+    .tp-wrap { display:grid; grid-template-columns:1.2fr 1fr; gap:16px; }
+    @media (max-width:1000px){ .tp-wrap { grid-template-columns:1fr; } }
+    .queue { display:flex; flex-direction:column; gap:8px; }
+    .queue-item {
+      display:flex; align-items:center; gap:8px;
+      border:1px solid #2b3a55; border-radius:10px;
+      padding:6px 8px; background:#0e1726; flex-wrap:wrap;
+    }
+    .chip { padding:.1rem .45rem; border:1px solid #2b3a55; border-radius:999px; background:#132034; }
+    #classTotals strong { font-weight:700; }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="panel">
-    <div class="inner">
-      <div class="hdr">
-        <div class="row" style="gap:8px">
-          <h1>Electron Configuration — Class/Test Mode</h1>
-          <span id="connectionBadge" class="badge">offline (local)</span>
-          <span class="tiny">Class: <strong id="classLabel">—</strong></span>
-          <span class="tiny">Session: <strong id="sessionLabel">—</strong></span>
-        </div>
-        <div class="row" style="gap:8px">
-          <input id="classInput" class="tiny" style="width:9rem" placeholder="CLASS">
-          <button id="setClassBtn" class="btn">Set Class</button>
-          <button id="shareClassBtn" class="btn">Copy Link</button>
-          <input id="nameInput" class="tiny" style="width:9rem" placeholder="Your name">
-          <button id="saveNameBtn" class="btn">Save Name</button>
-          <button id="loginBtn" class="btn">Teacher Login</button>
-          <label class="hint"><input id="nobleToggle" type="checkbox" checked> Noble-gas shorthand ≥ Period 4</label>
-          <button id="toggleAnswers" class="btn">Show Answers</button>
-        </div>
-      </div>
+<div class="wrap workspace">
 
-      <!-- Answers -->
-      <div id="answersPanel" class="hidden" aria-live="polite">
-        <div class="row" style="margin-top:6px;">
-          <div class="badge">Z = <strong id="Z">0</strong></div>
-          <div class="badge">Element: <strong id="El">—</strong></div>
-          <div class="badge">Period: <strong id="Period">—</strong></div>
-        </div>
-        <div style="margin-top:8px;">
-          <div>Full configuration:</div>
-          <div id="cfg" class="cfg">—</div>
-          <div class="hint" style="margin-top:4px;">Shorthand: <span id="sh" class="cfg">—</span></div>
-        </div>
-        <div style="margin-top:8px;">
-          <div>Quantum numbers (last e⁻):</div>
-          <div id="qn" class="cfg">n = —, ℓ = — (—), m<sub>ℓ</sub> = —, m<sub>s</sub> = —</div>
-        </div>
+  <h1>Electron Configuration Trainer / Class Mode</h1>
 
-        <!-- Mini periodic table for learning view -->
-        <div id="ptMiniWrap" style="margin-top:10px">
-          <div class="hint" style="margin-bottom:4px">Periodic table (highlights current element)</div>
-          <div id="ptMini" class="pt-grid pt-mini"></div>
-        </div>
-      </div>
+  <!-- Firebase / Auth initialization -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+
+  <script>
+    // === FIREBASE CONFIG (embedded from LiveGauge standard) ===
+    const firebaseConfig = {
+      apiKey: "AIzaSyBTD9D-1R6rnhb5wC1C9Cq9QOAxg3XoX7A",
+      authDomain: "livegauge-chem.firebaseapp.com",
+      databaseURL: "https://livegauge-chem-default-rtdb.firebaseio.com",
+      projectId: "livegauge-chem",
+      storageBucket: "livegauge-chem.appspot.com",
+      messagingSenderId: "783311250711",
+      appId: "1:783311250711:web:91f7605c899a432c81d3e7"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
+
+    // === GLOBAL STATE ===
+    let currentUser = null;
+    let isTeacher = false;
+    let classKey = "";
+    let studentName = "";
+    let studentScore = 0;
+    let totalPossible = 0;
+    let testQueue = [];
+    let currentItemIndex = 0;
+
+    const EXCEPTIONS = {
+      24: {'4s':1,'3d':5}, // Chromium
+      29: {'4s':1,'3d':10} // Copper
+    };
+
+    // === ELEMENT MAP (partial for brevity; will auto-fill later) ===
+    const ELEMENTS = {
+      1:"H",2:"He",3:"Li",4:"Be",5:"B",6:"C",7:"N",8:"O",9:"F",10:"Ne",
+      11:"Na",12:"Mg",13:"Al",14:"Si",15:"P",16:"S",17:"Cl",18:"Ar",
+      19:"K",20:"Ca",21:"Sc",22:"Ti",23:"V",24:"Cr",25:"Mn",26:"Fe",
+      27:"Co",28:"Ni",29:"Cu",30:"Zn",31:"Ga",32:"Ge",33:"As",34:"Se",
+      35:"Br",36:"Kr"
+    };
+
+    // === Firebase utilities ===
+    function classRef(path="") {
+      return db.ref("classes/"+classKey+(path?"/"+path:""));
+    }
+
+    function updateRoster(name,score){
+      if(!classKey||!name)return;
+      classRef("roster/"+name).set({score:score||0,ts:Date.now()});
+    }
+
+    function loadRoster(){
+      classRef("roster").on("value",snap=>{
+        const val=snap.val()||{};
+        const list=Object.entries(val).map(([n,v])=>({n,score:v.score||0}));
+        renderRoster(list);
+      });
+    }
+
+    function renderRoster(list){
+      const div=document.getElementById("studentList");
+      div.innerHTML="";
+      let tot=0;
+      list.forEach(r=>{
+        tot+=r.score||0;
+        const e=document.createElement("div");
+        e.textContent=`${r.n}: ${r.score}`;
+        div.appendChild(e);
+      });
+      document.getElementById("classTotals").textContent=
+        `Total: ${tot} pts  |  Avg: ${(tot/list.length||0).toFixed(1)}`;
+    }
+
+    // === Authentication ===
+    function signInAnon(){
+      auth.signInAnonymously()
+        .then(()=>console.log("Signed in anonymously"))
+        .catch(e=>alert("Auth error: "+e.message));
+    }
+
+    auth.onAuthStateChanged(u=>{
+      currentUser=u;
+      if(u) console.log("Auth ready",u.uid);
+    });
+
+    // === TEACHER PORTAL ===
+    function setClass(){
+      const val=document.getElementById("classInput").value.trim();
+      if(!val){alert("Enter class name");return;}
+      classKey=val.replace(/[^a-zA-Z0-9_-]/g,"").toLowerCase();
+      localStorage.setItem("classKey",classKey);
+      document.getElementById("classLabel").textContent=classKey;
+      classRef("meta").set({ts:Date.now()});
+      loadRoster();
+      alert("Class set: "+classKey);
+    }
+
+    function closeClass(){
+      if(!classKey)return;
+      if(!confirm("End this class and clear all data?"))return;
+      classRef().remove();
+      document.getElementById("studentList").innerHTML="";
+      document.getElementById("classTotals").textContent="";
+      alert("Class closed.");
+    }
+
+    // === STUDENT JOIN ===
+    function joinClass(){
+      const val=document.getElementById("joinClassInput").value.trim();
+      const name=document.getElementById("studentNameInput").value.trim();
+      if(!val||!name){alert("Enter class and name");return;}
+      classKey=val.toLowerCase();
+      studentName=name;
+      localStorage.setItem("studentName",name);
+      localStorage.setItem("classKey",classKey);
+      document.getElementById("joinArea").classList.add("hidden");
+      document.getElementById("trainerArea").classList.remove("hidden");
+      updateRoster(name,0);
+      alert("Joined "+classKey+" as "+name);
+    }
+
+    // === SCORING ===
+    function adjustScore(delta){
+      studentScore+=delta;
+      if(studentScore<0)studentScore=0;
+      updateRoster(studentName,studentScore);
+      document.getElementById("studentScore").textContent=studentScore;
+    }
+
+    // === ORBITAL BUILDING (simplified) ===
+    const ORBITAL_ORDER=["1s","2s","2p","3s","3p","4s","3d","4p","5s","4d","5p","6s","4f","5d","6p","7s"];
+    let filled={};
+
+    function resetBoard(){
+      filled={};
+      document.querySelectorAll(".orbital").forEach(o=>o.classList.remove("full"));
+    }
+
+    function autoPlaceOne(){
+      for(let o of ORBITAL_ORDER){
+        if(!(o in filled))filled[o]=0;
+        const max=(o.includes("s")?2:o.includes("p")?6:o.includes("d")?10:14);
+        if(filled[o]<max){
+          filled[o]++;
+          if(filled[o]==max)document.querySelector(`[data-orb="${o}"]`)?.classList.add("full");
+          break;
+        }
+      }
+      updateConfigOutput();
+    }
+
+    function autoRemoveOne(){
+      for(let i=ORBITAL_ORDER.length-1;i>=0;i--){
+        const o=ORBITAL_ORDER[i];
+        if(filled[o]>0){filled[o]--;document.querySelector(`[data-orb="${o}"]`)?.classList.remove("full");break;}
+      }
+      updateConfigOutput();
+    }
+
+    // === DISPLAY CONFIGURATION ===
+    function updateConfigOutput(){
+      let text="";
+      for(let o of ORBITAL_ORDER){
+        const n=filled[o]||0;
+        if(n>0)text+=`${o}<sup>${n}</sup> `;
+      }
+      document.getElementById("configText").innerHTML=text.trim();
+    }
+
+    // === INIT ===
+    window.addEventListener("load",()=>{
+      signInAnon();
+      classKey=localStorage.getItem("classKey")||"";
+      studentName=localStorage.getItem("studentName")||"";
+      if(classKey&&studentName){
+        document.getElementById("joinArea").classList.add("hidden");
+        document.getElementById("trainerArea").classList.remove("hidden");
+        loadRoster();
+        updateRoster(studentName,studentScore);
+      }
+    });
+  </script>
+  <!-- === JOIN / TRAINER AREA === -->
+  <div id="joinArea" class="panel inner">
+    <h2>Join a Class</h2>
+    <div class="row">
+      <input id="joinClassInput" placeholder="Class name">
+      <input id="studentNameInput" placeholder="Your name">
+      <button class="btn primary" onclick="joinClass()">Join</button>
     </div>
-
-    <!-- Prompt + score -->
-    <div class="promptbar">
-      <div>
-        <span class="pill" id="modeBadge">practice</span>
-        <span class="prompt" id="promptText">—</span>
-      </div>
-      <div class="tiny">
-        Item: <span id="itemIdx">—</span> /
-        <span id="itemTotal">—</span> •
-        Points: <span class="score" id="scoreNow">—</span>
-      </div>
-    </div>
-
-    <!-- Student QN entry (test mode only) -->
-    <div class="inner" id="studentTestBar" style="display:none">
-      <div class="row" style="justify-content:space-between;align-items:center">
-        <div class="row" style="gap:12px;flex-wrap:wrap">
-          <div class="hint">Enter quantum numbers (last e⁻):</div>
-          <input id="qn_n" type="number" min="1" max="7" step="1" placeholder="n">
-          <select id="qn_l">
-            <option value="">ℓ</option><option value="0">0 (s)</option><option value="1">1 (p)</option><option value="2">2 (d)</option><option value="3">3 (f)</option>
-          </select>
-          <input id="qn_ml" type="number" step="1" placeholder="mℓ">
-          <select id="qn_ms"><option value="">mₛ</option><option value="+1/2">+1/2</option><option value="-1/2">-1/2</option></select>
-        </div>
-        <div class="row">
-          <button id="submitBtn" class="btn primary">Submit Answer</button>
-        </div>
-      </div>
-      <div class="hint" id="qnHint">QN may be required depending on teacher prompt.</div>
-    </div>
-
-    <!-- Workspace -->
-    <div class="inner workspace">
-      <div class="blocks" id="blocks">
-        <div></div>
-        <div class="blabel"><div class="bl sbg">s</div><div class="hint">block</div></div>
-        <div class="blabel"><div class="bl pbg">p</div><div class="hint">block</div></div>
-        <div class="blabel"><div class="bl dbg">d</div><div class="hint">block</div></div>
-        <div class="blabel"><div class="bl fbg">f</div><div class="hint">block</div></div>
-
-        <div id="labels" class="block"></div>
-        <div id="scol" class="block"></div>
-        <div id="pcol" class="block"></div>
-        <div id="dcol" class="block"></div>
-        <div id="fcol" class="block"></div>
-      </div>
-
-      <!-- Floating tray INSIDE the workspace (bottom-right) -->
-      <div class="float-tray" id="tray">
-        <div class="top">
-          <div class="arrows" title="Drag an electron into the next allowed orbital">
-            <div class="e up" draggable="true" data-spin="up">↑</div>
-            <div class="e down" draggable="true" data-spin="down">↓</div>
-          </div>
-          <button id="autoOne" class="btn primary" title="Place next allowed electron">Auto-place 1</button>
-          <button id="autoRemove" class="btn warn" title="Undo last correct placement">Auto-remove 1</button>
-          <button id="clear" class="btn">Clear</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Embedded Teacher Panel -->
-    <div id="teacherPanel" class="inner hidden">
-      <h3 style="margin:0 0 8px 0">Teacher Panel</h3>
-      <div class="tp-wrap">
-        <!-- Periodic chart & queue builder -->
-        <div class="panel">
-          <div class="inner">
-            <div class="row" style="justify-content:space-between;align-items:center">
-              <h4 style="margin:0">Periodic Chart → Queue</h4>
-              <div class="row" style="gap:8px;flex-wrap:wrap">
-                <label class="tiny">Points per item: <input id="tp_points" type="number" min="1" max="20" value="5" style="width:64px"></label>
-                <label class="tiny"><input id="tp_requireQN" type="checkbox"> Require QN</label>
-                <button id="tp_clearQueue" class="btn">Clear Queue</button>
-              </div>
-            </div>
-            <div id="pt" class="pt-grid" style="margin-top:10px"></div>
-            <div class="hint" style="margin-top:6px">Click elements to add to the test list. Adjust charge (±) and toggle NG (start from noble gas core).</div>
-          </div>
-        </div>
-
-        <!-- Queue, send, roster -->
-        <div class="panel">
-          <div class="inner">
-            <h4 style="margin:0 0 8px 0">Test List</h4>
-            <div id="queue" class="queue"></div>
-            <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
-              <button id="tp_sendList" class="btn primary">Send Test (<span id="qCount">0</span> items)</button>
-              <button id="tp_softReset" class="btn">Soft Reset Boards</button>
-              <button id="tp_newSession" class="btn">New Session</button>
-              <button id="tp_closeClass" class="btn warn">Close Class</button>
-              <button id="exportBtn" class="btn">Export Scores CSV</button>
-            </div>
-
-            <div id="classTotals" class="hint" style="margin:6px 0 8px 0"></div>
-
-            <h4 style="margin:12px 0 8px 0">Live Roster & Scores</h4>
-            <div style="max-height:260px;overflow:auto;border:1px solid #2b3a55;border-radius:12px">
-              <table id="scoreTable">
-                <thead>
-                  <tr>
-                    <th style="width:30%">Student</th>
-                    <th style="width:14%">Right / Total</th>
-                    <th style="width:14%">Points</th>
-                    <th style="width:22%">Last Submit</th>
-                    <th style="width:20%">ID</th>
-                  </tr>
-                </thead>
-                <tbody id="scoreBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div><!-- /tp-wrap -->
-    </div><!-- /teacherPanel -->
-
   </div>
-</div>
 
-<!-- PIN dialog -->
-<dialog id="loginDlg" style="border:none;border-radius:12px;max-width:420px;width:92%">
-  <form method="dialog" style="padding:16px">
-    <h3 style="margin:0 0 8px 0">Teacher Login</h3>
-    <p class="tiny" style="margin-top:0">Enter PIN to unlock Teacher Panel.</p>
-    <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4"
-           style="width:100%;padding:.6rem;border:1px solid #2b3a55;border-radius:10px;background:#0e1726;color:#dbe7ff" placeholder="4-digit PIN">
-    <div style="display:flex;gap:8px;margin-top:10px">
-      <button id="unlockBtn" class="btn" value="unlock">Unlock</button>
-      <button class="btn" value="cancel">Close</button>
+  <div id="trainerArea" class="panel inner hidden">
+    <h2>Electron Config Practice</h2>
+    <div class="row">
+      <span class="badge">Class: <span id="classLabel"></span></span>
+      <span class="badge">Student: <span id="studentName"></span></span>
+      <span class="badge">Score: <span id="studentScore">0</span></span>
     </div>
-    <div id="pinSetup" class="tiny" style="margin-top:8px;display:none">
-      No PIN set for this class. Create one now:
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <input id="newPinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4"
-               style="flex:1;padding:.5rem;border:1px solid #2b3a55;border-radius:8px;background:#0e1726;color:#dbe7ff" placeholder="New 4-digit PIN">
-        <button id="saveNewPinBtn" class="btn" type="button">Save PIN</button>
+
+    <!-- Orbital chart -->
+    <div id="orbitalChart" class="blocks" style="margin-top:12px">
+      <div class="blabel"><div class="bl sbg">s</div></div>
+      <div class="blabel"><div class="bl pbg">p</div></div>
+      <div class="blabel"><div class="bl dbg">d</div></div>
+      <div class="blabel"><div class="bl fbg">f</div></div>
+      <div class="block" id="orbGrid"></div>
+    </div>
+
+    <div style="margin-top:8px">
+      <button class="btn" onclick="autoPlaceOne()">Auto-place 1 electron</button>
+      <button class="btn" onclick="autoRemoveOne()">Auto-remove 1</button>
+      <button class="btn warn" onclick="resetBoard()">Reset</button>
+    </div>
+
+    <p id="configText" style="margin-top:10px;font-family:monospace;"></p>
+
+    <!-- Periodic chart -->
+    <h3>Periodic Chart</h3>
+    <div id="ptable" class="pt-grid"></div>
+  </div>
+
+  <!-- === TEACHER PANEL === -->
+  <div id="teacherPanel" class="panel inner">
+    <h2>Teacher Controls</h2>
+    <div class="row">
+      <input id="classInput" placeholder="Set class name">
+      <button class="btn primary" onclick="setClass()">Set Class</button>
+      <button class="btn warn" onclick="closeClass()">Close Class</button>
+    </div>
+
+    <div id="teacherQueue" style="margin-top:12px">
+      <h3>Student Roster</h3>
+      <div id="studentList" class="queue"></div>
+      <div id="classTotals" style="margin-top:8px;font-weight:700;"></div>
+    </div>
+  </div>
+
+  <!-- === FLOATING ELECTRON TRAY === -->
+  <div class="float-tray" id="tray">
+    <div class="top">
+      <div class="arrows">
+        <div class="e up" draggable="true">↑</div>
+        <div class="e down" draggable="true">↓</div>
       </div>
     </div>
-  </form>
-</dialog>
+  </div>
 
 <script>
-/* ===== Error guard ===== */
-window.onunhandledrejection = e => console.error(e.reason||e);
-
-/* ===== Firebase core ===== */
-const CONFIG = {
-  useFirebase: true,
-  firebaseConfig: {
-    apiKey: "AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
-    authDomain: "presentation-83d1f.firebaseapp.com",
-    databaseURL: "https://presentation-83d1f-default-rtdb.firebaseio.com",
-    projectId: "presentation-83d1f",
-    storageBucket: "presentation-83d1f.firebasestorage.app",
-    messagingSenderId: "132406143951",
-    appId: "1:132406143951:web:9695690023bd3f2aedc0ba"
-  }
-};
-
-const $ = s=>document.querySelector(s);
-function sanitizeClassName(s){ return (s||'').trim().toUpperCase().replace(/[^A-Z0-9-]/g,'-').replace(/-+/g,'-').slice(0,32) || 'CLASS'; }
-function getUrlParam(name){ try { return new URL(location.href).searchParams.get(name); } catch { return null; } }
-function setUrlParam(name, value){
-  try{ const u=new URL(location.href); if(value==null) u.searchParams.delete(name); else u.searchParams.set(name,value); history.replaceState({}, "", u.toString()); }catch{}
-}
-function uid(){ return Math.random().toString(36).slice(2,9); }
-function nowId(){ return String(Date.now()); }
-function badge(txt){ const b=$('#connectionBadge'); if(b) b.textContent = txt; }
-function fmtTime(t){ if(!t) return '—'; const d=new Date(t); return d.toLocaleString(); }
-
-const fb = { db:null, online:false };
-const live = { classKey:null, sessionId:null, me:{id:null,name:null}, classHasPin:false };
-const paths = {
-  classPath: () => `/classes/${live.classKey}`,
-  configPath: () => `${paths.classPath()}/config`,
-  sessRoot:   () => `${paths.classPath()}/sessions`,
-  basePath:   () => `${paths.sessRoot()}/${live.sessionId}`,
-  prompts:    () => `${paths.basePath()}/prompts`,
-  currentPrompt: () => `${paths.prompts()}/current`,
-  results:    () => `${paths.basePath()}/results`,
-  students:   () => `${paths.basePath()}/students`,
-  control:    () => `${paths.basePath()}/control`,
-  progressRoot: () => `${paths.basePath()}/progress`
-};
-
-async function dbInit(){
-  if(!CONFIG.useFirebase){ badge('offline (local)'); return; }
-  try{
-    if (firebase.apps && firebase.apps.length === 0) firebase.initializeApp(CONFIG.firebaseConfig);
-    fb.db = firebase.database();
-    await firebase.auth().signInAnonymously();
-    fb.online = true; badge('online (firebase)');
-    await bootFromClass();
-  }catch(e){ console.error(e); fb.online=false; badge('offline (local)'); }
-}
-
-async function bootFromClass(){
-  const urlC = getUrlParam('class');
-  const savedC = localStorage.getItem('ec_class');
-  setClassKey(sanitizeClassName(urlC || savedC || 'CLASS'), false);
-  $('#classInput').value = live.classKey; $('#classLabel').textContent = live.classKey;
-
-  // PIN presence
-  const cfgSnap = await fb.db.ref(paths.configPath()).get();
-  const cfg = cfgSnap.val() || {};
-  live.classHasPin = typeof cfg.teacherPin === 'string' && cfg.teacherPin.length === 4;
-
-  // session
-  let s = (await fb.db.ref(`${paths.configPath()}/currentSession`).get()).val();
-  if(!s){ s = nowId(); await fb.db.ref(`${paths.configPath()}/currentSession`).set(s); }
-  live.sessionId = s; $('#sessionLabel').textContent = s.slice(-6);
-
-  ensureStudentPresence();
-  attachPromptListener();
-  attachResetListeners();
-  attachCloseListener();       // listen for Close Class events
-  subscribeRoster();
-  subscribeScores();
-
-  // Build mini PT once at boot (answers hidden by default)
-  buildMiniPT();
-}
-
-function setClassKey(k, writeUrl=true){
-  live.classKey = sanitizeClassName(k);
-  localStorage.setItem('ec_class', live.classKey);
-  if(writeUrl) setUrlParam('class', live.classKey);
-}
-function ensureStudentPresence(){
-  let id = localStorage.getItem('ec_uid');
-  if(!id){ id = uid(); localStorage.setItem('ec_uid', id); }
-  live.me.id = id;
-
-  const nm = localStorage.getItem('ec_name') || '';
-  live.me.name = nm || null;
-  if(nm) $('#nameInput').value = nm;
-
-  const ref = fb.db.ref(`${paths.students()}/${id}`);
-  ref.set({ name: nm || null, at: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
-  try{ ref.onDisconnect().remove(); }catch{}
-}
-$('#saveNameBtn').onclick = ()=>{
-  const nm = ($('#nameInput').value||'').trim().slice(0,40);
-  localStorage.setItem('ec_name', nm);
-  live.me.name = nm || null;
-  if(fb.db) fb.db.ref(`${paths.students()}/${live.me.id}`).update({ name: nm || null, at: firebase.database.ServerValue.TIMESTAMP }).catch(()=>{});
-  alert('Name saved.');
-};
-
-/* PIN helpers & class close handling */
-async function fetchPin(){
-  const cfg = (await fb.db.ref(paths.configPath()).get()).val() || {};
-  live.classHasPin = typeof cfg.teacherPin === 'string' && cfg.teacherPin.length === 4;
-  return cfg.teacherPin || null;
-}
-async function savePin(pin){ await fb.db.ref(paths.configPath()).update({ teacherPin: pin }); live.classHasPin = true; }
-function validPin(p){ return /^\d{4}$/.test(p || ''); }
-
-function tokenSeenKey(kind){ return `ec_seen_${live.classKey}_${kind}_${live.sessionId||'none'}`; }
-function getSeen(kind){ return Number(localStorage.getItem(tokenSeenKey(kind)) || 0); }
-function setSeen(kind,v){ localStorage.setItem(tokenSeenKey(kind), String(v)); }
-
-function attachResetListeners(){
-  const softRef = fb.db.ref(`${paths.control()}/softResetAt`);
-  const hardRef = fb.db.ref(`${paths.control()}/resetAt`);
-  softRef.on('value', s=>{
-    const t = Number(s.val()||0);
-    if(t && t>getSeen('soft')){ setSeen('soft',t); resetBoard(); }
-  });
-  hardRef.on('value', async s=>{
-    const t = Number(s.val()||0);
-    if(t && t>getSeen('hard')){
-      setSeen('hard',t);
-      let next = nowId();
-      await fb.db.ref(`${paths.configPath()}/currentSession`).set(next);
-      live.sessionId = next; $('#sessionLabel').textContent = next.slice(-6);
-      resetBoard();
-      attachPromptListener(); subscribeRoster(true); subscribeScores(true);
-    }
+/* ===== Build Orbital grid ===== */
+function buildOrbitals(){
+  const grid=document.getElementById("orbGrid");
+  grid.innerHTML="";
+  ORBITAL_ORDER.forEach(o=>{
+    const div=document.createElement("div");
+    div.className="orbital";
+    div.dataset.orb=o;
+    div.ondragover=(e)=>{e.preventDefault();div.classList.add("over");};
+    div.ondragleave=()=>div.classList.remove("over");
+    div.ondrop=(e)=>{
+      e.preventDefault();div.classList.remove("over");
+      if(!filled[o])filled[o]=0;
+      const max=(o.includes("s")?2:o.includes("p")?6:o.includes("d")?10:14);
+      if(filled[o]<max){filled[o]++;updateConfigOutput();}
+      else{adjustScore(-1);alert("Too many electrons in "+o);}
+    };
+    grid.appendChild(div);
   });
 }
 
-function attachCloseListener(){
-  const ref = fb.db.ref(`${paths.configPath()}/closedAt`);
-  ref.on('value', (snap)=>{
-    const t = Number(snap.val()||0);
-    if(!t) return;
-    const seen = Number(localStorage.getItem(`ec_closed_seen_${live.classKey}`)||0);
-    if(t>seen){
-      localStorage.setItem(`ec_closed_seen_${live.classKey}`, String(t));
-      // Evict: clear class and prompt user; fall back to practice mode
-      localStorage.removeItem('ec_class');
-      setUrlParam('class', null);
-      alert('This class has been closed by the teacher. You have been removed from it.');
-      setPractice();
-      $('#classLabel').textContent='—';
-    }
-  });
-}
-
-/* =========================
-   Student/Test engine + list
-   ========================= */
-const ORDER = ["1s","2s","2p","3s","3p","4s","3d","4p","5s","4d","5p","6s","4f","5d","6p","7s","5f","6d","7p"];
-const ORB_COUNT = { s:1, p:3, d:5, f:7 };
-const CAP       = { s:2, p:6, d:10, f:14 };
-
-const SYMBOLS=[null,"H","He","Li","Be","B","C","N","O","F","Ne","Na","Mg","Al","Si","P","S","Cl","Ar",
-"K","Ca","Sc","Ti","V","Cr","Mn","Fe","Co","Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr",
-"Rb","Sr","Y","Zr","Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd","In","Sn","Sb","Te","I","Xe",
-"Cs","Ba","La","Ce","Pr","Nd","Pm","Sm","Eu","Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu",
-"Hf","Ta","W","Re","Os","Ir","Pt","Au","Hg","Tl","Pb","Bi","Po","At","Rn",
-"Fr","Ra","Ac","Th","Pa","U","Np","Pu","Am","Cm","Bk","Cf","Es","Fm","Md","No","Lr",
-"Rf","Db","Sg","Bh","Hs","Mt","Ds","Rg","Cn","Nh","Fl","Mc","Lv","Ts","Og"];
-const PERIOD =(()=>{const b=[2,10,18,36,54,86,118]; const p=[null]; for(let z=1,k=1; z<=118; z++){ if(z>b[k-1]) k++; p[z]=k; } return p;})();
-const NOBLES=[{Z:2,sym:"He"},{Z:10,sym:"Ne"},{Z:18,sym:"Ar"},{Z:36,sym:"Kr"},{Z:54,sym:"Xe"},{Z:86,sym:"Rn"},{Z:118,sym:"Og"}];
-
-const state = { orbitals:{}, Z:0, history:[], lastQN:null };
-const test = {
-  mode:'practice',
-  requireQN:false,
-  pointsPer:5,
-  list:null,              // array of {Z, charge, ng:boolean}
-  idx:0,
-  score:null
-};
-
-/* Build orbital grid */
-function addRow(container, tag, boxes){
-  const line=document.createElement('div'); line.className='rowline';
-  const lab=document.createElement('div'); lab.className='rlabel'; lab.textContent=tag;
-  const wrap=document.createElement('div'); wrap.className='orbitals';
-  for(let i=0;i<boxes;i++){
-    const box=document.createElement('div');
-    box.className='orbital';
-    box.dataset.key=`${tag}:${i}`;
-    box.dataset.sub=tag.replace(/[0-9]/g,"");
-    box.dataset.idx=String(i);
-    box.addEventListener('dragover', ev=>{ ev.preventDefault(); box.classList.add('over'); });
-    box.addEventListener('dragleave', ()=> box.classList.remove('over'));
-    box.addEventListener('drop', ev=>{
-      ev.preventDefault(); box.classList.remove('over');
-      const spin=ev.dataTransfer.getData('text/plain')||ev.dataTransfer.getData('text');
-      attemptPlace(box, spin, true);
-    });
-    wrap.appendChild(box);
-    state.orbitals[`${tag}:${i}`]=[];
-  }
-  line.appendChild(lab); line.appendChild(wrap);
-  container.appendChild(line);
-}
-function buildBlocks(){
-  const scol=$('#scol'), pcol=$('#pcol'), dcol=$('#dcol'), fcol=$('#fcol');
-  scol.innerHTML=pcol.innerHTML=dcol.innerHTML=fcol.innerHTML="";
-  const sTags=["1s","2s","3s","4s","5s","6s","7s"];
-  const pTags=["2p","3p","4p","5p","6p","7p"];
-  const dTags=["3d","4d","5d","6d"];
-  const fTags=["4f","5f"];
-  [...sTags].reverse().forEach(tag=> addRow(scol, tag, 1));
-  [...pTags].reverse().forEach(tag=> addRow(pcol, tag, 3));
-  [...dTags].reverse().forEach(tag=> addRow(dcol, tag, 5));
-  [...fTags].reverse().forEach(tag=> addRow(fcol, tag, 7));
-}
-
-/* Tray wiring */
-function wireTray(){
-  document.querySelectorAll('#tray .e').forEach(el=>{
-    el.addEventListener('dragstart', ev=>{
-      ev.dataTransfer.setData('text/plain', el.dataset.spin);
-    });
-  });
-  $('#autoOne').onclick = ()=>{
-    if(test.mode==='test') return;     // disabled in test
-    const a = nextAllowed(); if(!a) return;
-    const box = document.querySelector(`.orbital[data-key="${a.key}"]`);
-    attemptPlace(box, a.spin, false);
-  };
-  $('#autoRemove').onclick = ()=>{
-    if(test.mode==='test') return;
-    if(!state.history.length) return;
-    const last = state.history.pop();
-    const occ  = state.orbitals[last.key];
-    if(occ && occ.length){
-      occ.pop();
-      const box=document.querySelector(`.orbital[data-key="${last.key}"]`);
-      if(box) drawOrbital(box, occ);
-      if(state.Z>0) state.Z--;
-      state.lastQN=null; syncReadouts(); syncQuantumLast();
-    }
-  };
-  $('#clear').onclick = ()=>{
-    if(test.mode==='test') return;
-    resetBoard();
-  };
-}
-
-/* counters & order */
-function counters(){ const c={}; for(const tag of ORDER){ const sub=tag.replace(/[0-9]/g,""); const cnt=ORB_COUNT[sub]; let sum=0; for(let i=0;i<cnt;i++) sum+=state.orbitals[`${tag}:${i}`]?.length||0; c[tag]=sum; } return c; }
-function currentSubshell(){ const c=counters(); for(const tag of ORDER){ const sub=tag.replace(/[0-9]/g,""); if(c[tag] < CAP[sub]) return tag; } return null; }
-function nextAllowed(){
-  const tag=currentSubshell(); if(!tag) return null;
-  const sub=tag.replace(/[0-9]/g,""); const count=ORB_COUNT[sub];
-  const keys=[...Array(count).keys()].map(i=>`${tag}:${i}`);
-  const occs=keys.map(k=>state.orbitals[k]);
-  for(let i=0;i<count;i++){ if((occs[i]||[]).length===0) return {key:keys[i], spin:'up', tag}; }
-  for(let i=0;i<count;i++){ if((occs[i]||[]).length===1 && !occs[i].some(e=>e.spin==='down')) return {key:keys[i], spin:'down', tag}; }
-  for(let i=0;i<count;i++){ if((occs[i]||[]).length===1) return {key:keys[i], spin:(occs[i][0].spin==='up'?'down':'up'), tag}; }
-  return null;
-}
-
-/* QN helpers */
-const L_FROM_SUB={s:0,p:1,d:2,f:3};
-function mlSeq(sub){ const l=L_FROM_SUB[sub]; const a=[]; for(let m=-l;m<=l;m++) a.push(m); return a; }
-function qnFromKeySpin(key,spin){
-  const tag=key.split(":")[0], n=parseInt(tag), sub=tag.replace(/[0-9]/g,""), l=L_FROM_SUB[sub];
-  const idx=parseInt(key.split(":")[1],10), mlList=mlSeq(sub), m_l=mlList[idx] ?? 0, m_s=(spin==='up')?'+1/2':'-1/2';
-  return {n,l,sub,m_l,m_s};
-}
-
-/* Noble helpers & configs */
-function nearestNobleCore(z){ let core=null; for(const ng of NOBLES){ if(ng.Z<=z) core=ng; else break; } return core; }
-function buildCountsForZ(z){ const counts={}; for(const tag of ORDER) counts[tag]=0; let left=z; for(const tag of ORDER){ if(left<=0) break; const sub=tag.replace(/[0-9]/g,""); const take=Math.min(CAP[sub],left); counts[tag]=take; left-=take; } return counts; }
-function prefillToZ(z){
-  for(const k in state.orbitals) state.orbitals[k]=[];
-  document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
-
-  let toPlace = z;
-  while(toPlace>0){
-    const a = nextAllowed();
-    if(!a) break;
-    const box = document.querySelector(`.orbital[data-key="${a.key}"]`);
-    state.orbitals[a.key].push({spin:a.spin});
-    drawOrbital(box, state.orbitals[a.key]);
-    state.Z++;
-    toPlace--;
-  }
-  state.history=[]; state.lastQN=null; syncReadouts(); syncQuantumLast();
-}
-
-/* Prompt handling (single or list), including NG prefill */
-let unsubPrompt=null, unsubMyProgress=null;
-function attachPromptListener(){
-  if(!fb.db) return;
-  const ref = fb.db.ref(paths.currentPrompt());
-  if(unsubPrompt) try{ ref.off(); }catch{}
-  ref.on('value', snap=>{
-    const v = snap.val() || null;
-    applyPrompt(v);
-  });
-  unsubPrompt = ref;
-}
-function speciesTargetZ(goal){
-  if(!goal) return null;
-  if(goal.kind==='element') return goal.Z;
-  if(goal.kind==='ion') return goal.Z - (goal.charge||0);
-  return null;
-}
-function applyPrompt(v){
-  if(!v){ setPractice(); return; }
-  test.mode = 'test';
-  test.requireQN = !!v.requireQN;
-  test.pointsPer = Number(v.pointsPer)||5;
-
-  if (Array.isArray(v.list) && v.list.length){
-    test.list = v.list.slice();
-    $('#itemTotal').textContent = test.list.length;
-    if(unsubMyProgress) try{ fb.db.ref(`${paths.progressRoot()}/${live.me.id}`).off(); }catch{}
-    const myRef = fb.db.ref(`${paths.progressRoot()}/${live.me.id}`);
-    myRef.on('value', snap=>{
-      let idx = Number(snap.val()||0);
-      if(!Number.isInteger(idx) || idx<0) idx=0;
-      if(idx >= test.list.length) idx = test.list.length;
-      test.idx = idx;
-      setUpItemFromList();
-    });
-    unsubMyProgress = myRef;
-  } else if (v.goal){
-    test.list = [{ Z: v.goal.Z, charge: v.goal.charge||0, ng:false }];
-    test.idx = 0;
-    $('#itemTotal').textContent = 1;
-    setUpItemFromList();
-  }
-
-  $('#modeBadge').textContent='test';
-  $('#promptText').textContent = labelForCurrent();
-  $('#scoreNow').textContent = test.pointsPer;
-  $('#studentTestBar').style.display = '';
-  $('#qnHint').textContent = test.requireQN ? 'QN are required for credit.' : 'QN not required for this item.';
-  $('#autoOne').disabled=true; $('#autoRemove').disabled=true; $('#clear').disabled=true;
-}
-
-function setPractice(){
-  test.mode='practice'; test.list=null; test.idx=0; test.requireQN=false; test.pointsPer=5; test.score=null;
-  $('#modeBadge').textContent='practice'; $('#promptText').textContent='—'; $('#scoreNow').textContent='—';
-  $('#studentTestBar').style.display='none'; $('#itemIdx').textContent='—'; $('#itemTotal').textContent='—';
-  $('#autoOne').disabled=false; $('#autoRemove').disabled=false; $('#clear').disabled=false;
-  resetBoard();
-}
-
-function currentItem(){ return (test.list && test.idx<test.list.length) ? test.list[test.idx] : null; }
-function labelForItem(it){
-  if(!it) return '—';
-  const sym = SYMBOLS[it.Z]||'?';
-  const ch = it.charge||0;
-  const ion = ch===0 ? '' : (ch>0?`^${ch}+`:`^${Math.abs(ch)}-`);
-  const ng = it.ng ? ' (NG)' : '';
-  return `${sym}${ion}${ng}`;
-}
-function labelForCurrent(){ return labelForItem(currentItem()); }
-
-function setUpItemFromList(){
-  const it = currentItem();
-  $('#itemIdx').textContent = test.list ? String(Math.min(test.idx+1, test.list.length)) : '—';
-  $('#promptText').textContent = labelForItem(it);
-  test.score = test.pointsPer;
-  $('#scoreNow').textContent = test.score;
-
-  resetBoard();
-  if(!it) return;
-
-  // Noble-gas prefill: fill up to noble core of TARGET species (Z - charge)
-  const targetZ = (it.charge && it.charge!==0) ? (it.Z - it.charge) : it.Z;
-  if(it.ng){
-    const core = nearestNobleCore(targetZ);
-    if(core && core.Z>0){ prefillToZ(core.Z); }
-  }
-}
-
-/* placement + rules + scoring hook */
-function attemptPlace(targetBox, spin, userAction){
-  const allowed = nextAllowed();
-  if(!allowed) return strike("No available orbital","All orbitals through 7p are filled.", userAction);
-
-  const targetKey = targetBox.dataset.key;
-  const targetOcc = state.orbitals[targetKey];
-
-  if(targetOcc.length>=2) return strike("Pauli exclusion","That orbital already has two electrons.", userAction);
-  if(targetOcc.length===1 && targetOcc[0].spin===spin) return strike("Pauli exclusion","Electrons in the same orbital must have opposite spins.", userAction);
-
-  const curTag = allowed.tag, targetTag = targetKey.split(":")[0];
-  if(targetTag !== curTag) return strike("Aufbau order",`Next subshell is <strong>${curTag}</strong>, not <strong>${targetTag}</strong>.`, userAction);
-
-  const sub = curTag.replace(/[0-9]/g,""), count = ORB_COUNT[sub];
-  const keys=[...Array(count).keys()].map(i=>`${curTag}:${i}`);
-  const anyEmpty = keys.some(k=>state.orbitals[k].length===0);
-  if(anyEmpty && targetOcc.length===1) return strike("Hund’s rule","Place one electron (↑) in each orbital of this subshell before pairing (↓).", userAction);
-
-  if(!(targetKey===allowed.key && spin===allowed.spin)){
-    if(targetKey===allowed.key && spin!==allowed.spin)
-      return strike("Spin / Hund",`Use <strong>${allowed.spin==='up'?'↑':'↓'}</strong> for this step.`, userAction);
-    return strike("Order violation",`Place at <strong>${allowed.key.split(':')[0]}</strong> with <strong>${allowed.spin==='up'?'↑':'↓'}</strong>.`, userAction);
-  }
-
-  targetOcc.push({spin});
-  drawOrbital(targetBox, targetOcc);
-  state.Z++;
-  state.history.push({ key: targetKey, spin });
-  state.lastQN = qnFromKeySpin(targetKey, spin);
-  syncReadouts(); syncQuantumLast();
-
-  if(test.mode==='test'){ maybeAutoCheck(); }
-}
-function drawOrbital(box, occ){
-  box.innerHTML='';
-  occ.forEach(o=>{ const e=document.createElement('div'); e.className='e '+(o.spin==='up'?'up':'down'); e.textContent=(o.spin==='up'?'↑':'↓'); box.appendChild(e); });
-  box.classList.toggle('full', occ.length===2);
-}
-
-/* readouts */
-function currentConfigCounters(){ const c=counters(), out={}; for(const tag of ORDER){ if(c[tag]>0) out[tag]=c[tag]; } return out; }
-function cfgHTML(){ const c=currentConfigCounters(), parts=[]; for(const tag of ORDER){ if(c[tag]) parts.push(`${tag}<sup>${c[tag]}</sup>`);} return parts.length?parts.join(" "):"—"; }
-function cfgPlain(){ const c=currentConfigCounters(), parts=[]; for(const tag of ORDER){ if(c[tag]) parts.push(`${tag}${c[tag]}`);} return parts.length?parts.join(" "):"—"; }
-function elementSymbol(Z){ return (Z>=1 && Z<=118)? SYMBOLS[Z] : "—"; }
-function periodFromZ(Z){ return PERIOD[Z] || "—"; }
-function shorthand(){
-  const Z=state.Z; if(!Z) return "—";
-  const nobleToggle=$('#nobleToggle').checked; const p=periodFromZ(Z);
-  if(!nobleToggle || (typeof p==="number" && p<4)) return cfgPlain();
-  let core=null; for(const ng of NOBLES){ if(ng.Z===Z) return `[${ng.sym}]`; if(ng.Z<Z) core=ng; else break; }
-  if(!core) return cfgPlain();
-  const current=currentConfigCounters(), coreCounts=buildCountsForZ(core.Z);
-  const parts=[`[${core.sym}]`];
-  for(const tag of ORDER){ const rem=(current[tag]||0)-(coreCounts[tag]||0); if(rem>0) parts.push(`${tag}${rem}`); }
-  return parts.join(" ");
-}
-function syncReadouts(){
-  $('#Z').textContent=state.Z;
-  $('#El').textContent=elementSymbol(state.Z);
-  $('#Period').textContent=periodFromZ(state.Z);
-  $('#cfg').innerHTML=cfgHTML();
-  $('#sh').textContent=shorthand();
-  highlightMiniPT(state.Z);
-}
-function syncQuantumLast(){
-  const qnEl=$('#qn');
-  if(!state.lastQN){ qnEl.innerHTML='n = —, ℓ = — (—), mℓ = —, ms = —'; return; }
-  const q=state.lastQN, lName=({0:'s',1:'p',2:'d',3:'f'})[q.l]||'—';
-  qnEl.innerHTML=`n = ${q.n}, ℓ = ${q.l} (${lName}), m<sub>ℓ</sub> = ${q.m_l}, m<sub>s</sub> = ${q.m_s}`;
-}
-
-/* mini periodic table (answers panel) */
-function buildMiniPT(){
-  const pt = $('#ptMini'); if(!pt) return;
-  pt.innerHTML='';
-  function blank(n){ for(let i=0;i<n;i++){ const b=document.createElement('div'); b.className='pt-btn pt-blank'; pt.appendChild(b);} }
-  function btn(z){
-    const b=document.createElement('button');
-    b.type='button'; b.className='pt-btn'; b.dataset.z=String(z);
-    b.textContent = SYMBOLS[z]||'?'; b.title = `${SYMBOLS[z]||'?'} (Z=${z})`;
-    pt.appendChild(b);
-  }
-  // Period 1
-  blank(0); btn(1); blank(16); btn(2);
-  // Period 2
-  btn(3); btn(4); blank(10); btn(5); btn(6); btn(7); btn(8); btn(9); btn(10);
-  // Period 3
-  btn(11); btn(12); blank(10); btn(13); btn(14); btn(15); btn(16); btn(17); btn(18);
-  // Period 4
-  btn(19); btn(20); btn(21); btn(22); btn(23); btn(24); btn(25); btn(26); btn(27); btn(28); btn(29); btn(30); btn(31); btn(32); btn(33); btn(34); btn(35); btn(36);
-  // Period 5
-  btn(37); btn(38); btn(39); btn(40); btn(41); btn(42); btn(43); btn(44); btn(45); btn(46); btn(47); btn(48); btn(49); btn(50); btn(51); btn(52); btn(53); btn(54);
-  // Period 6
-  btn(55); btn(56); btn(57); btn(72); btn(73); btn(74); btn(75); btn(76); btn(77); btn(78); btn(79); btn(80); btn(81); btn(82); btn(83); btn(84); btn(85); btn(86);
-  // Period 7
-  btn(87); btn(88); btn(89); btn(104); btn(105); btn(106); btn(107); btn(108); btn(109); btn(110); btn(111); btn(112); btn(113); btn(114); btn(115); btn(116); btn(117); btn(118);
-  // f-block rows
-  const strip = document.createElement('div'); strip.style.gridColumn='1 / -1'; strip.style.marginTop='6px'; pt.appendChild(strip);
-  const row4f=document.createElement('div'); row4f.style.display='flex'; row4f.style.gap='3px';
-  for(let z=58; z<=71; z++){ const b=document.createElement('button'); b.type='button'; b.className='pt-btn'; b.dataset.z=String(z); b.textContent=SYMBOLS[z]||'?'; b.title=`${SYMBOLS[z]||'?'} (Z=${z})`; row4f.appendChild(b); }
-  pt.appendChild(row4f);
-  const row5f=document.createElement('div'); row5f.style.display='flex'; row5f.style.gap='3px'; row5f.style.marginTop='3px';
-  for(let z=90; z<=103; z++){ const b=document.createElement('button'); b.type='button'; b.className='pt-btn'; b.dataset.z=String(z); b.textContent=SYMBOLS[z]||'?'; b.title=`${SYMBOLS[z]||'?'} (Z=${z})`; row5f.appendChild(b); }
-  pt.appendChild(row5f);
-}
-function highlightMiniPT(Z){
-  const pt = $('#ptMini'); if(!pt) return;
-  pt.querySelectorAll('.pt-hi').forEach(el=>el.classList.remove('pt-hi'));
-  if(Z>=1 && Z<=118){
-    const el = pt.querySelector(`[data-z="${Z}"]`);
-    if(el) el.classList.add('pt-hi');
-  }
-}
-
-/* warnings */
-function warn(title, html){ alert(title + ": " + (html||"")); }
-function strike(title, html, userAction){
-  if(userAction && test.mode==='test'){ decPoint(); }
-  warn(title, html);
-  return;
-}
-
-/* controls */
-$('#nobleToggle').addEventListener('change', syncReadouts);
-const answersPanel=$('#answersPanel'); const toggleBtn=$('#toggleAnswers');
-toggleBtn.onclick = ()=>{
-  const hidden=answersPanel.classList.toggle('hidden');
-  toggleBtn.textContent = hidden?'Show Answers':'Hide Answers';
-  // Ensure mini PT is present when showing
-  if(!hidden && !$('#ptMini').children.length){ buildMiniPT(); }
-  // Always refresh highlight when toggled
-  highlightMiniPT(state.Z);
-};
-
-/* scoring */
-function decPoint(){ if(test.mode!=='test') return; if(test.score>0){ test.score--; $('#scoreNow').textContent=test.score; } }
-
-/* Auto-check change: ONLY penalize if they exceed target; no auto-correct/advance */
-function maybeAutoCheck(){
-  if (test.mode !== 'test') return;
-  const it = currentItem(); if(!it) return;
-  const targetZ = speciesTargetZ({kind: it.charge? 'ion':'element', Z: it.Z, charge: it.charge||0});
-  if (targetZ == null) return;
-
-  if (state.Z > targetZ){
-    decPoint();
-    warn("Too many electrons","You exceeded the target electron count. Remove one or submit your answer.");
-  }
-}
-
-/* Submit */
-$('#submitBtn').onclick = ()=>{
-  if (test.mode !== 'test') return;
-  const it = currentItem(); if(!it) return;
-  const tZ = speciesTargetZ({kind: it.charge? 'ion':'element', Z: it.Z, charge: it.charge||0});
-  if (tZ == null) return;
-
-  if (state.Z !== tZ){
-    decPoint();
-    warn("Incorrect submission", `Target requires ${tZ} electrons; you submitted ${state.Z}.`);
-    return;
-  }
-
-  if (test.requireQN){
-    const q = state.lastQN;
-    if (!q){
-      decPoint();
-      warn("Missing last electron","No last electron recorded. Place the final electron and re-submit.");
-      return;
-    }
-    const n  = Number($('#qn_n').value||NaN);
-    const l  = $('#qn_l').value==='' ? NaN : Number($('#qn_l').value);
-    const ml = Number($('#qn_ml').value||NaN);
-    const ms = $('#qn_ms').value || '';
-    const L=L_FROM_SUB[q.sub]; const mlList=mlSeq(q.sub);
-    const ok = (n===q.n) && (l===L) && mlList.includes(ml) && (ms===q.m_s);
-    if (!ok){
-      decPoint();
-      warn("Quantum numbers mismatch",
-           `Expected n=${q.n}, ℓ=${L} (${q.sub}), mℓ ∈ [${mlList[0]}…${mlList[mlList.length-1]}] (chosen ${q.m_l}), mₛ=${q.m_s}.`);
-      return;
-    }
-  }
-
-  writeResult(true,'submit_ok');
-  advanceItem();
-};
-
-function advanceItem(){
-  alert(`Correct! Earned ${test.score}/${test.pointsPer}.`);
-  const myRef = fb.db.ref(`${paths.progressRoot()}/${live.me.id}`);
-  const next = (test.idx+1);
-  myRef.set(next).catch(()=>{});
-  resetBoard();
-}
-
-/* write result */
-function writeResult(ok, reason){
-  if(!fb.db || !live.classKey || !live.sessionId) return;
-  const it = currentItem();
-  const ts=Date.now();
-  const payload={
-    ok: !!ok,
-    reason: reason||null,
-    earned: ok ? test.score : 0,
-    pointsPer: test.pointsPer,
-    requireQN: test.requireQN,
-    target: it ? { Z: it.Z, charge: it.charge||0, ng: !!it.ng } : null,
-    zFinal: state.Z,
-    cfg: cfgPlain(),
-    sh: shorthand(),
-    lastQN: state.lastQN,
-    itemIndex: test.idx,
-    at: ts,
-    who: live.me.id || 'anon',
-    name: live.me.name || null
-  };
-  fb.db.ref(`${paths.results()}/${live.me.id}/${ts}`).set(payload).catch(()=>{});
-}
-
-/* reset board */
-function resetBoard(){
-  for(const k in state.orbitals) state.orbitals[k]=[];
-  document.querySelectorAll('.orbital').forEach(b=>{ b.innerHTML=''; b.classList.remove('full'); });
-  state.Z=0; state.history=[]; state.lastQN=null; syncReadouts(); syncQuantumLast();
-  $('#qn_n').value=''; $('#qn_l').value=''; $('#qn_ml').value=''; $('#qn_ms').value='';
-}
-
-/* ========== Roster & Scores with Right/Total and CLASS TOTALS ========== */
-const roster = new Map(); // id -> {name, at}
-const totals = new Map(); // id -> {sum, last, right, total}
-function subscribeRoster(reset){
-  if(!fb.db) return;
-  const ref = fb.db.ref(paths.students());
-  if(reset) try{ ref.off(); }catch{}
-  ref.on('child_added', snap=>{
-    const id=snap.key, v=snap.val()||{};
-    roster.set(id,{name:v.name||null, at:v.at||0}); renderScores();
-  });
-  ref.on('child_changed', snap=>{
-    const id=snap.key, v=snap.val()||{};
-    roster.set(id,{name:v.name||null, at:v.at||0}); renderScores();
-  });
-  ref.on('child_removed', snap=>{ roster.delete(snap.key); renderScores(); });
-}
-function subscribeScores(reset){
-  if(!fb.db) return;
-  const ref = fb.db.ref(paths.results());
-  if(reset) try{ ref.off(); }catch{}
-  ref.on('value', snap=>{
-    totals.clear();
-    const all = snap.val()||{};
-    Object.keys(all).forEach(id=>{
-      let sum=0, last=0, right=0, total=0;
-      const items = all[id]||{};
-      Object.keys(items).forEach(ts=>{
-        const r = items[ts];
-        sum += Number(r.earned||0);
-        last = Math.max(last, Number(r.at||0));
-        total += 1;
-        if(r.ok) right += 1;
-      });
-      totals.set(id,{sum,last,right,total});
-    });
-    renderScores();
-  });
-}
-function renderScores(){
-  const body = $('#scoreBody'); if(!body) return;
-  body.innerHTML='';
-  const rows=[];
-  const ids = new Set([...roster.keys(), ...totals.keys()]);
-  ids.forEach(id=>{
-    const r = roster.get(id)||{};
-    const t = totals.get(id)||{sum:0,last:0,right:0,total:0};
-    rows.push({
-      id,
-      name: (r.name && String(r.name).trim()) ? r.name.trim() : '(no name)',
-      sum: t.sum||0,
-      last: t.last||0,
-      right: t.right||0,
-      total: t.total||0
-    });
-  });
-  rows.sort((a,b)=> (b.sum-a.sum) || ((b.last||0)-(a.last||0)) || a.name.localeCompare(b.name));
-
-  // Aggregate totals
-  const studentCount = rows.length;
-  const classRight = rows.reduce((s,r)=>s+(r.right||0), 0);
-  const classTotal = rows.reduce((s,r)=>s+(r.total||0), 0);
-  const classPoints = rows.reduce((s,r)=>s+(r.sum||0), 0);
-  const pct = classTotal ? Math.round((classRight/classTotal)*100) : 0;
-  const avgPts = studentCount ? (classPoints / studentCount) : 0;
-
-  const totalsEl = $('#classTotals');
-  if (totalsEl){
-    totalsEl.innerHTML = `
-      <strong>Class totals:</strong>
-      Students: ${studentCount} • Right: ${classRight} / Total: ${classTotal}
-      (${pct}% correct) • Points: ${classPoints} • Avg points/student: ${avgPts.toFixed(1)}
-    `;
-  }
-
-  // Render rows
-  rows.forEach(row=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(row.name)}</td>
-                    <td>${row.right} / ${row.total}</td>
-                    <td>${row.sum}</td>
-                    <td>${fmtTime(row.last)}</td>
-                    <td class="tiny">${row.id}</td>`;
-    body.appendChild(tr);
-  });
-}
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
-function exportCSV(){
-  const rows = document.querySelectorAll('#scoreBody tr');
-  let studentCount = 0, classRight = 0, classTotal = 0, classPoints = 0;
-  rows.forEach(tr=>{
-    studentCount++;
-    const tds = [...tr.children].map(td=>td.textContent);
-    const [rightStr, totalStr] = tds[1].split('/').map(s=>s.trim());
-    classRight  += Number(rightStr||0);
-    classTotal  += Number(totalStr||0);
-    classPoints += Number(tds[2]||0);
-  });
-  const pct = classTotal ? Math.round((classRight/classTotal)*100) : 0;
-  const avgPts = studentCount ? (classPoints/studentCount) : 0;
-
-  const lines = [];
-  lines.push(['Class totals',
-              `Students=${studentCount}`,
-              `Right=${classRight}`,
-              `Total=${classTotal}`,
-              `Percent=${pct}%`,
-              `Points=${classPoints}`,
-              `AvgPoints=${avgPts.toFixed(1)}`
-  ]);
-  lines.push(['Student','Right','Total','Points','Last Submit','ID']);
-
-  rows.forEach(tr=>{
-    const tds=[...tr.children].map(td=>td.textContent);
-    const [rightStr, totalStr] = tds[1].split('/').map(s=>s.trim());
-    lines.push([tds[0], rightStr, totalStr, tds[2], tds[3], tds[4]]);
-  });
-
-  function csvEscape(s){ const str = String(s == null ? '' : s); return /[",\n]/.test(str) ? '"' + str.replace(/"/g,'""') + '"' : str; }
-  const csv = lines.map(row => row.map(csvEscape).join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download=`ec-scores-${live.classKey}-${live.sessionId}.csv`; a.click();
-  URL.revokeObjectURL(url);
-}
-
-/* Teacher Panel: periodic chart + queue */
-const queue = []; // items: {Z, charge, ng}
-function renderQueue(){
-  const wrap = $('#queue'); wrap.innerHTML='';
-  $('#qCount').textContent = String(queue.length);
-  if(!queue.length){ wrap.innerHTML = '<div class="hint">Queue is empty. Click elements on the chart to add.</div>'; return; }
-  queue.forEach((it,idx)=>{
-    const sym = SYMBOLS[it.Z]||'?';
-    const ch = it.charge||0;
-    const ion = ch===0 ? '' : (ch>0?`^${ch}+`:`^${Math.abs(ch)}-`);
-    const row=document.createElement('div'); row.className='queue-item';
-    row.innerHTML = `
-      <span class="chip" title="atomic number">Z=${it.Z}</span>
-      <strong>${sym}${ion}</strong>
-      <button class="btn" data-act="minus" data-idx="${idx}">−</button>
-      <button class="btn" data-act="plus" data-idx="${idx}">+</button>
-      <label class="tiny"><input type="checkbox" data-act="ng" data-idx="${idx}" ${it.ng?'checked':''}> NG</label>
-      <button class="btn warn" data-act="del" data-idx="${idx}">Remove</button>
-    `;
-    wrap.appendChild(row);
-  });
-}
-document.addEventListener('click', (e)=>{
-  const act = e.target?.dataset?.act; if(!act) return;
-  const idx = Number(e.target.dataset.idx);
-  if(Number.isNaN(idx)) return;
-  const it = queue[idx]; if(!it) return;
-  if(act==='plus'){ it.charge = (it.charge||0)+1; }
-  if(act==='minus'){ it.charge = (it.charge||0)-1; }
-  if(act==='ng'){ it.ng = !!e.target.checked; }
-  if(act==='del'){ queue.splice(idx,1); }
-  renderQueue();
-});
-$('#tp_clearQueue').onclick = ()=>{ queue.length=0; renderQueue(); };
-
+/* ===== Build Periodic Table ===== */
 function buildPeriodicGrid(){
-  const pt = $('#pt'); pt.innerHTML='';
-  function blank(n){ for(let i=0;i<n;i++){ const b=document.createElement('div'); b.className='pt-btn pt-blank'; pt.appendChild(b);} }
-  function btn(z){
-    const b=document.createElement('button');
-    b.type='button'; b.className='pt-btn'; b.textContent = SYMBOLS[z]||'?'; b.title = `${SYMBOLS[z]||'?'} (Z=${z})`;
-    b.addEventListener('click', ()=>{ queue.push({Z:z, charge:0, ng:false}); renderQueue(); });
+  const pt=document.getElementById("ptable");
+  pt.innerHTML="";
+  for(let i=1;i<=36;i++){
+    const b=document.createElement("div");
+    b.className="pt-btn";
+    const sym=ELEMENTS[i]||"";
+    b.textContent=sym;
+    if(i<=2||[3,4,11,12,19,20].includes(i))b.classList.add("pt-s");
+    else if([5,6,7,8,9,10,13,14,15,16,17,18,31,32,33,34,35,36].includes(i))b.classList.add("pt-p");
+    else if(i>=21&&i<=30)b.classList.add("pt-d");
     pt.appendChild(b);
   }
-  // Periods
-  blank(0); btn(1); blank(16); btn(2);
-  btn(3); btn(4); blank(10); btn(5); btn(6); btn(7); btn(8); btn(9); btn(10);
-  btn(11); btn(12); blank(10); btn(13); btn(14); btn(15); btn(16); btn(17); btn(18);
-  btn(19); btn(20); btn(21); btn(22); btn(23); btn(24); btn(25); btn(26); btn(27); btn(28); btn(29); btn(30); btn(31); btn(32); btn(33); btn(34); btn(35); btn(36);
-  btn(37); btn(38); btn(39); btn(40); btn(41); btn(42); btn(43); btn(44); btn(45); btn(46); btn(47); btn(48); btn(49); btn(50); btn(51); btn(52); btn(53); btn(54);
-  btn(55); btn(56); btn(57); btn(72); btn(73); btn(74); btn(75); btn(76); btn(77); btn(78); btn(79); btn(80); btn(81); btn(82); btn(83); btn(84); btn(85); btn(86);
-  btn(87); btn(88); btn(89); btn(104); btn(105); btn(106); btn(107); btn(108); btn(109); btn(110); btn(111); btn(112); btn(113); btn(114); btn(115); btn(116); btn(117); btn(118);
-  // f-block rows
-  const strip = document.createElement('div'); strip.style.gridColumn='1 / -1'; strip.style.marginTop='8px'; pt.appendChild(strip);
-  const row4f=document.createElement('div'); row4f.style.display='flex'; row4f.style.gap='4px';
-  for(let z=58; z<=71; z++){ const b=document.createElement('button'); b.type='button'; b.className='pt-btn'; b.textContent=SYMBOLS[z]||'?'; b.title=`${SYMBOLS[z]||'?'} (Z=${z})`; b.onclick=()=>{ queue.push({Z:z, charge:0, ng:false}); renderQueue(); }; row4f.appendChild(b); }
-  pt.appendChild(row4f);
-  const row5f=document.createElement('div'); row5f.style.display='flex'; row5f.style.gap='4px'; row5f.style.marginTop='4px';
-  for(let z=90; z<=103; z++){ const b=document.createElement('button'); b.type='button'; b.className='pt-btn'; b.textContent=SYMBOLS[z]||'?'; b.title=`${SYMBOLS[z]||'?'} (Z=${z})`; b.onclick=()=>{ queue.push({Z:z, charge:0, ng:false}); renderQueue(); }; row5f.appendChild(b); }
-  pt.appendChild(row5f);
 }
 
-/* Send list => broadcast to class */
-$('#tp_sendList').onclick = async ()=>{
-  if(!queue.length){ alert('Queue is empty.'); return; }
-  const pts = Number($('#tp_points').value||5);
-  const reqQN = !!$('#tp_requireQN').checked;
-  const payload = {
-    mode:'test',
-    pointsPer: pts,
-    requireQN: reqQN,
-    list: queue.map(it=>({Z:it.Z, charge:it.charge||0, ng:!!it.ng})),
-    version: Date.now()
-  };
-  await fb.db.ref(paths.currentPrompt()).set(payload);
-  await fb.db.ref(paths.progressRoot()).set(null); // reset student progress
-  alert(`Sent ${queue.length} items.`);
-};
-
-/* Admin controls */
-$('#tp_softReset').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/softResetAt`).set(Date.now()); alert('Soft reset broadcasted.'); };
-$('#tp_newSession').onclick = async ()=>{ await fb.db.ref(`${paths.control()}/resetAt`).set(Date.now()); alert('New session broadcasted.'); };
-$('#tp_closeClass').onclick = async ()=>{
-  if(!confirm('Close this class now? All students will be removed and progress cleared.')) return;
-  const t = Date.now();
-  // mark class closed; wipe session data
-  await fb.db.ref(paths.configPath()).update({ closedAt: t });
-  await fb.db.ref(paths.prompts()).set(null);
-  await fb.db.ref(paths.progressRoot()).set(null);
-  await fb.db.ref(paths.results()).set(null);
-  await fb.db.ref(paths.students()).set(null);
-  alert('Class closed. All participants removed.');
-};
-
-/* UI & login */
-$('#setClassBtn').onclick = async ()=>{
-  const val = sanitizeClassName($('#classInput').value);
-  setClassKey(val);
-  $('#classLabel').textContent=live.classKey;
-  const curRef = fb.db.ref(`${paths.configPath()}/currentSession`);
-  let s = (await curRef.get()).val(); if(!s){ s=nowId(); await curRef.set(s); }
-  live.sessionId = s; $('#sessionLabel').textContent = s.slice(-6);
-  ensureStudentPresence();
-  attachPromptListener(); attachResetListeners(); attachCloseListener(); subscribeRoster(true); subscribeScores(true);
-
-  // Immediately enforce PIN creation if not set
-  const existing = await fetchPin();
-  if(!validPin(existing)){
-    $('#pinSetup').style.display='';
-    $('#loginDlg').showModal();
-  } else {
-    alert('Class set. PIN already configured.');
+/* ===== Noble-gas Prefill Hook ===== */
+function noblePrefill(elementZ){
+  // find previous noble gas core
+  const noble={2:"He",10:"Ne",18:"Ar",36:"Kr"};
+  let coreZ=0;
+  for(let nz of Object.keys(noble))if(elementZ>nz)coreZ=nz;
+  if(coreZ){
+    resetBoard();
+    let cnt=0;
+    for(let o of ORBITAL_ORDER){
+      const max=(o.includes("s")?2:o.includes("p")?6:o.includes("d")?10:14);
+      filled[o]=max;
+      cnt+=max;
+      if(cnt>=coreZ)break;
+    }
+    updateConfigOutput();
   }
-};
-$('#shareClassBtn').onclick = async ()=>{
-  const link = new URL(location.href); link.searchParams.set('class', live.classKey);
-  try{ await navigator.clipboard.writeText(String(link)); alert('Join link copied:\n'+link); }
-  catch(e){ prompt('Copy this link:', String(link)); }
-};
-$('#loginBtn').onclick = async ()=>{
-  const pin = await fetchPin();
-  $('#pinSetup').style.display = pin ? 'none' : '';
-  $('#loginDlg').showModal();
-};
-$('#saveNewPinBtn').onclick = async ()=>{
-  const np = $('#newPinInput').value.trim();
-  if(!validPin(np)){ alert('Enter a 4-digit PIN (0-9).'); return; }
-  await savePin(np); alert('PIN saved.'); $('#pinSetup').style.display='none'; $('#newPinInput').value='';
-};
-$('#unlockBtn').onclick = async (e)=>{
-  e.preventDefault();
-  const stored = await fetchPin(); const inp = $('#pinInput').value.trim();
-  if(validPin(stored) && inp === stored){
-    $('#loginDlg').close();
-    $('#teacherPanel').classList.remove('hidden');
-  } else { alert('Wrong PIN'); }
-};
-
-/* Build everything */
-function buildAll(){
-  buildBlocks();
-  wireTray();
-  buildPeriodicGrid();
-  renderQueue();
-  buildMiniPT();               // answers view mini PT (hidden until shown)
-  highlightMiniPT(state.Z);    // in case answers shown later
 }
-window.addEventListener('load', ()=>{ buildAll(); dbInit(); });
+
+/* ===== Exception Merge (Cu/Cr) ===== */
+function applyExceptions(z){
+  if(EXCEPTIONS[z]){
+    const ex=EXCEPTIONS[z];
+    for(let o in ex){filled[o]=ex[o];}
+    updateConfigOutput();
+  }
+}
+
+/* ===== Main Initialization ===== */
+window.addEventListener("load",()=>{
+  buildOrbitals();
+  buildPeriodicGrid();
+});
 </script>
+
+</div>
 </body>
 </html>
