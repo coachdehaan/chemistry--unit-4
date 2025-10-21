@@ -493,74 +493,121 @@ function pushScore(correct){
  totalPoints++;
  ref.update({name:studentName,score:currentScore,total:totalPoints});
 }
+<!-- === Firebase Teacher Portal (non-destructive) === -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script>
+(() => {
+ const cfg={
+  apiKey:"AIzaSyAal8uHe9nePGimXiRPZAnBl0ucQlKnXNo",
+  authDomain:"presentation-83d1f.firebaseapp.com",
+  databaseURL:"https://presentation-83d1f-default-rtdb.firebaseio.com",
+  projectId:"presentation-83d1f",
+  storageBucket:"presentation-83d1f.firebasestorage.app",
+  messagingSenderId:"132406143951",
+  appId:"1:132406143951:web:9695690023bd3f2aedc0ba"
+ };
+ let app,db,auth,classKey=null,pin=null,classRef=null;
+ let teacherMode=false;
+ let studentId=localStorage.getItem('ec_uid')||Math.random().toString(36).slice(2,9);
+ localStorage.setItem('ec_uid',studentId);
+ let studentName=localStorage.getItem('ec_name')||"Student";
 
-/* ===== Floating Teacher Button + Modal ===== */
-const tpBtn=document.createElement('div');
-tpBtn.style.cssText='position:fixed;bottom:20px;right:20px;width:52px;height:52px;border-radius:50%;background:#3a82ff;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;z-index:9999;box-shadow:0 4px 10px rgba(0,0,0,.4)';
-tpBtn.textContent='T';
-tpBtn.title='Teacher Portal';
-document.body.appendChild(tpBtn);
+ function initFirebase(){
+   if(app) return;
+   app=firebase.initializeApp(cfg);
+   db=firebase.database();
+   auth=firebase.auth();
+   return auth.signInAnonymously().catch(e=>console.log(e));
+ }
 
-const dlg=document.createElement('dialog');
-dlg.innerHTML=`
- <form method="dialog" style="border:none;padding:20px;background:#0b111b;color:#fff;border-radius:10px;min-width:300px">
-  <h3>Teacher Portal</h3>
-  <div id="tpLogin">
-    <label>Class <input id="tpClass" style="width:100%;margin-top:4px"></label><br>
-    <label>PIN <input id="tpPin" type="password" style="width:100%;margin-top:4px"></label><br>
-    <button id="tpEnter" type="button" class="btn primary" style="margin-top:8px">Enter</button>
-  </div>
-  <div id="tpPanel" style="display:none;margin-top:10px">
-    <div id="tpRoster" style="font-size:14px;max-height:180px;overflow:auto;border:1px solid #2b3a55;padding:4px"></div>
-    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
-      <button id="tpStart" type="button" class="btn primary">Start Test</button>
-      <button id="tpReset" type="button" class="btn warn">Reset Scores</button>
-      <button id="tpClose" type="button" class="btn">Close Class</button>
-    </div>
-  </div>
- </form>`;
-document.body.appendChild(dlg);
+ // helper
+ const $=s=>document.querySelector(s);
 
-tpBtn.onclick=()=>dlg.showModal();
-dlg.addEventListener('close',()=>dlg.close());
-
-$('#tpEnter').onclick=async()=>{
- classKey=$('#tpClass').value.trim().toUpperCase();
- pin=$('#tpPin').value.trim();
- if(!classKey||!pin){alert('Enter class and PIN');return;}
- classRef=fb.db.ref(`electronConfig/${classKey}`);
- await classRef.child('teacherPin').set(pin);
- teacherMode=true;
- $('#tpLogin').style.display='none';
- $('#tpPanel').style.display='block';
- attachRoster();
-};
-function $(s){return document.querySelector(s);}
-function attachRoster(){
- if(!classRef)return;
- classRef.child('students').on('value',snap=>{
-   const data=snap.val()||{};
-   let html='',right=0,total=0,count=0;
-   for(const [id,s] of Object.entries(data)){
-     html+=`${s.name||'—'}: ${s.score||0}/${s.total||0}<br>`;
-     if(s.total>0){right+=s.score/ s.total;count++;}
-   }
-   $('#tpRoster').innerHTML=html||'No students yet.';
+ // floating button
+ const btn=document.createElement('div');
+ btn.textContent='T';
+ Object.assign(btn.style,{
+   position:'fixed',bottom:'20px',right:'20px',width:'52px',height:'52px',
+   borderRadius:'50%',background:'#1e1e1e',color:'#fff',display:'flex',
+   alignItems:'center',justifyContent:'center',fontWeight:'700',cursor:'pointer',
+   zIndex:'9999',boxShadow:'0 3px 8px rgba(0,0,0,.4)'
  });
-}
-$('#tpStart').onclick=()=>alert('Test broadcast placeholder');
-$('#tpReset').onclick=()=>{
- if(classRef)classRef.child('students').get().then(s=>{
+ btn.title='Teacher Portal';
+ document.body.appendChild(btn);
+
+ // dialog
+ const dlg=document.createElement('dialog');
+ dlg.innerHTML=`
+  <form method="dialog" style="padding:18px;border:none;background:#0b111b;color:#fff;border-radius:10px">
+   <div id="tpLogin">
+     <h3>Teacher Portal</h3>
+     <label>Class<br><input id="tpClass" style="width:100%;margin-bottom:6px"></label>
+     <label>PIN<br><input id="tpPin" type="password" style="width:100%;margin-bottom:6px"></label>
+     <button id="tpEnter" type="button">Enter</button>
+   </div>
+   <div id="tpPanel" style="display:none">
+     <h3>Controls</h3>
+     <div id="tpRoster" style="font-size:13px;max-height:160px;overflow:auto;border:1px solid #2b3a55;padding:4px;margin-bottom:8px"></div>
+     <button id="tpStart" type="button">Start Test</button>
+     <button id="tpReset" type="button">Reset</button>
+     <button id="tpClose" type="button">End</button>
+   </div>
+  </form>`;
+ document.body.appendChild(dlg);
+
+ // open/close
+ btn.onclick=()=>{dlg.showModal();};
+ dlg.addEventListener('close',()=>dlg.close());
+
+ // login handler
+ $('#tpEnter').onclick=async()=>{
+   await initFirebase();
+   classKey=$('#tpClass').value.trim().toUpperCase();
+   pin=$('#tpPin').value.trim();
+   if(!classKey||!pin){alert('Enter class and PIN');return;}
+   try{
+     classRef=db.ref(`electronConfig/${classKey}`);
+     await classRef.child('teacherPin').set(pin);
+     teacherMode=true;
+     $('#tpLogin').style.display='none';
+     $('#tpPanel').style.display='block';
+     attachRoster();
+   }catch(e){console.log(e);}
+ };
+
+ function attachRoster(){
+   if(!classRef)return;
+   classRef.child('students').on('value',snap=>{
+     const data=snap.val()||{};
+     let html='';
+     for(const [id,s] of Object.entries(data)){
+       html+=`${s.name||'—'}: ${s.score||0}/${s.total||0}<br>`;
+     }
+     $('#tpRoster').innerHTML=html||'No students yet.';
+   });
+ }
+
+ $('#tpStart').onclick=()=>alert('Broadcast placeholder');
+ $('#tpReset').onclick=()=>{ if(classRef) classRef.child('students').get().then(s=>{
    const d=s.val()||{};
-   for(const id in d){
-     classRef.child(`students/${id}`).update({score:0,total:0});
-   }
- });
-};
-$('#tpClose').onclick=()=>{
- if(classRef)classRef.remove();
- dlg.close();
-};
+   for(const id in d){ classRef.child(\`students/\${id}\`).update({score:0,total:0}); }
+ });};
+ $('#tpClose').onclick=()=>{ if(classRef) classRef.remove(); dlg.close(); };
+
+ // scoring hook
+ window.pushScore=function(correct){
+   if(!classKey)return;
+   const ref=db.ref(\`electronConfig/\${classKey}/students/\${studentId}\`);
+   const s=correct?1:0;
+   ref.transaction(v=>{
+     v=v||{name:studentName,score:0,total:0};
+     v.total+=1; v.score+=s; return v;
+   });
+ };
+})();
 </script>
+
 </body>
 </html>
