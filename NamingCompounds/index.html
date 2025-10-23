@@ -7,13 +7,14 @@
 <style>
   body {font-family: system-ui, sans-serif; background: #f8fafc; margin: 0; padding: 0;}
   header {background: #1e3a8a; color: white; padding: 10px 20px; text-align: center;}
-  main {max-width: 900px; margin: 20px auto; padding: 10px; background: white; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);}
-  .section-title {font-size: 1.3rem; font-weight: bold; margin: 20px 0 10px;}
+  main {max-width: 1000px; margin: 20px auto; padding: 10px; background: white; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);}
+  .section-title {font-size: 1.2rem; font-weight: 600; margin-top: 10px;}
   .question-box {border: 2px solid #e2e8f0; padding: 15px; border-radius: 6px; margin-bottom: 10px;}
-  .question {font-weight: bold; font-size: 1.2rem; margin-bottom: 10px;}
+  .question {font-weight: bold; font-size: 1.1rem; margin-bottom: 10px;}
   input[type=text] {width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px;}
-  button {background: #1e40af; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 10px;}
+  button {background: #1e40af; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; margin-top: 10px;}
   button:hover {background: #1d4ed8;}
+  select {padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; margin-bottom: 10px;}
   .feedback {margin-top: 8px; font-weight: 500;}
   .correct {color: green;}
   .incorrect {color: red;}
@@ -22,13 +23,21 @@
 </head>
 <body>
 <header>
-  <h1>NameIt Chem - Compound Naming Practice</h1>
+  <h1>NameIt Chem — Compound Naming Practice</h1>
+  <p>Modeled after the Mr. D Chemistry Standard Layout</p>
 </header>
 <main>
   <div id="game-area">
-    <div class="section-title">Current Mode: <span id="mode">Binary Ionic Compounds</span></div>
+    <div class="section-title">Select Compound Type</div>
+    <select id="mode-select">
+      <option value="binary">Binary Ionic Compounds</option>
+      <option value="polyatomic">Ternary / Polyatomic Compounds</option>
+      <option value="covalent">Covalent Compounds</option>
+      <option value="acid">Acids</option>
+      <option value="hydrate">Hydrates</option>
+    </select>
     <div class="question-box">
-      <div class="question" id="question-text">Formula: NaCl</div>
+      <div class="question" id="question-text"></div>
       <input type="text" id="user-answer" placeholder="Enter compound name">
       <button id="submit-btn">Submit</button>
       <div id="feedback" class="feedback"></div>
@@ -37,34 +46,53 @@
   </div>
 </main>
 <script>
-const ions = {
-  monatomic: {
-    'Na+': 'sodium', 'K+': 'potassium', 'Mg2+': 'magnesium', 'Ca2+': 'calcium',
-    'Fe2+': 'iron(II)', 'Fe3+': 'iron(III)', 'Cu+': 'copper(I)', 'Cu2+': 'copper(II)',
-    'Cl-': 'chloride', 'O2-': 'oxide', 'S2-': 'sulfide', 'N3-': 'nitride'
-  },
-  polyatomic: {
-    'NO3-': 'nitrate', 'SO4 2-': 'sulfate', 'OH-': 'hydroxide', 'CO3 2-': 'carbonate',
-    'NH4+': 'ammonium', 'PO4 3-': 'phosphate', 'NO2-': 'nitrite', 'SO3 2-': 'sulfite'
-  }
+const data = {
+  binary: [
+    {formula: 'NaCl', name: 'sodium chloride'},
+    {formula: 'MgO', name: 'magnesium oxide'},
+    {formula: 'FeCl2', name: 'iron(II) chloride'},
+    {formula: 'CuO', name: 'copper(II) oxide'},
+    {formula: 'CaS', name: 'calcium sulfide'}
+  ],
+  polyatomic: [
+    {formula: 'CaCO3', name: 'calcium carbonate'},
+    {formula: 'NH4NO3', name: 'ammonium nitrate'},
+    {formula: 'Fe(OH)3', name: 'iron(III) hydroxide'},
+    {formula: 'Na2SO4', name: 'sodium sulfate'},
+    {formula: 'AlPO4', name: 'aluminum phosphate'}
+  ],
+  covalent: [
+    {formula: 'CO2', name: 'carbon dioxide'},
+    {formula: 'N2O4', name: 'dinitrogen tetroxide'},
+    {formula: 'PCl3', name: 'phosphorus trichloride'},
+    {formula: 'SF6', name: 'sulfur hexafluoride'},
+    {formula: 'NO', name: 'nitric oxide'}
+  ],
+  acid: [
+    {formula: 'HCl', name: 'hydrochloric acid'},
+    {formula: 'H2SO4', name: 'sulfuric acid'},
+    {formula: 'HNO3', name: 'nitric acid'},
+    {formula: 'H2CO3', name: 'carbonic acid'},
+    {formula: 'H3PO4', name: 'phosphoric acid'}
+  ],
+  hydrate: [
+    {formula: 'CuSO4·5H2O', name: 'copper(II) sulfate pentahydrate'},
+    {formula: 'BaCl2·2H2O', name: 'barium chloride dihydrate'},
+    {formula: 'Na2CO3·10H2O', name: 'sodium carbonate decahydrate'},
+    {formula: 'MgSO4·7H2O', name: 'magnesium sulfate heptahydrate'},
+    {formula: 'CoCl2·6H2O', name: 'cobalt(II) chloride hexahydrate'}
+  ]
 };
 
-const binaryIonicCompounds = [
-  { formula: 'NaCl', name: 'sodium chloride' },
-  { formula: 'MgO', name: 'magnesium oxide' },
-  { formula: 'CaS', name: 'calcium sulfide' },
-  { formula: 'FeCl2', name: 'iron(II) chloride' },
-  { formula: 'Cu2O', name: 'copper(I) oxide' }
-];
-
-let score = 0;
-let total = 0;
-let current;
+let currentMode = 'binary';
+let currentQuestion;
+let score = 0, total = 0;
 
 function nextQuestion() {
-  const random = Math.floor(Math.random() * binaryIonicCompounds.length);
-  current = binaryIonicCompounds[random];
-  document.getElementById('question-text').innerText = `Formula: ${current.formula}`;
+  const list = data[currentMode];
+  const random = Math.floor(Math.random() * list.length);
+  currentQuestion = list[random];
+  document.getElementById('question-text').innerText = `Formula: ${currentQuestion.formula}`;
   document.getElementById('user-answer').value = '';
   document.getElementById('feedback').innerText = '';
 }
@@ -72,14 +100,21 @@ function nextQuestion() {
 document.getElementById('submit-btn').addEventListener('click', () => {
   const ans = document.getElementById('user-answer').value.trim().toLowerCase();
   total++;
-  if (ans === current.name) {
+  if (ans === currentQuestion.name) {
     score++;
-    document.getElementById('feedback').innerHTML = `<span class='correct'>Correct! ${current.name}</span>`;
+    document.getElementById('feedback').innerHTML = `<span class='correct'>Correct! ${currentQuestion.name}</span>`;
   } else {
-    document.getElementById('feedback').innerHTML = `<span class='incorrect'>Incorrect. Correct answer: ${current.name}</span>`;
+    document.getElementById('feedback').innerHTML = `<span class='incorrect'>Incorrect. Correct answer: ${currentQuestion.name}</span>`;
   }
   document.getElementById('progress').innerText = `Score: ${score} / ${total}`;
   setTimeout(nextQuestion, 2000);
+});
+
+document.getElementById('mode-select').addEventListener('change', (e) => {
+  currentMode = e.target.value;
+  score = 0; total = 0;
+  document.getElementById('progress').innerText = `Score: 0 / 0`;
+  nextQuestion();
 });
 
 nextQuestion();
