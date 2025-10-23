@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NameIt Chem</title>
+<style>
+  body {font-family: system-ui, sans-serif; background: #f8fafc; margin: 0; padding: 0;}
+  header {background: #1e3a8a; color: white; padding: 10px 20px; text-align: center;}
+  main {max-width: 900px; margin: 20px auto; padding: 10px; background: white; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);}
+  .section-title {font-size: 1.3rem; font-weight: bold; margin: 20px 0 10px;}
+  .question-box {border: 2px solid #e2e8f0; padding: 15px; border-radius: 6px; margin-bottom: 10px;}
+  .question {font-weight: bold; font-size: 1.2rem; margin-bottom: 10px;}
+  input[type=text] {width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px;}
+  button {background: #1e40af; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 10px;}
+  button:hover {background: #1d4ed8;}
+  .feedback {margin-top: 8px; font-weight: 500;}
+  .correct {color: green;}
+  .incorrect {color: red;}
+  .progress {margin-top: 20px; font-size: 1rem;}
+</style>
+</head>
+<body>
+<header>
+  <h1>NameIt Chem - Compound Naming Practice</h1>
+</header>
+<main>
+  <div id="game-area">
+    <div class="section-title">Current Mode: <span id="mode">Binary Ionic Compounds</span></div>
+    <div class="question-box">
+      <div class="question" id="question-text">Formula: NaCl</div>
+      <input type="text" id="user-answer" placeholder="Enter compound name">
+      <button id="submit-btn">Submit</button>
+      <div id="feedback" class="feedback"></div>
+    </div>
+    <div class="progress" id="progress">Score: 0 / 0</div>
+  </div>
+</main>
+<script>
+const ions = {
+  monatomic: {
+    'Na+': 'sodium', 'K+': 'potassium', 'Mg2+': 'magnesium', 'Ca2+': 'calcium',
+    'Fe2+': 'iron(II)', 'Fe3+': 'iron(III)', 'Cu+': 'copper(I)', 'Cu2+': 'copper(II)',
+    'Cl-': 'chloride', 'O2-': 'oxide', 'S2-': 'sulfide', 'N3-': 'nitride'
+  },
+  polyatomic: {
+    'NO3-': 'nitrate', 'SO4 2-': 'sulfate', 'OH-': 'hydroxide', 'CO3 2-': 'carbonate',
+    'NH4+': 'ammonium', 'PO4 3-': 'phosphate', 'NO2-': 'nitrite', 'SO3 2-': 'sulfite'
+  }
+};
+
+const binaryIonicCompounds = [
+  { formula: 'NaCl', name: 'sodium chloride' },
+  { formula: 'MgO', name: 'magnesium oxide' },
+  { formula: 'CaS', name: 'calcium sulfide' },
+  { formula: 'FeCl2', name: 'iron(II) chloride' },
+  { formula: 'Cu2O', name: 'copper(I) oxide' }
+];
+
+let score = 0;
+let total = 0;
+let current;
+
+function nextQuestion() {
+  const random = Math.floor(Math.random() * binaryIonicCompounds.length);
+  current = binaryIonicCompounds[random];
+  document.getElementById('question-text').innerText = `Formula: ${current.formula}`;
+  document.getElementById('user-answer').value = '';
+  document.getElementById('feedback').innerText = '';
+}
+
+document.getElementById('submit-btn').addEventListener('click', () => {
+  const ans = document.getElementById('user-answer').value.trim().toLowerCase();
+  total++;
+  if (ans === current.name) {
+    score++;
+    document.getElementById('feedback').innerHTML = `<span class='correct'>Correct! ${current.name}</span>`;
+  } else {
+    document.getElementById('feedback').innerHTML = `<span class='incorrect'>Incorrect. Correct answer: ${current.name}</span>`;
+  }
+  document.getElementById('progress').innerText = `Score: ${score} / ${total}`;
+  setTimeout(nextQuestion, 2000);
+});
+
+nextQuestion();
+</script>
+</body>
+</html>
