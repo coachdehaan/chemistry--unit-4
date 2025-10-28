@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Earth–Moon Orbital Geometry</title>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160/examples/js/controls/OrbitControls.js"></script>
+<style>
+  body { margin: 0; overflow: hidden; background-color: #000; }
+  #info { position: absolute; top: 10px; left: 10px; color: white; font-family: sans-serif; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h3>Earth–Moon Orbital Geometry</h3>
+  <p>Blue = Equatorial Plane, Green = Ecliptic Plane, Orange = Moon’s Orbital Plane</p>
+</div>
+<script>
+// === Scene setup ===
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 1, 2e6);
+camera.position.set(300000, -500000, 300000);const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.05;
+
+// === Lighting === const light = new THREE.PointLight(0xffffff, 1.2); light.position.set(0,0,0); scene.add(light); scene.add(new THREE.AmbientLight(0x404040));
+
+// === Constants === const a = 384400; // km scaled const scale = 800; // shrink for rendering const i = THREE.MathUtils.degToRad(5.145); const eps = THREE.MathUtils.degToRad(23.44);
+
+// === Helper to create a translucent disc === function makePlane(radius, color, tiltX=0, tiltZ=0) { const geometry = new THREE.CircleGeometry(radius, 128); const material = new THREE.MeshBasicMaterial({ color, opacity: 0.2, transparent: true, side: THREE.DoubleSide }); const mesh = new THREE.Mesh(geometry, material); mesh.rotation.x = tiltX; mesh.rotation.z = tiltZ; scene.add(mesh); return mesh; }
+
+// === Reference planes === const ecliptic = makePlane(500000, 0x00ff00, 0, 0); const equator = makePlane(500000, 0x0000ff, eps, 0); const moonOrbit = makePlane(500000, 0xffa500, i, 0);
+
+// === Earth === const earthGeo = new THREE.SphereGeometry(6371, 32, 32); const earthMat = new THREE.MeshPhongMaterial({ color: 0x2266ff, emissive: 0x112244 }); const earth = new THREE.Mesh(earthGeo, earthMat); scene.add(earth);
+
+// === Moon === const moonGeo = new THREE.SphereGeometry(1737, 32, 32); const moonMat = new THREE.MeshPhongMaterial({ color: 0xcccccc }); const moon = new THREE.Mesh(moonGeo, moonMat); scene.add(moon);
+
+// === Animation variables === let t = 0; function animate() { requestAnimationFrame(animate); controls.update(); t += 0.002;
+
+// elliptical orbit simplified const r = (a * (1 - 0.055**2)) / (1 + 0.055 * Math.cos(t)); const x = r * Math.cos(t) / scale; const y = r * Math.sin(t) / scale; const z = Math.sin(i) * y; // simple tilt projection
+
+moon.position.set(x, y, z); renderer.render(scene, camera); } animate();
+
+// === Resize === window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }); </script>
+
+</body>
+</html>
